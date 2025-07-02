@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('propriete', function (Blueprint $table) {
             $table->id();
-            $table->string('Lot',15);
+            $table->string('lot',15);
             $table->string('propriete_mere',20)->nullable();
             $table->string('titre',20);
             $table->string('proprietaire',50);
