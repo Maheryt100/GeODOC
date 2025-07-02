@@ -130,6 +130,6 @@ class DistrictSeeder extends Seeder
             ['id' => 113, 'nom_district' => 'MIANDRIVAZO', 'edilitaire' => 21, 'agricole' => null, 'id_region' => null],
             ['id' => 114, 'nom_district' => 'MORONDAVA', 'edilitaire' => 21, 'agricole' => null, 'id_region' => null]
         ];
-        DB::table('district')->insert($districts);
+        DB::table('districts')->insert($districts);
     }
 }
