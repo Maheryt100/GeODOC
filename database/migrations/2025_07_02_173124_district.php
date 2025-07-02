@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('districts', function (Blueprint $table) {
             $table->id();
             $table->string('nom_district');
-            $table->integer('edilitaire');
-            $table->integer('agricole');
+            $table->integer('edilitaire')->nullable();
+            $table->integer('agricole')->nullable();
             $table->unsignedInteger('id_region');
             $table->foreign('id_region')->references('id')->on('regions')->onDelete('cascade');
         });
