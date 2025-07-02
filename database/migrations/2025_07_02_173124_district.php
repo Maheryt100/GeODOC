@@ -14,11 +14,10 @@ return new class extends Migration
         Schema::create('district', function (Blueprint $table) {
             $table->id();
             $table->string('nom_district');
-            $table->integer('edilitaire');
-            $table->integer('agricole');
             $table->unsignedInteger('region_id');
             $table->foreign('region_id')->references('id')->on('region')->onDelete('cascade');
-            $table->timestamps();
+            $table->integer('edilitaire');
+            $table->integer('agricole');
         });
     }
 
