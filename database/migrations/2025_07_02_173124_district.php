@@ -16,8 +16,8 @@ return new class extends Migration
             $table->string('nom_district');
             $table->integer('edilitaire');
             $table->integer('agricole');
-            $table->unsignedInteger('region_id');
-            $table->foreign('region_id')->references('id')->on('regions')->onDelete('cascade');
+            $table->unsignedInteger('id_region');
+            $table->foreign('id_region')->references('id')->on('regions')->onDelete('cascade');
         });
     }
 
@@ -27,7 +27,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('districts', function (Blueprint $table) {
-            $table->dropForeign(['region_id']);
+            $table->dropForeign(['id_region']);
         });
         Schema::dropIfExists('districts');
     }
