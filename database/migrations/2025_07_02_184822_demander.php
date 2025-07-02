@@ -16,8 +16,8 @@ return new class extends Migration
             $table->unsignedInteger('id_demandeur');
             $table->unsignedInteger('id_propriete');
             $table->unsignedInteger('total_prix');
-            $table->foreign('id_demandeur')->references('id')->on('demandeur')->onDelete('cascade');
-            $table->foreign('id_propriete')->references('id')->on('propriete')->onDelete('cascade');
+            $table->foreign('id_demandeur')->references('id')->on('demandeurs')->onDelete('cascade');
+            $table->foreign('id_propriete')->references('id')->on('proprietes')->onDelete('cascade');
             $table->timestamps();
         });
     }

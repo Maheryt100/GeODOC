@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('demandeur', function (Blueprint $table) {
+        Schema::create('demandeurs', function (Blueprint $table) {
             $table->id();
             $table->string('titre_demandeur',20);
             $table->string('nom_demandeur',40);
@@ -33,7 +33,7 @@ return new class extends Migration
             $table->date('date_mariage')->nullable();
             $table->string('lieu_mariage',40);
             $table->unsignedInteger('id_region');
-            $table->foreign('id_region')->references('id')->on('region')->onDelete('cascade');
+            $table->foreign('id_region')->references('id')->on('regions')->onDelete('cascade');
             $table->timestamps();
         });
     }
@@ -43,9 +43,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('demandeur', function (Blueprint $table) {
+        Schema::table('demandeurs', function (Blueprint $table) {
             $table->dropForeign(['id_region']);
         });
-        Schema::dropIfExists('demandeur');
+        Schema::dropIfExists('demandeurs');
     }
 };

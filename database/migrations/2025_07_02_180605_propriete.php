@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('propriete', function (Blueprint $table) {
+        Schema::create('proprietes', function (Blueprint $table) {
             $table->id();
             $table->string('lot',15);
             $table->string('propriete_mere',20)->nullable();
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('type',30);
             $table->string('nature',40);
             $table->unsignedInteger('id_district');
-            $table->foreign('id_district')->references('id')->on('district')->onDelete('cascade');
+            $table->foreign('id_district')->references('id')->on('districts')->onDelete('cascade');
             $table->timestamps();
         });
     }
@@ -34,9 +34,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('propriete', function (Blueprint $table) {
+        Schema::table('proprietes', function (Blueprint $table) {
             $table->dropForeign(['id_district']);
         });
-        Schema::dropIfExists('propriete');
+        Schema::dropIfExists('proprietes');
     }
 };
