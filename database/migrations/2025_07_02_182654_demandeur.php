@@ -30,6 +30,7 @@ return new class extends Migration
             $table->string('domiciliation');
             $table->string('situation_familiale',40);
             $table->string('regime_matrimoniale',40);
+            $table->string('telephone',10)->nullable();
             $table->date('date_mariage')->nullable();
             $table->string('lieu_mariage',40);
             $table->unsignedInteger('id_region');
