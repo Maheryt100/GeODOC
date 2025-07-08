@@ -16,6 +16,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('demandeurs', function (){
        return Inertia::render('demandeurs/index');
     })->name('demandeurs');
+
+    Route::get('demandeurs/create', function (){
+        return Inertia::render('demandeurs/create');
+    })->name('demandeurs.create');
+
+
+    //Route concernant tous les propriétés
+    Route::get('proprietes', function (){
+        return Inertia::render('proprietes/index');
+    })->name('proprietes');
+
+    //Route pour la generation des fichiers word
+    Route::get('demandes', function (){
+        return Inertia::render('demandes/index');
+    })->name('demandes');
 });
 
 require __DIR__.'/settings.php';

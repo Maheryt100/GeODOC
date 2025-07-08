@@ -10,34 +10,10 @@ import { Button } from '@/components/ui/button';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Demandeurs',
-        href: '/demandeurs',
+        title: 'Demande',
+        href: '/demandes',
     },
 ];
-
-// interface Region {
-//     id: number;
-//     nom_region: string;
-//     id_province: number;
-// }
-//
-// interface Province {
-//     id: number;
-//     nom_province: string;
-// }
-//
-// interface District {
-//     id: number;
-//     nom_district: string;
-//     id_region: number;
-// }
-//
-// interface PageProps {
-//     province: Province[];
-//     region: Region[];
-//     district: District[];
-//     [key: string]: unknown;
-// }
 
 export default function index() {
     return (
@@ -46,7 +22,7 @@ export default function index() {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
                 <div>
                     <Button asChild>
-                        <Link href="/demandeurs/create">Inserer Demandeur</Link>
+                        <Link href="/demandes/create">Generer un fichier</Link>
                     </Button>
                 </div>
                 <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">

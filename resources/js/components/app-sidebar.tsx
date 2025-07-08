@@ -23,13 +23,13 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Propriété',
-        href: '/propriete',
+        href: '/proprietes',
         icon: LandPlot,
 
     },
     {
         title: 'Demande',
-        href: '/demande',
+        href: '/demandes',
         icon: Inbox,
 
     },
