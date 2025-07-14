@@ -4,6 +4,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
+import { Toaster } from '@/components/ui/sonner';
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // import { Button } from '@/components/ui/button';
 
@@ -16,9 +17,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function index() {
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
+            <Toaster className={'opacity-50'} />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
                 <div>
                     <Button asChild>
