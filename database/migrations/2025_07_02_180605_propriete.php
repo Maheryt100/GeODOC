@@ -13,13 +13,15 @@ return new class extends Migration
     {
         Schema::create('proprietes', function (Blueprint $table) {
             $table->id();
+            $table->string('commune')->nullable();
+            $table->string('quartier')->nullable();
             $table->string('lot',15);
             $table->string('propriete_mere',20)->nullable();
             $table->string('titre',20);
-            $table->string('proprietaire',50);
-            $table->unsignedBigInteger('contenance');
+            $table->string('proprietaire',50)->nullable();
+            $table->unsignedBigInteger('contenance')->nullable();
             $table->string('charge',40)->nullable();
-            $table->string('situation');
+            $table->string('situation')->nullable();
             $table->string('circonscription','50')->nullable();
             $table->string('type',30);
             $table->string('nature',40);
