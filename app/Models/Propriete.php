@@ -18,7 +18,8 @@ class Propriete extends Model
         'circonscription',
         'type',
         'nature',
-        'id_district'
-
+        'id_district',
+        'commune',
+        'quartier',
     ];
 }
