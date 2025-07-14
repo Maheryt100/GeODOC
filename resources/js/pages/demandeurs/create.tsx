@@ -1,82 +1,83 @@
-import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
+import { Head, useForm } from '@inertiajs/react';
 import {
     Breadcrumb,
     BreadcrumbItem,
     BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
+    BreadcrumbList, BreadcrumbPage,
+    BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { useState } from 'react';
 import { Toaster } from '@/components/ui/sonner';
+import { Button } from '@/components/ui/button';
 
-// @ts-ignore
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Formulaire Demandeurs',
-        href: '/demandeurs/create',
-    },
-];
 
-export default function Create() {
-    const [showBackdrop, setShowBackdrop] = useState(true);
+export default function Create(){
+    const [step, setStep] = useState(1);
 
-    useEffect(() => {
-        toast.custom((t) => (
-            <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-xl w-96 text-center z-50 relative">
-                <p className="text-lg font-semibold mb-4">Veuillez valider l'emplacement</p>
-                <button
-                    className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
-                    onClick={() => {
-                        toast.dismiss(t);
-                        setShowBackdrop(false);
-                    }}
-                >
-                    Fermer
-                </button>
-            </div>
-        ), {
-            duration: Infinity,
-        });
-    }, []);
+    const{processing} = useForm({
+        'titre': '',
+
+    });
+    const handleSubmit = ()=>{
+        console.log('hei');
+    }
+
 
     return (
-        <>
+        <AppLayout>
+            <Toaster/>
+            <Head title={'Insertion Demandeur'}/>
+            <div className="mt-2">
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink href="/demandeurs">Demandeur</BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>Insertion</BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </div>
+            <div className="relative mt-4 min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border p-6">
+                <form onSubmit={handleSubmit} >
+                    {/* stepper */}
+                    <ol className="flex items-center justify-center mb-6 text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <li className={`flex items-center ${step === 1 ? 'text-blue-600' : ''}`}>
+                          <span className="flex items-center gap-2">
+                            <span className="w-6 h-6 border rounded-full flex items-center justify-center">1</span>
+                            <span className="hidden sm:inline">Identité</span>
+                          </span>
+                        </li>
+                        <li className="mx-4 border-t-2 w-10 sm:w-20 border-gray-300 dark:border-gray-600"></li>
+                        <li className={`flex items-center ${step === 2 ? 'text-blue-600' : ''}`}>
+                          <span className="flex items-center gap-2">
+                            <span className="w-6 h-6 border rounded-full flex items-center justify-center">2</span>
+                            <span className="hidden sm:inline">Famille & Contact</span>
+                          </span>
+                        </li>
+                    </ol>
 
-            {showBackdrop && (
-                <div className="fixed inset-0 bg-black/40 z-40" />
-            )}
+                    {step === 1 && (
+                        <div>
+                            <div className="text-right">
+                                <Button type="button" onClick={() => setStep(2)}>Suivant</Button>
+                            </div>
+                        </div>
+                    )}
 
-
-            <Toaster
-                position="top-center"
-                toastOptions={{
-                    classNames: {
-                        toast: "my-50 z-50 flex justify-center items-center",
-                    },
-                }}
-            />
-
-            <AppLayout breadcrumbs={breadcrumbs}>
-                <div>
-                    <Breadcrumb>
-                        <BreadcrumbList>
-                            <BreadcrumbItem>
-                                <BreadcrumbLink href="/demandeurs">Demandeur</BreadcrumbLink>
-                            </BreadcrumbItem>
-                            <BreadcrumbSeparator />
-                            <BreadcrumbItem>
-                                <BreadcrumbPage>Insertion</BreadcrumbPage>
-                            </BreadcrumbItem>
-                        </BreadcrumbList>
-                    </Breadcrumb>
-                </div>
-                <div className="relative mt-4 min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                </div>
-            </AppLayout>
-        </>
+                    {step === 2 && (
+                        <div>
+                            <div className="flex justify-between mt-4">
+                                <Button type="button" onClick={() => setStep(1)}>Précédent</Button>
+                                <Button type="submit" disabled={processing}>{processing ? 'Envoi...' : 'Valider'}</Button>
+                            </div>
+                        </div>
+                    )}
+                </form>
+            </div>
+        </AppLayout>
     );
 }
