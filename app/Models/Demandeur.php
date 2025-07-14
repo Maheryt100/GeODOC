@@ -25,8 +25,11 @@ class Demandeur extends Model
         'domiciliation',
         'situation_familiale',
         'regime_matrimoniale',
-        'date_marriage',
-        'lieu_marriage',
-        'id_region',
+        'date_mariage',
+        'lieu_mariage',
+        'nationalite',
+        'marie_a',
+        'telephone',
+        'id_district',
     ];
 }
