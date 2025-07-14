@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\DemandeurController;
+use App\Http\Controllers\ProprieteController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -21,11 +23,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('demandeurs/create');
     })->name('demandeurs.create');
 
+    Route::post('demandeurs/store', [DemandeurController::class, 'store'])->name('demandeurs.store');
+
 
     //Route concernant tous les propriétés
-    Route::get('proprietes', function (){
-        return Inertia::render('proprietes/index');
-    })->name('proprietes');
+    Route::get('proprietes', [ProprieteController::class, 'index'])->name('proprietes');
+    Route::get('proprietes/create', function (){
+       return Inertia::render('proprietes/create');
+    })->name('proprietes.create');
+    Route::post('proprietes/store', [ProprieteController::class, 'store'])->name('proprietes.store');
+    Route::get('proprietes/{id}/edit', [ProprieteController::class, 'edit'])->name('proprietes.edit');
+    Route::put('proprietes/{id}', [ProprieteController::class, 'update'])->name('proprietes.update');
+    Route::delete('proprietes/{id}', [ProprieteController::class, 'destroy'])->name('proprietes.destroy');
+    Route::get('proprietes/{id}/show', [ProprieteController::class, 'show'])->name('proprietes.show');
 
     //Route pour la generation des fichiers word
     Route::get('demandes', function (){
