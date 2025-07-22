@@ -14,4 +14,15 @@ class District extends Model
         'edilitaire',
         'agricole',
     ];
+
+    public function region() {
+        return $this->belongsTo(Region::class);
+    }
+    public function demandeur(){
+        return $this->hasMany(Demandeur::class,'id_district');
+    }
+    public function propriete()
+    {
+        return $this->hasMany(Propriete::class,'id_district');
+    }
 }

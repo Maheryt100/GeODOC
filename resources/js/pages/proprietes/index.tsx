@@ -33,7 +33,7 @@ export default function Index( { propriete }) {
     const { delete: destroy } = useForm();
     const { message } = usePage().props as { message?: string };
     const handleDelete = (id: number) => {
-        console.log(id);
+        // console.log(id);
         if(confirm('voulez vous vraiment supprimer ce propriété ? ')){
             destroy(route(`proprietes.destroy`, id));
         }

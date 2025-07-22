@@ -28,8 +28,8 @@ const mainNavItems: NavItem[] = [
 
     },
     {
-        title: 'Demande',
-        href: '/demandes',
+        title: 'Documents',
+        href: '/documents',
         icon: Inbox,
 
     },

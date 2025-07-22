@@ -32,4 +32,9 @@ class Demandeur extends Model
         'telephone',
         'id_district',
     ];
+
+    public function district()
+    {
+        return $this->belongsTo(District::class);
+    }
 }

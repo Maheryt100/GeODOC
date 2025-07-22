@@ -1,22 +1,20 @@
-// import { useState } from 'react';
 import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-// import { Button } from '@/components/ui/button';
+import { FolderPlus } from 'lucide-react';
 
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Demande',
-        href: '/demandes',
+        title: 'Documents',
+        href: '/documents',
     },
 ];
 
-export default function index() {
+export default function Index() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -25,7 +23,10 @@ export default function index() {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
                 <div>
                     <Button asChild>
-                        <Link href="/demandes/create">Generer un fichier</Link>
+                        <Link href="documents/create">
+                            <FolderPlus/>
+                            Lier un Demandeur à un Propriété
+                        </Link>
                     </Button>
                 </div>
                 <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">

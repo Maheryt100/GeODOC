@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DemandeController;
 use App\Http\Controllers\DemandeurController;
 use App\Http\Controllers\ProprieteController;
 use Illuminate\Support\Facades\Route;
@@ -15,15 +16,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     // Route concernant tous les Demandeurs
-    Route::get('demandeurs', function (){
-       return Inertia::render('demandeurs/index');
-    })->name('demandeurs');
+    Route::get('demandeurs', [DemandeurController::class, 'index'])->name('demandeurs');
 
     Route::get('demandeurs/create', function (){
         return Inertia::render('demandeurs/create');
     })->name('demandeurs.create');
 
     Route::post('demandeurs/store', [DemandeurController::class, 'store'])->name('demandeurs.store');
+    Route::get('demandeurs/{id}/edit', [DemandeurController::class, 'edit'])->name('demandeurs.edit');
+    Route::put('demandeurs/{id}', [DemandeurController::class, 'update'])->name('demandeurs.update');
+    Route::delete('demandeurs/{id}', [DemandeurController::class, 'destroy'])->name('demandeurs.destroy');
 
 
     //Route concernant tous les propriétés
@@ -37,10 +39,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('proprietes/{id}', [ProprieteController::class, 'destroy'])->name('proprietes.destroy');
     Route::get('proprietes/{id}/show', [ProprieteController::class, 'show'])->name('proprietes.show');
 
+
+
     //Route pour la generation des fichiers word
-    Route::get('demandes', function (){
-        return Inertia::render('demandes/index');
-    })->name('demandes');
+    Route::get('documents', function (){
+        return Inertia::render('documents/index');
+    })->name('documents');
+
+    Route::get('documents/create', [DemandeController::class, 'create'])->name('documents.create');
+    Route::post('documents/store', [DemandeController::class, 'store'])->name('documents.store');
 });
 
 require __DIR__.'/settings.php';
