@@ -12,7 +12,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, MapPin, MapPinHouse } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import {
@@ -67,6 +67,14 @@ export default function Create(){
     const handleSubmit = (e: React.FormEvent)=>{
         e.preventDefault();
         console.log(data);
+
+        const cin = data.cin;
+        const cinIsValid = /^\d+$/.test(cin);
+
+        if (!cinIsValid) {
+            toast.error("Le CIN ne doit contenir que des chiffres (pas de lettres ni de caractères spéciaux).");
+            return;
+        }
         post(route('demandeurs.store'), {
             onError: (errors) => {
                 const messages = Object.values(errors).flat();
@@ -110,7 +118,7 @@ export default function Create(){
                                                 className={'w-[200px]'}
                                             >
                                                 { districtName || "District"}
-                                                <ChevronsUpDown className={'opacity-50'}/>
+                                                <MapPinHouse />
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-[200px] p-0">

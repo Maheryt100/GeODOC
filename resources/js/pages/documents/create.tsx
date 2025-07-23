@@ -28,6 +28,10 @@ export default function Create({ proprietes, demandeurs }){
     const [showCoDemandeur, setShowCoDemandeur] = useState(false);
     const [selectedCoDemandeurs, setSelectedCoDemandeurs] = useState([]);
 
+    const [statusConsort, setStatusConsort] = useState(false);
+    console.log(statusConsort);
+
+
     const handleValidate = (e: React.FormEvent) => {
         e.preventDefault();
         console.log(selectedProprieteId,selectedDemandeurId, selectedCoDemandeurs);
@@ -43,6 +47,7 @@ export default function Create({ proprietes, demandeurs }){
             propriete_id: selectedProprieteId,
             demandeur_id: selectedDemandeurId,
             consort: selectedCoDemandeurs.map(cd => cd.id),
+            status_consort: statusConsort,
         },{
             onError: (errors) =>{
                 Object.values(errors).forEach((error) => {
@@ -275,7 +280,11 @@ export default function Create({ proprietes, demandeurs }){
 
                              <div className="flex items-center space-x-2">
                                  <Switch id="co-demandeur"
-                                    onClick={() => setShowCoDemandeur(!showCoDemandeur)}
+                                         checked={statusConsort}
+                                         onCheckedChange={(checked) =>{
+                                             setStatusConsort(checked);
+                                             setShowCoDemandeur(!showCoDemandeur);
+                                        }}
                                  />
                                  <Label htmlFor="co-demandeur">Consort?</Label>
                              </div>

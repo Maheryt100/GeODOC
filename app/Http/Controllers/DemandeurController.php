@@ -101,7 +101,7 @@ class DemandeurController extends Controller
                 return back()->with('error', 'Erreur lors de la création du demandeur.');
             }
 
-            return Redirect::route('demandeurs')->with('success', 'Demandeur ajouté avec succès');
+            return redirect::route('demandeurs')->with('success', 'Demandeur ajouté avec succès');
         } catch (\Exception $e) {
             return back()->with('error', 'Une erreur est survenue : ' . $e->getMessage());
         }
