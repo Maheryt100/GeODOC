@@ -25,7 +25,7 @@ export default function Index() {
                     <Button asChild>
                         <Link href="documents/create">
                             <FolderPlus/>
-                            Lier un Demandeur à un Propriété
+                            Générer un document
                         </Link>
                     </Button>
                 </div>
