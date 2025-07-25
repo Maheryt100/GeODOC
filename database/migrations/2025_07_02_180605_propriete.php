@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('quartier')->nullable();
             $table->string('lot',15);
             $table->string('propriete_mere',20)->nullable();
-            $table->string('titre',20);
+            $table->string('titre',20)->nullable();
             $table->string('proprietaire',50)->nullable();
             $table->unsignedBigInteger('contenance')->nullable();
             $table->string('charge',40)->nullable();
