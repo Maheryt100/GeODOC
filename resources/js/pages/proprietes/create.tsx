@@ -243,7 +243,7 @@ export default function Create(){
                                 </div>
                                 <div className={'w-full'}>
                                     <Label>Titre</Label>
-                                    <Input type={'text'} onChange={(e) => setData('titre', e.target.value)} required />
+                                    <Input type={'text'} onChange={(e) => setData('titre', e.target.value)} />
                                 </div>
                                 <div className={'w-full'}>
                                     <Label>Nom propriété / Propriétaire</Label>

@@ -122,6 +122,7 @@ export default function Index( { propriete }) {
                                     <TableHead className={'text-center'}>Lot</TableHead>
                                     <TableHead className={'text-center'}>Titre</TableHead>
                                     <TableHead className={'text-center'}>Contenance</TableHead>
+                                    <TableHead className={'text-center'}>Circonscription</TableHead>
                                     <TableHead className={'text-center'}>Nom Propriété</TableHead>
                                     <TableHead className={'text-center'}>Nature</TableHead>
                                     <TableHead></TableHead>
@@ -133,6 +134,7 @@ export default function Index( { propriete }) {
                                         <TableCell className={'text-center'}>{propriete.lot}</TableCell>
                                         <TableCell className={'text-center'}>{propriete.titre}</TableCell>
                                         <TableCell className={'text-center'}>{propriete.contenance}</TableCell>
+                                        <TableCell className={'text-center'}>{propriete.circonscription}</TableCell>
                                         <TableCell className={'text-center'}>{propriete.proprietaire}</TableCell>
                                         <TableCell className={'text-center'}>{propriete.nature}</TableCell>
                                         <TableCell className={'text-center'}>
