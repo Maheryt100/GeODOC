@@ -12,5 +12,8 @@ class Demander extends Model
         'id_demandeur',
         'id_propriete',
         'total_prix',
+        'status',
+        'status_consort',
+        'motif_archive',
     ];
 }

@@ -29,8 +29,6 @@ export default function Create({ proprietes, demandeurs }){
     const [selectedCoDemandeurs, setSelectedCoDemandeurs] = useState([]);
 
     const [statusConsort, setStatusConsort] = useState(false);
-    console.log(statusConsort);
-
 
     const handleValidate = (e: React.FormEvent) => {
         e.preventDefault();
@@ -107,7 +105,9 @@ export default function Create({ proprietes, demandeurs }){
                     <div>
                         <Sheet>
                             <SheetTrigger asChild>
-                                <Button variant={'outline'} className={'cursor-pointer hover:underline border-0 shadow-none'}>
+                                <Button variant={'outline'} className={`cursor-pointer hover:underline border-0 shadow-none' +
+                                    ${selectedProprieteId === '' ? 'hidden' : 'flex'}`
+                                }>
                                     <Eye/>
                                     Visualiser
                                 </Button>
@@ -218,7 +218,8 @@ export default function Create({ proprietes, demandeurs }){
                                  <div>
                                      <Sheet>
                                          <SheetTrigger asChild>
-                                             <Button variant={'outline'} className={'border-0 shadow-none hover:underline'}>
+                                             <Button variant={'outline'} className={`border-0 shadow-none hover:underline
+                                             ${selectedDemandeurId === null ? 'hidden' : 'flex'}`}>
                                                  <Eye/>
                                                  Visualiser
                                              </Button>
@@ -349,7 +350,7 @@ export default function Create({ proprietes, demandeurs }){
                  </div>
                  <div>
                      <Button type={'submit'}>
-                         Lier
+                         Generer
                      </Button>
                  </div>
              </form>

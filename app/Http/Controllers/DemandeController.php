@@ -48,7 +48,7 @@ class DemandeController extends Controller
             'consort.*' => 'exists:demandeurs,id',
         ]);
 
-        //parcours le tableau et insert un consort à un demandeur principale et verifie si le consort n'existe pas déjà
+        //parcours le tableau et insert un consort à un demandeur principale et verifie si le consort existe déjà
         foreach ($validate['consort'] as $id_consort) {
             $exists = Consort::where('id_demandeur', $validate['demandeur_id'])
                 ->where('id_consort', $id_consort)
