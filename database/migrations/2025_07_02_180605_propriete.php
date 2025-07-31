@@ -1,4 +1,4 @@
-<?php
+cc<?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('commune')->nullable();
             $table->string('quartier')->nullable();
-            $table->string('lot',10);
+            $table->string('lot',10)->unique();
             $table->string('propriete_mere',20)->nullable();
             $table->string('titre',20)->nullable();
             $table->string('proprietaire',50)->nullable();
