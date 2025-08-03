@@ -39,6 +39,7 @@ class ProprieteController extends Controller
             'quartier' => 'nullable|string|max:70',
             'lot' => 'required|string|max:15',
             'propriete_mere' => 'nullable|string|max:20',
+            'titre_mere' => 'nullable|string|max:20',
             'titre' => 'nullable|string|max:20',
             'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric',
@@ -47,6 +48,8 @@ class ProprieteController extends Controller
             'circonscription' => 'required|string|max:50',
             'type' => 'required|string|max:30',
             'nature' => 'required|string|max:40',
+            'numero_FN' => 'nullable|string|max:10',
+            'date_descente' => 'required|date|before:today',
             'id_district' => 'required|numeric|exists:districts,id',
         ],[
             'commune.required' => 'La commune est obligatoire',
@@ -100,6 +103,7 @@ class ProprieteController extends Controller
             'quartier' => 'nullable|string|max:70',
             'lot' => 'required|string|max:15',
             'propriete_mere' => 'nullable|string|max:20',
+            'titre_mere' => 'nullable|string|max:20',
             'titre' => 'nullable|string|max:20',
             'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric',
@@ -108,6 +112,8 @@ class ProprieteController extends Controller
             'circonscription' => 'required|string|max:50',
             'type' => 'required|string|max:30',
             'nature' => 'required|string|max:40',
+            'numero_FN' => 'nullable|string|max:10',
+            'date_descente' => 'required|date|before:today',
             'id_district' => 'required|numeric|exists:districts,id',
         ],[
             'commune.required' => 'La commune est obligatoire',

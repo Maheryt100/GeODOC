@@ -15,8 +15,9 @@ return new class extends Migration
             $table->id();
             $table->string('commune')->nullable();
             $table->string('quartier')->nullable();
-            $table->string('lot',10)->unique();
+            $table->string('lot',10);
             $table->string('propriete_mere',20)->nullable();
+            $table->string('titre_mere',20)->nullable();
             $table->string('titre',20)->nullable();
             $table->string('proprietaire',50)->nullable();
             $table->unsignedBigInteger('contenance')->nullable();
@@ -25,6 +26,10 @@ return new class extends Migration
             $table->string('circonscription','50')->nullable();
             $table->string('type',30);
             $table->string('nature',40);
+            $table->date('date_descente');
+            $table->string('numero_FN',10)->nullable();
+            $table->boolean('statut')->default(false);
+
             $table->unsignedInteger('id_district');
             $table->foreign('id_district')->references('id')->on('districts')->onDelete('cascade');
             $table->timestamps();

@@ -10,6 +10,7 @@ class Propriete extends Model
     protected $fillable = [
         'lot',
         'propriete_mere',
+        'titre_mere',
         'titre',
         'proprietaire',
         'contenance',
@@ -21,5 +22,8 @@ class Propriete extends Model
         'id_district',
         'commune',
         'quartier',
+        'date_descente',
+        'numero_FN',
+        'status',
     ];
 }
