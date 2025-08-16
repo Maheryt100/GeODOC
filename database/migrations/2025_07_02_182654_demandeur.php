@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('occupation',50);
             $table->string('nom_pere')->nullable();
             $table->string('nom_mere',100);
-            $table->string('cin', 15);
+            $table->string('cin', 15)->unique();
             $table->date('date_delivrance');
             $table->string('lieu_delivrance',50);
             $table->date('date_delivrance_duplicata')->nullable();
