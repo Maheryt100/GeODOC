@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Propriete;
 use Illuminate\Http\Request;
-    use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
+use PhpOffice\PhpWord\TemplateProcessor;
 
 class ProprieteController extends Controller
 {
@@ -126,6 +129,49 @@ class ProprieteController extends Controller
         }catch (\Exception $exception){
             return redirect()->back()->with('message', $exception->getMessage());
         }
+    }
+
+    public function downloadRequisition($id)
+    {
+        $propriete = Propriete::find($id);
+
+        if (!$propriete) {
+            return redirect()->route('proprietes.index')->with('message', 'Propriété introuvable');
+        }
+        if ($propriete->type == 'morcellement') {
+            $requision_model = new TemplateProcessor(storage_path('app/public/modele_odoc/requisition_MO.docx'));
+        }elseif ($propriete->type == 'immatriculation') {
+            $requision_model = new TemplateProcessor(storage_path('app/public/modele_odoc/requisition_IM.docx'));
+        }
+
+        $place = DB::table('proprietes')
+            ->join('districts', 'districts.id', '=', 'proprietes.id_district')
+            ->join('regions', 'regions.id', '=', 'districts.id_region')
+            ->join('provinces', 'provinces.id', '=', 'regions.id_province')
+            ->where('proprietes.id', $propriete->id)
+            ->select('provinces.nom_province', 'regions.nom_region', 'districts.nom_district')
+            ->first();
+
+        $requision_model->setValues([
+            'Province' => $place->nom_province,
+            'Region' => $place->nom_region,
+            'District' => $place->nom_district,
+            'DISTRICT' => Str::upper($place->nom_district),
+            'Situation' => $propriete->situation,
+            'Nom_propriete' => Str::upper($propriete->proprietaire),
+            'Titre' => $propriete->titre,
+            'Commune' => $propriete->commune,
+            'Fokotany' => $propriete->quartier,
+            'Numero_fn' => $propriete->numero_FN,
+            'Propriete_mere' => Str::upper($propriete->propriete_mere),
+            'Titre_mere' => $propriete->titre_mere,
+        ]);
+
+        $fileName = 'Requisition_' . $propriete->titre . '_' . $propriete->lot . '_' . $propriete->type . '_' .'.docx';
+
+        $requision_model->saveAs(storage_path('app/public/modele_odoc/document_requisition/' .$fileName));
+
+        return response()->download(storage_path('app/public/modele_odoc/document_requisition/' .$fileName));
     }
 
     /**
