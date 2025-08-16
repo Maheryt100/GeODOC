@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('consorts', function (Blueprint $table) {
             $table->id();
+            $table->boolean('status')->default(true);
             $table->unsignedInteger('id_demandeur');
             $table->unsignedInteger('id_consort');
             $table->foreign('id_consort')->references('id')->on('demandeurs')->onDelete('cascade');
