@@ -1,12 +1,8 @@
 import AppLayout from '@/layouts/app-layout';
-import { Head, useForm, usePage } from '@inertiajs/react';
-import React, { useEffect, useState } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
 import {
     Select,
     SelectContent,
@@ -19,25 +15,25 @@ import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
+import { BreadcrumbItem, Demandeur, Dossier, SharedData } from '@/types';
 import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList, BreadcrumbPage,
-    BreadcrumbSeparator
-} from '@/components/ui/breadcrumb';
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown } from 'lucide-react';
 
-
-export default function Update({ demandeur }){
+export default function Update({ demandeur } : { demandeur : Demandeur}){
     // console.log(demandeur);
 
-    const { flash } = usePage().props;
+    const { flash } = usePage<SharedData>().props;
     console.log(flash);
-    const {district: districts} = usePage().props;
-    const [districtOpen, setDistrictOpen] = useState(false);
-    const [districtName, setDistrictName] = useState("");
+    const { dossier } = usePage<{
+        dossier: Dossier;
+    }>().props;
 
-    const{data, setData, put} = useForm({
+    const{data, setData, put, errors} = useForm({
         'titre_demandeur': demandeur.titre_demandeur ?? '',
         'nom_demandeur': demandeur.nom_demandeur ?? '',
         'prenom_demandeur': demandeur.prenom_demandeur ?? '',
@@ -50,101 +46,91 @@ export default function Update({ demandeur }){
         'cin': demandeur.cin ?? '',
         'date_delivrance': demandeur.date_delivrance ?? '',
         'lieu_delivrance': demandeur.lieu_delivrance ?? '',
-        'date_delivrance_duplicata': demandeur.date_delivrance_duplicata ?? '',
+        'date_delivrance_duplicata': demandeur.date_delivrance_duplicata ?? "",
         'lieu_delivrance_duplicata': demandeur.lieu_delivrance_duplicata ?? '',
         'domiciliation': demandeur.domiciliation ?? '',
         'nationalite': demandeur.nationalite ?? '',
         'situation_familiale': demandeur.situation_familiale ?? '',
         'regime_matrimoniale': demandeur.regime_matrimoniale ?? '',
-        'date_mariage': demandeur.date_mariage ?? '',
+        'date_mariage': demandeur.date_mariage ?? "",
         'lieu_mariage': demandeur.lieu_mariage ?? '',
         'marie_a': demandeur.marie_a ?? '',
         'telephone': demandeur.telephone ?? '',
-        'id_district': demandeur.id_district ?? '',
+        'id_dossier': dossier.id,
     });
-
     const handleTitre = (value: string) =>{
         setData('titre_demandeur', value);
         setData('sexe', value === 'Monsieur' ? 'Homme' : 'Femme');
     }
     useEffect(() => {
-        if (flash.message !== null){
-            toast.error(flash.message);
+        if (flash && flash.message){
+            toast.error(String(flash.message));
         }
     }, [flash]);
+    // Affiche l'erreur de validation renvoyée par le controller (par ex. "cin déjà pris")
+    useEffect(() => {
+        if (errors && errors.cin){
+            toast.error(String(errors.cin));
+        }
+    }, [errors]);
+    useEffect(() => {
+        if (data.situation_familiale != "Marié(e)"){
+            setData("marie_a", "");
+            setData("date_mariage", "");
+            setData("lieu_mariage", "");
+        }
+    }, [data.situation_familiale, setData]);
     const handleSubmit = (e: React.FormEvent)=>{
         e.preventDefault();
-        // console.log(demandeur.id);
+        console.log(data);
         put(route('demandeurs.update',demandeur.id), {
-            onError: (errors) => {
-                const messages = Object.values(errors).flat();
-                    toast.error(messages);
-            },
             onSuccess: () => {
                 toast.success('Formulaire envoyé avec succès !');
             },
         });
     }
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: dossier.nom_dossier,
+            href: '#',
+        },
+        {
+            title: (
+                <DropdownMenu>
+                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5">
+                        Demandeurs
+                        <ChevronDown />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.list', dossier.id)}>Liste document</Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ),
+            href: route('dossiers.proprietes', dossier.id),
+        },
+        {
+            title: 'Modification',
+            href: '#',
+        },
+    ];
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Toaster position={'top-right'}/>
             <Head title={'Modification Demandeur'} />
-            <div className="m-5">
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbLink href="/demandeurs">Demandeur</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator />
-                        <BreadcrumbItem>
-                            <BreadcrumbPage>Modification</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
             <div className="relative mt-4 min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
                 <form onSubmit={handleSubmit}>
                     <div className={'rounded-md border p-8'}>
                         <div className={'flex'}>
-                            <div className={'my-auto'}>
-                                <Popover open={districtOpen} onOpenChange={setDistrictOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button variant={'outline'} role={'combobox'} aria-expanded={districtOpen} className={'w-[200px]'}>
-                                            {districtName || 'District'}
-                                            <ChevronsUpDown className={'opacity-50'} />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[200px] p-0">
-                                        <Command>
-                                            <CommandInput placeholder="Rechercher un district" className="h-9" />
-                                            <CommandList>
-                                                <CommandEmpty>Aucun district ne correspond</CommandEmpty>
-                                                <CommandGroup>
-                                                    {districts.map((district) => (
-                                                        <CommandItem
-                                                            key={district.id}
-                                                            value={district.nom_district}
-                                                            onSelect={() => {
-                                                                setDistrictName(district.nom_district);
-                                                                setData('id_district', district.id);
-                                                                setDistrictOpen(false);
-                                                            }}
-                                                        >
-                                                            {district.nom_district}
-                                                            <Check
-                                                                className={cn(
-                                                                    'ml-auto',
-                                                                    districtName === district.nom_district ? 'opacity-100' : 'opacity-0',
-                                                                )}
-                                                            />
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
+
                         </div>
                         <div className={'my-3 flex w-3/4 flex-col justify-center gap-4 md:flex-row'}>
                             <div className={'w-1/3'}>
@@ -230,6 +216,9 @@ export default function Update({ demandeur }){
                                     <InputOTPSlot index={11} />
                                 </InputOTPGroup>
                             </InputOTP>
+                            {errors && errors.cin && (
+                                <p className="text-sm text-red-500 mt-1">{errors.cin}</p>
+                            )}
                         </div>
 
                         <div className={'my-8 flex w-full flex-col gap-4 md:flex-row'}>
@@ -255,7 +244,7 @@ export default function Update({ demandeur }){
                                 <Label>Date Délivrance Duplicata</Label>
                                 <Input
                                     type={'date'}
-                                    // value={data.date_delivrance_duplicata}
+                                    value={data.date_delivrance_duplicata}
                                     onChange={(e) => setData('date_delivrance_duplicata', e.target.value)}
                                 />
                             </div>
@@ -263,7 +252,7 @@ export default function Update({ demandeur }){
                                 <Label>Lieu Délivrance Duplicata</Label>
                                 <Input
                                     type={'text'}
-                                    // value={data.lieu_delivrance_duplicata}
+                                    value={data.lieu_delivrance_duplicata}
                                     onChange={(e) => setData('lieu_delivrance_duplicata', e.target.value)}
                                 />
                             </div>
@@ -301,7 +290,7 @@ export default function Update({ demandeur }){
                             </div>
                             <div className={'w-1/3'}>
                                 <Label>Régime matrimonial</Label>
-                                <Select required value={data.regime_matrimoniale} onValueChange={(e) => setData('regime_matrimoniale', e)}>
+                                <Select value={data.regime_matrimoniale} onValueChange={(e) => setData('regime_matrimoniale', e)}>
                                     <SelectTrigger>
                                         <SelectValue placeholder={'Régime Matrimonial'} />
                                     </SelectTrigger>
@@ -329,20 +318,22 @@ export default function Update({ demandeur }){
                                 <Input type={'text'} value={data.nom_mere} onChange={(e) => setData('nom_mere', e.target.value)} />
                             </div>
                         </div>
-                        <div className={'my-8 flex w-3/4 flex-col gap-4 md:flex-row'}>
-                            <div className={'w-full'}>
-                                <Label>Marié(e) à</Label>
-                                <Input type={'text'} value={data.marie_a} onChange={(e) => setData('marie_a', e.target.value)} />
+                        {data.situation_familiale == "Marié(e)" && (
+                            <div className={'my-8 flex w-3/4 flex-col gap-4 md:flex-row'}>
+                                <div className={'w-full'}>
+                                    <Label>Marié(e) à</Label>
+                                    <Input type={'text'} value={data.marie_a} onChange={(e) => setData('marie_a', e.target.value)} />
+                                </div>
+                                <div className={'w-full'}>
+                                    <Label>Date de Mariage</Label>
+                                    <Input type={'date'} value={data.date_mariage} onChange={(e) => setData('date_mariage', e.target.value)} />
+                                </div>
+                                <div className={'w-full'}>
+                                    <Label>Lieu de Mariage</Label>
+                                    <Input type={'text'} value={data.lieu_mariage} onChange={(e) => setData('lieu_mariage', e.target.value)} />
+                                </div>
                             </div>
-                            <div className={'w-full'}>
-                                <Label>Date de Mariage</Label>
-                                <Input type={'date'} value={data.date_mariage} onChange={(e) => setData('date_mariage', e.target.value)} />
-                            </div>
-                            <div className={'w-full'}>
-                                <Label>Lieu de Mariage</Label>
-                                <Input type={'text'} value={data.lieu_mariage} onChange={(e) => setData('lieu_mariage', e.target.value)} />
-                            </div>
-                        </div>
+                        )}
                         <div className="text-right">
                             <Button type="submit">Valider</Button>
                         </div>

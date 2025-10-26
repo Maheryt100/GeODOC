@@ -1,60 +1,49 @@
-import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
-import { Bar, BarChart } from "recharts"
+import { type BreadcrumbItem, SharedData } from '@/types';
+import { Head, usePage } from '@inertiajs/react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { LineChartDotsCustom } from '@/components/line-chart-dots-custom';
+import { BarChartMultiple } from '@/components/bar-chart-multiple';
+import { ChartRadial } from '@/components/chart-radial';
+import { BarChartInteractive } from '@/components/bar-chart-interactive';
 
-import { ChartConfig, ChartContainer } from "@/components/ui/chart"
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
         href: '/dashboard',
     },
 ];
-
-const chartData = [
-    { month: "January", desktop: 186, mobile: 80 },
-    { month: "February", desktop: 305, mobile: 200 },
-    { month: "March", desktop: 237, mobile: 120 },
-    { month: "April", desktop: 73, mobile: 190 },
-    { month: "May", desktop: 209, mobile: 130 },
-    { month: "June", desktop: 214, mobile: 140 },
-]
-
-const chartConfig = {
-    desktop: {
-        label: "Desktop",
-        color: "#2563eb",
-    },
-    mobile: {
-        label: "Mobile",
-        color: "#60a5fa",
-    },
-} satisfies ChartConfig
-export default function Dashboard() {
+interface Props {
+    lineChartData: { nom_dossier: string; demandes_count: number; }[];
+    barChartData:  { nom_dossier: string; demandeurs: number; proprietes: number; }[];
+    chartRadialData:  { nom_dossier: string; demandeurs_sans_propriete: number; }[];
+    barChartInteractiveData: { nom_dossier: string; prix: number; }[];
+}
+export default function Dashboard({ lineChartData, barChartData, chartRadialData, barChartInteractiveData}: Props) {
+    const { flash } = usePage<SharedData>().props;
+    useEffect(()=>{
+        if (flash.message != null){
+            toast.info(flash.message);
+        }
+    },[flash.message]);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                        <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
-                        <BarChart accessibilityLayer data={chartData}>
-                            <Bar dataKey="desktop" fill="var(--color-desktop)" radius={4} />
-                            <Bar dataKey="mobile" fill="var(--color-mobile)" radius={4} />
-                        </BarChart>
-                    </ChartContainer>
+                <div className="grid auto-rows-min gap-4 lg:grid-cols-3">
+                    <div className="">
+                        <LineChartDotsCustom lineChartData={lineChartData}/>
                     </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
+                    <div className="">
+                        <BarChartMultiple barChartData={barChartData}/>
                     </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
+                    <div className="">
+                        <ChartRadial chartRadialData={chartRadialData} />
                     </div>
                 </div>
                 <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
+                    <BarChartInteractive barChartInteractiveData={barChartInteractiveData}/>
                 </div>
             </div>
         </AppLayout>

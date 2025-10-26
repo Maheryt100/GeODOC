@@ -1,19 +1,12 @@
 
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type BreadcrumbItem, Demandeur, Demandeurs } from '@/types';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { Input } from '@/components/ui/input';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { Archive, Ellipsis, Eye, Pencil } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -29,22 +22,14 @@ export default function Index() {
         cin: ''
     });
     const { demandeur, allConsorts } = usePage().props as {
-        demandeur?: any;
-        allConsorts?: Array;
+        demandeur?: Demandeur;
+        allConsorts?: Demandeurs;
     };
     //console.log(allConsorts?.length);
 
     const handleCin = (e: React.FormEvent) => {
         e.preventDefault();
-        post('search',{
-            onSuccess: (page) => {
-                const { demandeur, allConsorts } = page.props as {
-                    demandeur?: any;
-                    allConsorts?: any;
-                };
-                //console.log(allConsorts.length);
-            }
-        });
+        post(route('consorts.search'));
     }
 
     return (
@@ -52,15 +37,16 @@ export default function Index() {
             <Head title="Consorts" />
             <Toaster position={'top-right'} />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <form onSubmit={handleCin} >
-                    <div className={'w-1/4 flex gap-6'}>
+                <form onSubmit={handleCin} className='w-1/4'>
+                    <div className={'flex flex-col md:flex-row space-x-8 space-y-4'}>
                         <Input type={'search'}
                                onChange={(e) => setData('cin', e.target.value)}
                                placeholder={'CIN demandeur principale....'}
                                maxLength={12}
                                minLength={12}
+                               className={'min-w-[200px]'}
                         />
-                        <Button type={'submit'} disabled={data.cin == ""}>
+                        <Button type={'submit'} disabled={data.cin == ""} className='min-w-[200px]'>
                             Rechercher
                         </Button>
                     </div>
@@ -82,51 +68,22 @@ export default function Index() {
                         <TableHeader>
 
                             <TableRow>
+                                <TableHead className={'text-center'}></TableHead>
                                 <TableHead className={'text-center'}>Titre</TableHead>
                                 <TableHead className={'text-center'}>Nom complet</TableHead>
                                 <TableHead className={'text-center'}>CIN</TableHead>
                                 <TableHead className={'text-center'}>Téléphone</TableHead>
-                                <TableHead className={'text-center'}>Action</TableHead>
-                                <TableHead></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {allConsorts && allConsorts.length > 0 ? (
-                                allConsorts.map((consort: any, index: number) => (
+                                allConsorts.map((consort: Demandeur, index: number) => (
                                     <TableRow key={index} className="text-center">
+                                        <TableCell>{index + 1}</TableCell>
                                         <TableCell>{consort.titre_demandeur}</TableCell>
                                         <TableCell>{consort.nom_demandeur} {consort.prenom_demandeur}</TableCell>
                                         <TableCell>{consort.cin}</TableCell>
                                         <TableCell>{consort.telephone}</TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger>
-                                                    <Ellipsis className={'opacity-50'}/>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem
-                                                    >
-                                                        <Link href={`documents/${document.id}/show`} className={'w-full flex gap-2 items-center'}>
-                                                            <Eye/>
-                                                            Voir
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem>
-                                                        <Link href={`documents/${document.id}/edit`} className={'w-full flex gap-2 items-center'}>
-                                                            <Pencil/>
-                                                            Modifier
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => {handleArchive(document.id);
-                                                        }}
-                                                    >
-                                                        <Archive/>
-                                                        Archiver
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
                                     </TableRow>
                                 ))
                             ) : (

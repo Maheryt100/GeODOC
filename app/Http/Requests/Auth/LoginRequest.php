@@ -48,6 +48,13 @@ class LoginRequest extends FormRequest
                 'email' => __('auth.failed'),
             ]);
         }
+        $user = Auth::user();
+        if ($user && !$user->status) {
+            Auth::logout();
+            throw ValidationException::withMessages([
+                'email' => 'Votre compte est désactivé. Veuillez contacter l\'administrateur.',
+            ]);
+        }
 
         RateLimiter::clear($this->throttleKey());
     }

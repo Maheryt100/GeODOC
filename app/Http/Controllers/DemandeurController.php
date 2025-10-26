@@ -2,32 +2,51 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Contenir;
 use App\Models\Demandeur;
+use App\Models\Dossier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
-
-//use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class DemandeurController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request, $id_dossier)
     {
-        //
+        $dossier = Dossier::find($id_dossier);
+
+        $query = $dossier->demandeurs();
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nom_demandeur', 'ilike', "%{$search}%")
+                    ->orWhere('prenom_demandeur', 'ilike', "%{$search}%")
+                    ->orWhere('cin', 'ilike', "%{$search}%");
+            });
+        }
+
+        $demandeurs = $query->paginate(20)->withQueryString();
+
         return Inertia::render('demandeurs/index', [
-            'demandeur' => Demandeur::orderBy('id', 'desc')->paginate(10),
+            'dossier' => $dossier,
+            'demandeurs' => $demandeurs,
         ]);
     }
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create($id)
     {
-        //
+        $dossier = Dossier::find($id);
+        return Inertia::render('demandeurs/create', [
+            'dossier' => $dossier,
+        ]);
     }
 
     /**
@@ -45,20 +64,20 @@ class DemandeurController extends Controller
             'occupation' => 'required|string|max:30',
             'nom_pere' => 'string|nullable',
             'nom_mere' => 'required|string',
-            'cin' => 'required|string|max:15',
+            'cin' => 'required|string|max:15|unique:' . Demandeur::class,
             'date_delivrance' => 'required|date|before:today',
             'lieu_delivrance' => 'required|string|max:40',
             'date_delivrance_duplicata' => 'nullable|date|before:today',
             'lieu_delivrance_duplicata' => 'nullable|string|max:40',
             'domiciliation' => 'required|string|max:60',
             'situation_familiale' => 'required|string|max:40',
-            'regime_matrimoniale' => 'required|string|max:40',
+            'regime_matrimoniale' => 'nullable|string|max:40',
             'telephone' => 'nullable|string|max:10',
             'date_mariage' => 'nullable|date|before:today',
             'lieu_mariage' => 'nullable|string|max:40',
             'marie_a' => 'nullable|string|max:40',
             'nationalite' => 'required|string|max:40',
-            'id_district' => 'required|numeric|exists:districts,id',
+            'id_dossier' => 'required|numeric|exists:dossiers,id',
             'pieces.*' => 'nullable|file',
         ], [
             'titre_demandeur.required' => 'Le titre est obligatoire.',
@@ -79,9 +98,10 @@ class DemandeurController extends Controller
             'regime_matrimoniale.required' => 'Le régime matrimonial est obligatoire.',
             'telephone.max' => 'Le numéro de téléphone ne doit pas dépasser 10 chiffres.',
             'date_mariage.before' => 'La date de mariage doit être antérieure à aujourd’hui.',
-            'id_district.required' => 'Le district est obligatoire.',
-            'id_district.exists' => 'Le district sélectionné est invalide.',
+            'id_dossier.required' => 'Le dossier est obligatoire.',
+            'id_dossier.exists' => 'Le dossier sélectionné est invalide.',
             'pieces.*.file' => 'Chaque pièce jointe doit être un fichier valide.',
+            'cin.unique' => 'Le numéro CIN est déjà pris.',
         ]);
 
         $piecesPaths = [];
@@ -95,13 +115,20 @@ class DemandeurController extends Controller
         }
 
         try {
-            $demandeur = Demandeur::create($request->all());
+            $request->merge(['id_user' => Auth::user()->getAuthIdentifier()]);
+            $demandeur = Demandeur::create(
+                $request->except(['_token', 'id_dossier']),
+            );
+            $contenir = Contenir::create([
+                'id_demandeur' => $demandeur->id,
+                'id_dossier' => request()->id_dossier,
+            ]);
+//
+//            if (!$demandeur || !$contenir) {
+//                return back()->with('error', 'Erreur lors de la création du demandeur.');
+//            }
 
-            if (!$demandeur) {
-                return back()->with('error', 'Erreur lors de la création du demandeur.');
-            }
-
-            return redirect::route('demandeurs')->with('success', 'Demandeur ajouté avec succès');
+            return redirect::route('dossiers.demandeurs', $request->id_dossier)->with('success', 'Demandeur ajouté avec succès');
         } catch (\Exception $e) {
             return back()->with('error', 'Une erreur est survenue : ' . $e->getMessage());
         }
@@ -109,20 +136,30 @@ class DemandeurController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function search(Request $request)
     {
         //
+        $var = $request->search;
+        $dossier = Dossier::where('nom_dossier', 'ILIKE', '%' . $var . '%')->first();
+        if (!$dossier) {
+            return Redirect::route("demandeurs")->with("message", "Dossier introuvable");
+        }
+        $demandeurs = $dossier->demandeurs->toArray();
 
+        return Inertia::render('demandeurs/index', [
+            'demandeurs' => $demandeurs,
+            'dossiers' => $dossier,
+        ]);
     }
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit($id)
+    public function edit($id_dossier, $id_demandeur)
     {
-        //
         return Inertia::render('demandeurs/update', [
-            'demandeur' => Demandeur::find($id),
+            'demandeur' => Demandeur::find($id_demandeur),
+            'dossier' => Dossier::find($id_dossier),
         ]);
     }
 
@@ -147,21 +184,21 @@ class DemandeurController extends Controller
             'occupation' => 'required|string|max:30',
             'nom_pere' => 'string|nullable',
             'nom_mere' => 'required|string',
-            'cin' => 'required|numeric',
+            'cin' => ['required','numeric', Rule::unique(Demandeur::class)->ignore($id)],
             'date_delivrance' => 'required|date|before:today',
             'lieu_delivrance' => 'required|string|max:40',
             'date_delivrance_duplicata' => 'nullable|date|before:today',
             'lieu_delivrance_duplicata' => 'nullable|string|max:40',
             'domiciliation' => 'required|string|max:60',
             'situation_familiale' => 'required|string|max:40',
-            'regime_matrimoniale' => 'required|string|max:40',
+            'regime_matrimoniale' => 'nullable|string|max:40',
             'telephone' => 'nullable|string|max:10',
             'date_mariage' => 'nullable|date|before:today',
             'lieu_mariage' => 'nullable|string|max:40',
             'marie_a' => 'nullable|string|max:40',
             'nationalite' => 'required|string|max:40',
-            'id_district' => 'required|numeric|exists:districts,id',
             'pieces.*' => 'nullable|file',
+            'id_dossier' => 'required|exists:dossiers,id',
         ], [
             'titre_demandeur.required' => 'Le titre est obligatoire.',
             'nom_demandeur.required' => 'Le nom est obligatoire.',
@@ -181,30 +218,67 @@ class DemandeurController extends Controller
             'regime_matrimoniale.required' => 'Le régime matrimonial est obligatoire.',
             'telephone.max' => 'Le numéro de téléphone ne doit pas dépasser 10 chiffres.',
             'date_mariage.before' => 'La date de mariage doit être antérieure à aujourd’hui.',
-            'id_district.required' => 'Le district est obligatoire.',
-            'id_district.exists' => 'Le district sélectionné est invalide.',
             'pieces.*.file' => 'Chaque pièce jointe doit être un fichier valide.',
+            'cin.unique' => 'Le numéro CIN est déjà pris.',
+
         ]);
 
         try {
-            $existDemandeur->update($validateData);
-            return \redirect()->route('demandeurs')->with('message', 'Demandeur modifié avec succes.');
-        }catch (\Exception $e){
-            return back()->withErrors('Error', $e->getMessage());
+            $existDemandeur->update(
+                collect($validateData)->except(['id_dossier'])->toArray()
+            );
+            return redirect::route('dossiers.demandeurs', $request->id_dossier)->with('success', 'Demandeur modifié avec succès');
+        } catch (\Exception $e) {
+            return back()->withErrors(['message' => $e->getMessage()]);
         }
     }
+    public function exist($id)
+    {
+        return Inertia::render('demandeurs/exist', [
+            'dossier' => Dossier::find($id),
+        ]);
+    }
+    public function searchCin(Request $request)
+    {
+        $demandeur = Demandeur::where('cin', $request->get('cin'))->first();
+        $dossier = Dossier::find($request->id_dossier);
 
+        if (!$demandeur){
+            return back()->with('message', 'Aucun demandeur ne correspond à ce CIN');
+        }
+
+        $contenir = Contenir::where('id_demandeur', $demandeur->id)
+            ->where('id_dossier', $dossier->id)
+            ->exists();
+        if($contenir) {
+            return to_route('dossiers.demandeurs', $dossier->id)->with('message', 'Le demandeur existe déjà dans le dossier');
+        }else{
+            return Inertia::render('demandeurs/createExist', [
+                'demandeur' => $demandeur,
+                'dossier' => $dossier,
+            ]);
+        }
+    }
+    public function storeExist(Request $request)
+    {
+        $contenir = Contenir::create(
+            $request->only(['id_dossier', 'id_demandeur'])
+        );
+
+        return to_route('dossiers.demandeurs', $request->id_dossier)->with('message', 'Demandeur existant bien ajouté!');
+    }
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id)
+    public function destroy($id_dossier, $id_demandeur)
     {
-        //
-        $demandeur = Demandeur::find($id);
-        if(!$demandeur){
-            return redirect()->route('demandeurs')->with('message', 'Demandeur introuvable.');
+        $contenir = Contenir::where('id_dossier', $id_dossier)
+            ->where('id_demandeur', $id_demandeur)
+            ->first();
+        if(!$contenir){
+            return redirect()->route('dossiers.demandeurs', $id_dossier)->with('message', 'Demandeur introuvable.');
         }
-        $demandeur->delete();
-        return redirect()->route('demandeurs')->with('message', 'Demandeur Supprimé avec succes.');
+        $contenir->delete();
+        return redirect()->route('demandeurs')->with('message', 'Demandeur Supprimé avec succès.');
     }
 }

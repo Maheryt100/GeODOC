@@ -22,6 +22,16 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/appearance',
         icon: null,
     },
+    {
+        title: 'Ajouter un Utilisateur',
+        href: route('add.users'),
+        icon: null,
+    },
+    {
+        title: 'Listes des Utilisateurs',
+        href: route('list.users'),
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
@@ -59,8 +69,8 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
 
                 <Separator className="my-6 md:hidden" />
 
-                <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">{children}</section>
+                <div className="flex-1">
+                    <section className="max-w-[1500px] space-y-12">{children}</section>
                 </div>
             </div>
         </div>

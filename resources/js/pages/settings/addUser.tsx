@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Manage Users',
-        href: '/settings/manageUser',
+        href: '/settings/addUser',
     },
 ];
 
@@ -29,7 +29,7 @@ type RegisterForm = {
     password_confirmation: string;
 };
 
-export default function ManageUser() {
+export default function AddUser() {
     const { flash } = usePage<SharedData>().props;
 
     const { data, setData, post, processing, errors, reset } = useForm<Required<RegisterForm>>({
@@ -60,7 +60,7 @@ export default function ManageUser() {
                 <div className="space-y-8">
             <HeadingSmall title="Ajouter un utilisateur" description="Choisissez le rôle et completez les informations" />
 
-                    <form className="flex flex-col gap-6" onSubmit={submit}>
+                    <form className="flex flex-col gap-6 max-w-xl" onSubmit={submit}>
                         <div className="grid gap-6">
                             <Label>Rôle</Label>
                             <div className="grid gap-2">
@@ -87,7 +87,7 @@ export default function ManageUser() {
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     disabled={processing}
-                                    placeholder="Full name"
+                                    placeholder="Nom complet"
                                 />
                                 <InputError message={errors.name} className="mt-2" />
                             </div>

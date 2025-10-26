@@ -29,14 +29,14 @@ return new class extends Migration
             $table->string('lieu_delivrance_duplicata',50)->nullable();
             $table->string('domiciliation', 100);
             $table->string('situation_familiale',40);
-            $table->string('regime_matrimoniale',40);
+            $table->string('regime_matrimoniale',40)->nullable();
             $table->string('nationalite',50);
             $table->string('telephone',12)->nullable();
             $table->date('date_mariage')->nullable();
             $table->string('lieu_mariage',40)->nullable();
             $table->string('marie_a')->nullable();
-            $table->unsignedInteger('id_district');
-            $table->foreign('id_district')->references('id')->on('districts')->onDelete('cascade');
+            $table->unsignedInteger('id_user');
+            $table->foreign('id_user')->references('id')->on('users')->onDelete('cascade');
             $table->timestamps();
         });
     }
@@ -47,7 +47,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('demandeurs', function (Blueprint $table) {
-            $table->dropForeign(['id_district']);
+            $table->dropForeign(['id_user']);
         });
         Schema::dropIfExists('demandeurs');
     }

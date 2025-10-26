@@ -18,6 +18,7 @@ return new class extends Migration
             $table->integer('agricole')->nullable();
             $table->unsignedInteger('id_region');
             $table->foreign('id_region')->references('id')->on('regions')->onDelete('cascade');
+            $table->timestamps();
         });
     }
 

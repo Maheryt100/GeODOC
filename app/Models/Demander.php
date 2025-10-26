@@ -15,5 +15,17 @@ class Demander extends Model
         'status',
         'status_consort',
         'motif_archive',
+        'id_user',
     ];
+
+    public function demandeur(){
+        return $this->belongsTo(Demandeur::class, 'id_demandeur');
+    }
+    public function propriete(){
+        return $this->belongsTo(Propriete::class, 'id_propriete');
+    }
+    public function consorts()
+    {
+        return $this->belongsToMany(Consort::class, 'demande_consorts', 'id_demande', 'id_consort');
+    }
 }

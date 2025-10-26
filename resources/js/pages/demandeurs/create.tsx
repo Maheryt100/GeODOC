@@ -1,20 +1,10 @@
 import AppLayout from '@/layouts/app-layout';
-import { Head, useForm, usePage } from '@inertiajs/react';
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList, BreadcrumbPage,
-    BreadcrumbSeparator
-} from '@/components/ui/breadcrumb';
-import React, { useState } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import React, { useEffect } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown, MapPin, MapPinHouse } from 'lucide-react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
+
 import {
     Select,
     SelectContent,
@@ -26,13 +16,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
-
+import { BreadcrumbItem, Dossier, SharedData } from '@/types';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown } from 'lucide-react';
 
 export default function Create(){
-
-    const { district: districts } = usePage().props;
-    const [districtOpen, setDistrictOpen] = useState(false);
-    const [districtName, setDistrictName] = useState("");
+    const { dossier } = usePage<{
+        dossier: Dossier;
+    }>().props;
 
     const{data, setData, post} = useForm({
         'titre_demandeur': '',
@@ -57,9 +53,16 @@ export default function Create(){
         'lieu_mariage': '',
         'marie_a': '',
         'telephone': '',
-        'id_district': '',
+        'id_dossier': dossier.id,
     });
 
+    useEffect(() => {
+        if (data.situation_familiale != "Marié(e)"){
+            setData('marie_a', '');
+            setData('date_mariage', '');
+            setData('lieu_mariage', '');
+        }
+    }, [data.situation_familiale]);
     const handleTitre = (value: string) =>{
         setData('titre_demandeur', value);
         setData('sexe', value === 'Monsieur' ? 'Homme' : 'Femme');
@@ -75,6 +78,10 @@ export default function Create(){
             toast.error("Le CIN ne doit contenir que des chiffres (pas de lettres ni de caractères spéciaux).");
             return;
         }
+        if (data.id_dossier == 0){
+            toast.error('Veuillez séléctionner un dossier!');
+            return;
+        }
         post(route('demandeurs.store'), {
             onError: (errors) => {
                 const messages = Object.values(errors).flat();
@@ -86,73 +93,46 @@ export default function Create(){
         });
     }
 
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: dossier.nom_dossier,
+            href: '#',
+        },
+        {
+            title: (
+                <DropdownMenu>
+                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5">
+                        Demandeurs
+                        <ChevronDown />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.list', dossier.id)}>Liste document</Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ),
+            href: route('dossiers.proprietes', dossier.id),
+        },
+        {
+            title: 'Insertion',
+            href: '#',
+        },
+    ];
 
     return (
-        <AppLayout>
-            <Toaster className={'absolute top-0 right-0'}/>
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Toaster position={'top-right'}/>
             <Head title={'Insertion Demandeur'}/>
-            <div className="mt-2">
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbLink href="/demandeurs">Demandeur</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator />
-                        <BreadcrumbItem>
-                            <BreadcrumbPage>Insertion</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
-            <div className="relative mt-4 min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border p-6">
+            <div className="relative mt-2 min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border p-3">
                 <form onSubmit={handleSubmit} >
-                    <div className={'border rounded-md p-8'}>
-                            <div className={'flex'}>
-                                <div className={'my-auto'}>
-                                    <Popover open={districtOpen} onOpenChange={setDistrictOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant={'outline'}
-                                                role={'combobox'}
-                                                aria-expanded={districtOpen}
-                                                className={'w-[200px]'}
-                                            >
-                                                { districtName || "District"}
-                                                <MapPinHouse />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[200px] p-0">
-                                            <Command>
-                                                <CommandInput placeholder="Rechercher un district" className="h-9" />
-                                                <CommandList>
-                                                    <CommandEmpty>Aucun district ne correspond</CommandEmpty>
-                                                    <CommandGroup>
-                                                        { districts.map((district) => (
-                                                            <CommandItem
-                                                                key={district.id}
-                                                                value={district.nom_district}
-                                                                onSelect={() => {
-                                                                    setDistrictName(district.nom_district);
-                                                                    setData('id_district', district.id);
-                                                                    setDistrictOpen(false);
-                                                                }}
-                                                            >
-                                                                {district.nom_district}
-                                                                <Check
-                                                                    className={cn(
-                                                                        "ml-auto",
-                                                                        districtName === district.nom_district ? "opacity-100" : "opacity-0"
-                                                                    )}
-                                                                />
-                                                            </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-                            </div>
+                    <div className={'border rounded-md p-6'}>
                             <div className={'flex w-3/4 flex-col md:flex-row my-3 gap-4 justify-center'}>
                                 <div className={'w-1/3'}>
                                     <Label>Titre</Label>
@@ -290,6 +270,7 @@ export default function Create(){
                                     <Label>Téléphone</Label>
                                     <Input type={'text'}
                                            onChange={(e)=>setData('telephone', e.target.value)}
+                                           maxLength={10}
                                     />
                                 </div>
                             </div>
@@ -316,7 +297,6 @@ export default function Create(){
                                 <div className={'w-1/3'}>
                                     <Label>Régime matrimonial</Label>
                                     <Select
-                                        required
                                         onValueChange={(e) => setData('regime_matrimoniale', e)}
                                     >
                                         <SelectTrigger>
@@ -353,26 +333,28 @@ export default function Create(){
                                     />
                                 </div>
                             </div>
-                            <div className={'flex flex-col w-3/4 md:flex-row gap-4 my-8'}>
-                                <div className={'w-full'}>
-                                    <Label>Marié(e) à</Label>
-                                    <Input type={'text'}
-                                           onChange={(e)=>setData('marie_a',e.target.value)}
-                                    />
+                            {data.situation_familiale== "Marié(e)" &&(
+                                <div className={'flex flex-col w-3/4 md:flex-row gap-4 my-8'}>
+                                    <div className={'w-full'}>
+                                        <Label>Marié(e) à</Label>
+                                        <Input type={'text'}
+                                               onChange={(e)=>setData('marie_a',e.target.value)}
+                                        />
+                                    </div>
+                                    <div className={'w-full'}>
+                                        <Label>Date de Mariage</Label>
+                                        <Input type={'date'}
+                                               onChange={(e)=>setData('date_mariage',e.target.value)}
+                                        />
+                                    </div>
+                                    <div className={'w-full'}>
+                                        <Label>Lieu de Mariage</Label>
+                                        <Input type={'text'}
+                                               onChange={(e)=>setData('lieu_mariage',e.target.value)}
+                                        />
+                                    </div>
                                 </div>
-                                <div className={'w-full'}>
-                                    <Label>Date de Mariage</Label>
-                                    <Input type={'date'}
-                                           onChange={(e)=>setData('date_mariage',e.target.value)}
-                                    />
-                                </div>
-                                <div className={'w-full'}>
-                                    <Label>Lieu de Mariage</Label>
-                                    <Input type={'text'}
-                                           onChange={(e)=>setData('lieu_mariage',e.target.value)}
-                                    />
-                                </div>
-                            </div>
+                            )}
                             <div className="text-right">
                                 <Button type="submit">Valider</Button>
                             </div>

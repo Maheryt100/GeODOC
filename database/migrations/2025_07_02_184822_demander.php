@@ -15,12 +15,14 @@ return new class extends Migration
             $table->id();
             $table->unsignedInteger('id_demandeur');
             $table->unsignedInteger('id_propriete');
+            $table->unsignedInteger('id_user');
             $table->string('status',15)->default('active');
             $table->boolean('status_consort');
             $table->string('motif_archive')->nullable();
             $table->unsignedInteger('total_prix');
             $table->foreign('id_demandeur')->references('id')->on('demandeurs')->onDelete('cascade');
             $table->foreign('id_propriete')->references('id')->on('proprietes')->onDelete('cascade');
+            $table->foreign('id_user')->references('id')->on('users')->onDelete('cascade');
             $table->timestamps();
         });
     }
@@ -33,6 +35,7 @@ return new class extends Migration
         Schema::table('demander', function (Blueprint $table) {
             $table->dropForeign(['id_demandeur']);
             $table->dropForeign(['id_propriete']);
+            $table->dropForeign(['id_user']);
         });
         Schema::dropIfExists('demander');
     }

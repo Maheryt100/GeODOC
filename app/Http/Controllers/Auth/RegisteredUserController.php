@@ -20,7 +20,14 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('auth/register');
+        if (Auth::user()->role != 'admin'){
+            session()->flash('message', 'Seule les administrateurs ont accès à ce fonctionnalité');
+            return Inertia::render('settings/profile');
+        }
+        return Inertia::render('settings/addUser');
+
+        //Uncomment this when rollbacking migrate
+//        return Inertia::render('auth/register');
     }
 
     /**
@@ -32,6 +39,7 @@ class RegisteredUserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
+            'role' => 'nullable|string|max:20',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
@@ -39,13 +47,14 @@ class RegisteredUserController extends Controller
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'role' => $request->role,
             'password' => Hash::make($request->password),
         ]);
 
         event(new Registered($user));
 
-        Auth::login($user);
+        //Auth::login($user);
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        return to_route('dashboard')->with('message', 'New user created!');
     }
 }

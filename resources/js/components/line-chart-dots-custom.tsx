@@ -1,7 +1,7 @@
 "use client"
 
-import { TrendingUp } from "lucide-react"
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { GitCommitVertical, TrendingUpDown } from 'lucide-react';
+import { CartesianGrid, Line, LineChart, XAxis } from "recharts"
 
 import {
     Card,
@@ -15,104 +15,94 @@ import {
     ChartConfig,
     ChartContainer,
     ChartTooltip,
-    ChartTooltipContent,
 } from "@/components/ui/chart"
-
 
 const chartConfig = {
     desktop: {
         label: "Desktop",
         color: "var(--chart-1)",
     },
+    mobile: {
+        label: "Mobile",
+        color: "var(--chart-2)",
+    },
 } satisfies ChartConfig
 
 type Props = {
-    areaData: { nom_dossier:string; total: number;  }
+    lineChartData: { nom_dossier: string; demandes_count: number; }[]
 }
-export function AreaChartGradient( areaData: Props ) {
-
+export function LineChartDotsCustom({ lineChartData } : Props) {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Area Chart - Gradient</CardTitle>
-                <CardDescription>
-                    Showing total visitors for the last 6 months
-                </CardDescription>
+                <CardTitle>Line Chart - Custom Dots</CardTitle>
+                <CardDescription>6 derniers dossiers</CardDescription>
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig}>
-                    <AreaChart
+                    <LineChart
                         accessibilityLayer
-                        data={areaData}
+                        data={lineChartData.reverse()}
                         margin={{
                             left: 12,
                             right: 12,
+                            top: 10,
                         }}
                     >
                         <CartesianGrid vertical={false} />
                         <XAxis
-                            dataKey="month"
+                            dataKey="nom_dossier"
                             tickLine={false}
                             axisLine={false}
                             tickMargin={8}
                             tickFormatter={(value) => value.slice(0, 3)}
                         />
-                        <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                        <defs>
-                            <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
-                                <stop
-                                    offset="5%"
-                                    stopColor="var(--color-desktop)"
-                                    stopOpacity={0.8}
-                                />
-                                <stop
-                                    offset="95%"
-                                    stopColor="var(--color-desktop)"
-                                    stopOpacity={0.1}
-                                />
-                            </linearGradient>
-                            <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-                                <stop
-                                    offset="5%"
-                                    stopColor="var(--color-mobile)"
-                                    stopOpacity={0.8}
-                                />
-                                <stop
-                                    offset="95%"
-                                    stopColor="var(--color-mobile)"
-                                    stopOpacity={0.1}
-                                />
-                            </linearGradient>
-                        </defs>
-                        <Area
-                            dataKey="mobile"
-                            type="natural"
-                            fill="url(#fillMobile)"
-                            fillOpacity={0.4}
-                            stroke="var(--color-mobile)"
-                            stackId="a"
+                        <ChartTooltip
+                            cursor={false}
+                            content={({ active, payload }) => {
+                                if (active && payload && payload.length > 0) {
+                                    const data = payload[0].payload
+                                    return (
+                                        <div className="rounded-md bg-background p-2 shadow-md text-sm">
+                                            <div className="font-medium">
+                                                <h6 className="text-xs font-bold">{data.nom_dossier}:</h6>
+                                                {data.demandes_count}
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                                return null
+                            }}
                         />
-                        <Area
-                            dataKey="desktop"
+                        <Line
+                            dataKey="demandes_count"
                             type="natural"
-                            fill="url(#fillDesktop)"
-                            fillOpacity={0.4}
                             stroke="var(--color-desktop)"
-                            stackId="a"
+                            strokeWidth={2}
+                            dot={({ cx, cy, payload }) => {
+                                const r = 24
+                                return (
+                                    <GitCommitVertical
+                                        key={payload.nom_dossier}
+                                        x={cx - r / 2}
+                                        y={cy - r / 2}
+                                        width={r}
+                                        height={r}
+                                        fill="hsl(var(--background))"
+                                        stroke="var(--color-desktop)"
+                                    />
+                                )
+                            }}
                         />
-                    </AreaChart>
+                    </LineChart>
                 </ChartContainer>
             </CardContent>
-            <CardFooter>
-                <div className="flex w-full items-start gap-2 text-sm">
-                    <div className="grid gap-2">
-                        <div className="flex items-center gap-2 leading-none font-medium">
-                            Trending up by 5.2% this month <TrendingUp className="h-4 w-4" />
-                        </div>
-                        <div className="text-muted-foreground flex items-center gap-2 leading-none">
-                            January - June 2024
-                        </div>
-                    </div>
+            <CardFooter className="flex-col items-start gap-2 text-sm">
+                <div className="flex gap-2 leading-none font-medium">
+                    Affiche l'evolution des totals des demandes pour les 6 derniers dossiers <TrendingUpDown className="h-4 w-4" />
+                </div>
+                <div className="text-muted-foreground leading-none">
+                    survoler le graphique pour voir plus de détail sur le nombre par dossier
                 </div>
             </CardFooter>
         </Card>

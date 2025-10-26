@@ -12,6 +12,7 @@ import AuthLayout from '@/layouts/auth-layout';
 type RegisterForm = {
     name: string;
     email: string;
+    role: string;
     password: string;
     password_confirmation: string;
 };
@@ -21,6 +22,7 @@ export default function Register() {
         name: '',
         email: '',
         password: '',
+        role: 'admin',
         password_confirmation: '',
     });
 

@@ -13,8 +13,6 @@ return new class extends Migration
     {
         Schema::create('proprietes', function (Blueprint $table) {
             $table->id();
-            $table->string('commune')->nullable();
-            $table->string('quartier')->nullable();
             $table->string('lot',10);
             $table->string('propriete_mere',20)->nullable();
             $table->string('titre_mere',20)->nullable();
@@ -23,15 +21,17 @@ return new class extends Migration
             $table->unsignedBigInteger('contenance')->nullable();
             $table->string('charge',40)->nullable();
             $table->string('situation')->nullable();
-            $table->string('circonscription','50')->nullable();
-            $table->string('type',30);
             $table->string('nature',40);
-            $table->date('date_descente');
             $table->string('numero_FN',10)->nullable();
-            $table->boolean('statut')->default(false);
-
-            $table->unsignedInteger('id_district');
-            $table->foreign('id_district')->references('id')->on('districts')->onDelete('cascade');
+            $table->string('numero_requisition',30)->nullable();
+            $table->date('date_requisition')->nullable();
+            $table->date('date_inscription')->nullable();
+            $table->string('dep_vol',20)->nullable();
+            $table->boolean('status')->default(false);
+            $table->unsignedInteger('id_dossier');
+            $table->unsignedInteger('id_user');
+            $table->foreign('id_dossier')->references('id')->on('dossiers')->onDelete('cascade');
+            $table->foreign('id_user')->references('id')->on('users')->onDelete('cascade');
             $table->timestamps();
         });
     }
@@ -42,7 +42,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('proprietes', function (Blueprint $table) {
-            $table->dropForeign(['id_district']);
+            $table->dropForeign(['id_dossier']);
+            $table->dropForeign(['id_user']);
         });
         Schema::dropIfExists('proprietes');
     }

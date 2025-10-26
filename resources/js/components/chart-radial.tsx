@@ -1,7 +1,7 @@
 "use client"
 
-import { TrendingUp } from "lucide-react"
-import { LabelList, RadialBar, RadialBarChart } from "recharts"
+import { TrendingUpDown } from 'lucide-react';
+import { RadialBar, RadialBarChart } from "recharts"
 
 import {
     Card,
@@ -15,75 +15,67 @@ import {
     ChartConfig,
     ChartContainer,
     ChartTooltip,
+    ChartTooltipContent,
 } from "@/components/ui/chart"
 
-export const description = "A radial chart with a label"
+export const description = "A radial chart"
 
+const chartConfig = {
+    visitors: {
+        label: "Visitors",
+    },
+    chrome: {
+        label: "Chrome",
+        color: "var(--chart-1)",
+    },
+    safari: {
+        label: "Safari",
+        color: "var(--chart-2)",
+    },
+    firefox: {
+        label: "Firefox",
+        color: "var(--chart-3)",
+    },
+    edge: {
+        label: "Edge",
+        color: "var(--chart-4)",
+    },
+    other: {
+        label: "Other",
+        color: "var(--chart-5)",
+    },
+} satisfies ChartConfig
 
 type Props = {
     chartRadialData:  { nom_dossier: string; demandeurs_sans_propriete: number; }[];
 }
-export function ChartRadialLabel({ chartRadialData }: Props) {
-    const chartConfig = chartRadialData.reduce((acc, { nom_dossier }) => {
-        const key = nom_dossier.slice(0, 3).toLowerCase();
-        acc[key] = {
-            label: nom_dossier,
-            color: `hsl(${Math.random() * 360}, 70%, 50%)`,
-        };
-        return acc;
-    }, {} as ChartConfig);
+export function ChartRadial({chartRadialData}: Props ) {
     return (
         <Card className="flex flex-col">
             <CardHeader className="items-center pb-0">
-                <CardTitle>Radial Chart - Label</CardTitle>
-                <CardDescription>January - June 2024</CardDescription>
+                <CardTitle>Radial Chart</CardTitle>
+                <CardDescription>6 derniers dossiers</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pb-0">
                 <ChartContainer
                     config={chartConfig}
                     className="mx-auto aspect-square max-h-[250px]"
                 >
-                    <RadialBarChart
-                        data={chartRadialData}
-                        startAngle={-90}
-                        endAngle={380}
-                        innerRadius={30}
-                        outerRadius={110}
-                    >
+                    <RadialBarChart data={chartRadialData} innerRadius={30} outerRadius={110}>
                         <ChartTooltip
                             cursor={false}
-                            content={({ active, payload }) => {
-                                if (active && payload && payload.length > 0) {
-                                    const data = payload[0].payload;
-                                    return (
-                                        <div className="rounded-md bg-background p-2 shadow-md text-sm -mt-10"> {/* Offset CSS négatif pour monter */}
-                                            <div className="font-medium">
-                                                <h6 className="text-xs font-bold">{data.nom_dossier}:</h6>
-                                                {data.total_demandes}
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            }}
+                            content={<ChartTooltipContent hideLabel nameKey="nom_dossier" />}
                         />
-                        <RadialBar dataKey="demandeurs_sans_propriete" background>
-                            <LabelList
-                                position="insideEnd"
-                                dataKey="nom_dossier"
-                                className="fill-white dark:fill-black capitalize mix-blend-luminosity"
-                                fontSize={11}
-                            />
-                        </RadialBar>
+                        <RadialBar dataKey="demandeurs_sans_propriete" background />
                     </RadialBarChart>
                 </ChartContainer>
             </CardContent>
             <CardFooter className="flex-col gap-2 text-sm">
                 <div className="flex items-center gap-2 leading-none font-medium">
-                    Trending up by 5.2% this month <TrendingUp className="h-4 w-4" />
+                    total des demandeurs n'ayant pas de propriétés mais inséré <TrendingUpDown className="h-4 w-4" />
                 </div>
                 <div className="text-muted-foreground leading-none">
-                    Showing total visitors for the last 6 months
+                    survoler le graphique pour voir plus de détail sur le nombre par dossier
                 </div>
             </CardFooter>
         </Card>

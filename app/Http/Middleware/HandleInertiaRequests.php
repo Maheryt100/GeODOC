@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\District;
+use App\Models\Dossier;
 use App\Models\Province;
 use App\Models\Region;
 use Illuminate\Foundation\Inspiring;

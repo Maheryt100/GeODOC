@@ -30,11 +30,20 @@ class Demandeur extends Model
         'nationalite',
         'marie_a',
         'telephone',
-        'id_district',
+        'id_user'
     ];
 
-    public function district()
+    public function dossiers()
     {
-        return $this->belongsTo(District::class);
+        return $this->belongsToMany(Dossier::class, 'contenir', 'id_demandeur', 'id_dossier');
+    }
+
+    public function proprietes()
+    {
+        return $this->belongsToMany(Propriete::class,'demander', 'id_demandeur', 'id_propriete');
+    }
+    public function consortLinks()
+    {
+        return $this->hasMany(Consort::class, 'id_consort');
     }
 }

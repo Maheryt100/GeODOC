@@ -1,70 +1,58 @@
 import AppLayout from '@/layouts/app-layout';
-import React, { useEffect, useState } from 'react';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import React, { useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { useForm, usePage } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BreadcrumbItem, Dossier } from '@/types';
 import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator
-} from '@/components/ui/breadcrumb';
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown } from 'lucide-react';
 
 export default function Create(){
-    const { district: districts } = usePage().props;
+    const { dossier } = usePage<{ dossier: Dossier }>().props;
 
-    const [districtOpen, setDistrictOpen] = useState(false);
-    const [circonscriptionOpen, setCirconscriptionOpen] = useState(false);
-    const [districtName, setDistrictName] = useState("");
-    const [circonscriptionName, setCirconscriptionName] = useState("");
+    const dossierType = dossier.type;
 
     const {data, setData, post} = useForm({
-        id_district: '',
-        commune: '',
-        quartier: '',
+        id_dossier: dossier.id,
         lot: '',
         propriete_mere: '',
         titre: '',
+        titre_mere: '',
         proprietaire: '',
-        type: '',
         contenance: '',
         charge: '',
         situation: '',
-        circonscription: '',
         nature: '',
-
+        numero_FN: '',
+        numero_requisition: '',
+        date_requisition: '',
+        date_inscription: '',
+        dep_vol: '',
     });
     useEffect(() => {
-        if (data.type === 'immatriculation') {
+        if (dossierType === 'immatriculation') {
             setData('propriete_mere', '');
+            setData('titre_mere', '');
         }
-    }, [data.type]);
+    }, [dossierType]);
 
     const handleSubmit = (e: React.FormEvent) =>{
         e.preventDefault();
-        if(data.id_district == ''){
-            toast.error('Veuillez séléctionner un district')
-            return;
-        }else if(data.type == ''){
-            toast.error('Veuillez séléctionner le type du propriété. Immatriculation ou Morcellement');
-            return;
-        }else if(data.nature == ''){
+        if(data.nature == ''){
             toast.warning('Veuillez séléctionner la nature du propriété')
             return;
         }
 
-        console.log(data);
-        post(route('proprietes.store', ), {
+        //console.log(data);
+        post(route('proprietes.store'), {
             onError: (errors) => {
                 const messages = Object.values(errors).flat();
                 toast.error('Erreur de validation: ', {
@@ -76,45 +64,47 @@ export default function Create(){
             },
         });
     }
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: dossier.nom_dossier,
+            href: '#',
+        },
+        {
+            title: (
+                <DropdownMenu>
+                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5">
+                        Propriétés
+                        <ChevronDown />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.list', dossier.id)}>Liste</Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ),
+            href: route('dossiers.proprietes', dossier.id),
+        },
+        {
+            title: 'Insertion',
+            href: '#',
+        },
+    ];
     return(
-        <AppLayout
-            breadcrumbs={[
-                {
-                    title: 'Formulaire Propriété',
-                    href: '/propriete/create',
-                },
-            ]}
-        >
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Toaster richColors position="top-right" />
-            <Breadcrumb className={'m-5'}>
-                <BreadcrumbList>
-                    <BreadcrumbItem>
-                        <BreadcrumbLink href="/proprietes">Propriété</BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem>
-                        <BreadcrumbPage>Insertion</BreadcrumbPage>
-                    </BreadcrumbItem>
-                </BreadcrumbList>
-            </Breadcrumb>
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
                 <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
                     <form onSubmit={handleSubmit}>
-
-                        <div className={'flex flex-col md:flex-row gap-6 justify-center'}>
-                            <div className={'m-5 w-full'}>
-                                <RadioGroup onValueChange={(e) => setData('type', e)}  className={'flex'}>
-                                    <div className="flex items-center gap-3">
-                                        <RadioGroupItem value="morcellement" id="r1" />
-                                        <Label htmlFor="r1" className={'hover:cursor-pointer'}>Morcellement</Label>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <RadioGroupItem value="immatriculation" id="r2"/>
-                                        <Label htmlFor="r2" className={'hover:cursor-pointer'}>Immatriculation</Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-                            <div className={'my-auto w-full'}>
+                        <div className={'mt-15'}>
+                            <div className={'my-auto mx-5'}>
                                 <Select onValueChange={(e) => setData('nature', e)} required >
                                     <SelectTrigger className="w-[180px]">
                                         <SelectValue placeholder="Nature" />
@@ -125,144 +115,102 @@ export default function Create(){
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className={'my-auto w-full'}>
-                                <Popover open={districtOpen} onOpenChange={setDistrictOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant={'outline'}
-                                            role={'combobox'}
-                                            aria-expanded={districtOpen}
-                                            className={'w-[200px]'}
-                                        >
-                                            { districtName || "District"}
-                                            <ChevronsUpDown className={'opacity-50'}/>
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[200px] p-0">
-                                        <Command>
-                                            <CommandInput placeholder="Rechercher un district" className="h-9" />
-                                            <CommandList>
-                                                <CommandEmpty>Aucun district ne correspond</CommandEmpty>
-                                                <CommandGroup>
-                                                    { districts.map((district) => (
-                                                        <CommandItem
-                                                            key={district.id}
-                                                            value={district.nom_district}
-                                                            onSelect={() => {
-                                                                setDistrictName(district.nom_district);
-                                                                setCirconscriptionName(district.nom_district);
-                                                                setData('id_district', district.id);
-                                                                setData('circonscription', district.nom_district);
-                                                                setDistrictOpen(false);
-                                                            }}
-                                                        >
-                                                            {district.nom_district}
-                                                            <Check
-                                                                className={cn(
-                                                                    "ml-auto",
-                                                                    districtName === district.nom_district ? "opacity-100" : "opacity-0"
-                                                                )}
-                                                            />
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <div className={'my-auto w-full'}>
-                                <Popover open={circonscriptionOpen} onOpenChange={setCirconscriptionOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant={'outline'}
-                                            role={'combobox'}
-                                            aria-expanded={circonscriptionOpen}
-                                            className={'w-[200px]'}
-                                        >
-                                            {circonscriptionName || "Circonscription"}
-                                            <ChevronsUpDown className={'opacity-50'}/>
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[200px] p-0">
-                                        <Command>
-                                            <CommandInput placeholder="Rechercher un district" className="h-9" />
-                                            <CommandList>
-                                                <CommandEmpty>Aucun district ne correspond</CommandEmpty>
-                                                <CommandGroup>
-                                                    { districts.map((district) => (
-                                                        <CommandItem
-                                                            key={district.id}
-                                                            value={district.nom_district}
-                                                            onSelect={() => {
-                                                                setCirconscriptionName(district.nom_district);
-                                                                setData('circonscription', district.nom_district);
-                                                                setCirconscriptionOpen(false);
-                                                            }}
-                                                        >
-                                                            {district.nom_district}
-                                                            <Check
-                                                                className={cn(
-                                                                    "ml-auto",
-                                                                    circonscriptionName === district.nom_district ? "opacity-100" : "opacity-0"
-                                                                )}
-                                                            />
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        </div>
-
-                        <div className={'mt-15'}>
-                            <div className={'flex flex-col md:flex-row gap-6 mx-5'}>
-                                <div className={'w-full'}>
-                                    <Label>Commune</Label>
-                                    <Input type={'text'} onChange={(e) => setData('commune', e.target.value)} />
-                                </div>
-                                <div className={'w-full'}>
-                                    <Label>Fokotany</Label>
-                                    <Input type={'text'} onChange={(e) => setData('quartier', e.target.value)} />
-                                </div>
-                                <div className={'w-full'}>
-                                    <Label>Lot</Label>
-                                    <Input type='text' onChange={(e) => setData('lot', e.target.value)} required />
-                                </div>
-                            </div>
-
                             <div className={'flex flex-col md:flex-row gap-6 m-5'}>
-                                <div className={'w-full '}>
-                                    <Label>Propriété mère</Label>
-                                    <Input type={'text'} value={data.type == 'morcellement' ? data.propriete_mere : ''}
-                                           onChange={(e) => setData('propriete_mere', e.target.value)}
-                                           disabled={data.type == 'immatriculation'}
+                                { dossierType == 'morcellement' && (
+                                    <div className={'w-full '}>
+                                        <Label>Propriété mère</Label>
+                                        <Input type={'text'} value={data.propriete_mere}
+                                               onChange={(e) => setData('propriete_mere', e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                                { dossierType == 'morcellement' && (
+                                    <div className={'w-full'}>
+                                        <Label>Titre mère</Label>
+                                        <Input type={'text'}
+                                               value={data.titre_mere}
+                                               onChange={(e) => setData('titre_mere', e.target.value)}
+                                               placeholder={"12.54-B"}
+                                        />
+                                    </div>
+                                )}
+                                <div className={`${dossierType == 'morcellement' ? 'w-full' : 'w-1/4'}`}>
+                                    <Label>Titre</Label>
+                                    <Input type={'text'}
+                                           onChange={(e) => setData('titre', e.target.value)}
+                                           placeholder={"54.21-A"}
                                     />
                                 </div>
-                                <div className={'w-full'}>
-                                    <Label>Titre</Label>
-                                    <Input type={'text'} onChange={(e) => setData('titre', e.target.value)} />
-                                </div>
-                                <div className={'w-full'}>
+
+                                <div className={`${dossierType == 'morcellement' ? 'w-full' : 'w-1/4'}`}>
                                     <Label>Nom propriété / Propriétaire</Label>
                                     <Input type={'text'} onChange={(e) => setData('proprietaire', e.target.value)}/>
                                 </div>
                             </div>
 
                             <div className={'flex flex-col md:flex-row gap-6 m-5'}>
-                                <div className={'w-full '}>
+                                <div className={'w-full md:w-1/4'}>
+                                    <Label>Lot</Label>
+                                    <Input type='text'
+                                           onChange={(e) => setData('lot', e.target.value)}
+                                           required
+                                           placeholder={"T 45"}
+                                    />
+                                </div>
+                                <div className={'w-full md:w-1/4'}>
+                                    <Label>Numero FNº</Label>
+                                    <Input type={'text'}
+                                           onChange={(e) => setData('numero_FN', e.target.value)}
+                                           placeholder={"78-A/25"}
+                                    />
+                                </div>
+                                { dossierType == 'immatriculation' && (
+                                    <div className={'w-full md:w-1/4'}>
+                                        <Label>Nº Requisition</Label>
+                                        <Input type={'text'} value={data.numero_requisition}
+                                               onChange={(e) => setData('numero_requisition', e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className={'flex flex-col md:flex-row gap-6 m-5'}>
+                                <div className={'w-full md:w-1/4'}>
                                     <Label>Contenance</Label>
                                     <Input type={'number'} min={1} placeholder={'en m²'} onChange={(e) => setData('contenance', e.target.value)} />
                                 </div>
-                                <div className={'w-full'}>
+                                <div className={'w-full md:w-1/4'}>
                                     <Label>Charge</Label>
                                     <Input type={'text'} onChange={(e) => setData('charge', e.target.value)}/>
                                 </div>
-                                <div className={'w-full'}>
-                                    <Label>Situation</Label>
+                                <div className={'w-full md:w-1/4'}>
+                                    <Label>Situation (sise à)</Label>
                                     <Input type={'text'} onChange={(e) => setData('situation', e.target.value)}/>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row gap-6 m-5">
+                                <div className="w-full md:w-1/4">
+                                    <Label>date inscription</Label>
+                                    <Input
+                                        type="date"
+                                        onChange={(e) => setData('date_inscription', e.target.value)}
+                                        required
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className="w-full md:w-1/4">
+                                    <Label>date requisition</Label>
+                                    <Input
+                                        type="date"
+                                        onChange={(e) => setData('date_requisition', e.target.value)}
+                                        required
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className={'w-full md:w-1/4'}>
+                                    <Label>Dep Vol</Label>
+                                    <Input type={'text'} onChange={(e) => setData('dep_vol', e.target.value)}/>
                                 </div>
                             </div>
                         </div>

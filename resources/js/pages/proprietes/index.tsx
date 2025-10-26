@@ -1,37 +1,34 @@
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type BreadcrumbItem, Dossier, Paginated, Propriete, SharedData } from '@/types';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Ellipsis, Eye, MapPinPlus, Pencil, Trash } from 'lucide-react';
+import { ChevronDown, Download, Ellipsis, MapPinPlus, Pencil, Trash } from 'lucide-react';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     DropdownMenu,
     DropdownMenuContent, DropdownMenuItem,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
 import {
     Pagination,
-    PaginationContent, PaginationEllipsis,
-    PaginationItem,
-    PaginationLink, PaginationNext,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem, PaginationLink, PaginationNext,
     PaginationPrevious
 } from '@/components/ui/pagination';
-import { useEffect } from 'react';
-import { toast } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 
+export default function Index() {
+    const { proprietes } = usePage<{proprietes: Paginated<Propriete> }>().props;
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Propriété',
-        href: '/proprietes',
-    },
-];
-
-export default function Index( { propriete }) {
-    const proprietes = propriete.data;
-    console.log(propriete.data);
+    const { dossier } = usePage<{ dossier: Dossier; }>().props;
     const { delete: destroy } = useForm();
-    const { message } = usePage().props as { message?: string };
+    const { flash } = usePage<SharedData>().props;
+    const [search, setSearch] = useState("");
+
     const handleDelete = (id: number) => {
         // console.log(id);
         if(confirm('voulez vous vraiment supprimer ce propriété ? ')){
@@ -39,19 +36,68 @@ export default function Index( { propriete }) {
         }
     }
 
+    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearch(e.target.value);
+
+        router.get(route('proprietes.search', dossier.id), {
+            search: e.target.value
+        }, {
+            preserveState: true,
+            replace: true,
+        });
+    }
+
     useEffect(() => {
-        if (message) {
-            toast.success(message); // ou toast.error, selon le message
+        if (flash.message != null) {
+            toast.info(flash.message);
         }
-    }, [message]);
+    }, [flash.message]);
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: dossier.nom_dossier,
+            href: '#',
+        },
+        {
+            title: (
+                <DropdownMenu>
+                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5">
+                        Propriétés
+                        <ChevronDown />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href={route('dossiers.list', dossier.id)}>Liste</Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ),
+            href: route('dossiers.proprietes', dossier.id),
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Propriété liste" />
+            <Toaster position={'top-right'}/>
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <div>
+                <div className={"w-full flex justify-between mt-6 px-5"}>
+                    <div className={"flex flex-col md:flex-row"}>
+                        <Input type={'search'}
+                               placeholder={'Recherche...'}
+                               className="min-w-[200px]"
+                               value={search}
+                               onChange={handleSearch}
+                        />
+                    </div>
                     <Button asChild>
-                        <Link href="/proprietes/create">
+                        <Link href={route('proprietes.create', dossier.id)}>
                             <MapPinPlus />
                             Inserer Propriété
                         </Link>
@@ -61,11 +107,10 @@ export default function Index( { propriete }) {
                 <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
                     <div className={'m-10 border rounded-md'}>
                         <Table>
-                            <TableCaption>Liste des Propriétés</TableCaption>
                             <TableCaption>
                                 <Pagination>
                                     <PaginationContent>
-                                        {propriete.links.map((link: any, index: number) => {
+                                        {proprietes.links.map((link, index: number) => {
                                             const isPrevious = link.label.includes('Previous') || link.label.includes('&laquo;');
                                             const isNext = link.label.includes('Next') || link.label.includes('&raquo;');
                                             const isEllipsis = link.label === '...';
@@ -109,7 +154,7 @@ export default function Index( { propriete }) {
                                                     <PaginationLink
                                                         href={link.url}
                                                         isActive={link.active}
-                                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                                        dangerouslySetInnerHTML={{ __html: link.label ?? '' }}
                                                     />
                                                 </PaginationItem>
                                             );
@@ -117,24 +162,23 @@ export default function Index( { propriete }) {
                                     </PaginationContent>
                                 </Pagination>
                             </TableCaption>
+                            <TableCaption>Liste des Propriétés</TableCaption>
                             <TableHeader className={'w-[100px]'}>
                                 <TableRow>
                                     <TableHead className={'text-center'}>Lot</TableHead>
                                     <TableHead className={'text-center'}>Titre</TableHead>
                                     <TableHead className={'text-center'}>Contenance</TableHead>
-                                    <TableHead className={'text-center'}>Circonscription</TableHead>
                                     <TableHead className={'text-center'}>Nom Propriété</TableHead>
                                     <TableHead className={'text-center'}>Nature</TableHead>
                                     <TableHead></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {proprietes.map((propriete) => (
+                                {proprietes.data.map((propriete) => (
                                     <TableRow key={propriete.id}>
                                         <TableCell className={'text-center'}>{propriete.lot}</TableCell>
-                                        <TableCell className={'text-center'}>{propriete.titre}</TableCell>
-                                        <TableCell className={'text-center'}>{propriete.contenance}</TableCell>
-                                        <TableCell className={'text-center'}>{propriete.circonscription}</TableCell>
+                                        <TableCell className={'text-center'}>TNº{propriete.titre}</TableCell>
+                                        <TableCell className={'text-center'}>{propriete.contenance} m²</TableCell>
                                         <TableCell className={'text-center'}>{propriete.proprietaire}</TableCell>
                                         <TableCell className={'text-center'}>{propriete.nature}</TableCell>
                                         <TableCell className={'text-center'}>
@@ -143,18 +187,19 @@ export default function Index( { propriete }) {
                                                     <Ellipsis className={'opacity-50'}/>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent>
-                                                    <DropdownMenuItem
-                                                    >
-                                                        <Link href={`proprietes/${propriete.id}/show`} className={'w-full flex gap-2 items-center'}>
-                                                            <Eye/>
-                                                            Voir
-                                                        </Link>
-                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem>
-                                                        <Link href={`proprietes/${propriete.id}/edit`} className={'w-full flex gap-2 items-center'}>
+                                                        <Link href={route('proprietes.edit', propriete.id)} className={'w-full flex gap-2 items-center'}>
                                                             <Pencil/>
                                                             Modifier
                                                         </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                    >
+                                                        <a href={route('proprietes.requisition', { dossier: dossier.id, id: propriete.id })}
+                                                           className={'w-full flex gap-2 items-center'}>
+                                                            <Download/>
+                                                            Réquisition
+                                                        </a>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
                                                         className={'text-red-500'}
