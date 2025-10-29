@@ -1,6 +1,8 @@
 import { LucideIcon } from 'lucide-react';
 import type { Config } from 'ziggy-js';
 import { ReactNode } from 'react';
+import type { BreadcrumbItem, Dossiers, SharedData } from '@/types';
+
 
 export interface Auth {
     user: User;
@@ -162,3 +164,9 @@ type Users = {
     users: User[];
 }
 
+export {}; // Pour rendre ce fichier un module
+declare global {
+  interface Window {
+    route: any; // tu peux typer selon ton besoin, ex: route: (args: any) => any;
+  }
+}

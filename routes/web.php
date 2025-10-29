@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [StatController::class, 'index'])->name('dashboard');
 
     Route::prefix('dossiers')->group(function () {
+    
        Route::get('/', [DossierController::class, 'index'])->name('dossiers');
        Route::get('/create', [DossierController::class, 'create'])->name('dossiers.create');
        Route::post('/store', [DossierController::class, 'store'])->name('dossiers.store');
@@ -25,13 +26,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
        Route::get('/search', function (){
           return redirect()->route('dossiers');
        });
+        Route::get('/{id}/show', [DossierController::class, 'show'])->name('dossiers.show');
         Route::get("/{id}/edit", [DossierController::class, 'edit'])->name('dossiers.edit');
         Route::post("update/{id}", [DossierController::class, 'update'])->name('dossiers.update');
         Route::get('{id}/list',[DemandeController::class, 'list'])->name('dossiers.list');
 
         //Route concernant les demandeurs
         Route::get('/{id}/demandeurs', [DossierController::class, 'demandeurs'])->name('dossiers.demandeurs');
-        Route::get('/{id}/demandeur/create}', [DemandeurController::class,'create'])->name('demandeurs.create');
+        Route::get('/{id}/demandeur/create', [DemandeurController::class,'create'])->name('demandeurs.create');
         Route::get('/{dossier}/demandeur/edit/{demandeur}', [DemandeurController::class,'edit'])->name('demandeurs.edit');
         Route::delete('/{dossier}/demandeur/delete/{demandeur}', [DemandeurController::class,'destroy'])->name('demandeurs.destroy');
         Route::post('/demandeurs/search/insert', [DemandeurController::class,'searchCin'])->name('demandeurs.searchCin');
@@ -54,6 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('document/archive', [DemandeController::class, 'archive'])->name('document.archive');
         Route::get('download/{id}/document', [DemandeController::class, 'download'])->name('document.download');
         Route::get('export/{id}/list', [DemandeController::class, 'exportList'])->name('export.list');
+       
     });
 
     //Route concernant tous les propriétés
@@ -90,6 +93,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('prix/terrain', [DistrictController::class, 'index'])->name('districts.terrain');
     Route::prefix('terrain')->group(function () {
         Route::post('update',[DistrictController::class, 'update'] )->name('terrain.update');
+        
     });
 
     Route::get('add/users', [RegisteredUserController::class, 'create'])->name('add.users');

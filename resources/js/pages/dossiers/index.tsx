@@ -1,9 +1,9 @@
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, Dossiers, SharedData } from '@/types';
+import type { BreadcrumbItem, Dossier, SharedData } from '@/types'; // ✅ Changé
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { EllipsisVertical, FolderPlus, LandPlot, List, Pencil, User } from 'lucide-react';
+import { EllipsisVertical, FolderPlus, LandPlot, List, Pencil, User, Eye } from 'lucide-react'; // ✅ Ajouté Eye
 import {
     Card,
     CardAction,
@@ -30,11 +30,11 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/dossiers',
     },
 ];
-export default function Index(){
 
+export default function Index(){
     const [search, setSearch] = useState("");
 
-    const { dossiers } = usePage<Dossiers>().props;
+    const { dossiers = [] } = usePage<{ dossiers: Dossier[] }>().props; // ✅ Changé
 
     const { flash } = usePage<SharedData>().props;
 
@@ -43,6 +43,7 @@ export default function Index(){
             toast.info(flash.message);
         }
     },[flash]);
+    
     const handleSearch = (e: React.FormEvent) =>{
         e.preventDefault();
 
@@ -79,7 +80,7 @@ export default function Index(){
                  </Button>
              </div>
              <div className={"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-5 mt-6"}>
-                 {dossiers?.map((dossier)=>(
+                 {dossiers?.map((dossier: Dossier)=>( // ✅ Ajouté le type
                      <Card key={dossier.id} className="w-full flex justify-self-center max-w-sm">
                          <CardHeader>
                              <CardTitle>{dossier.circonscription}</CardTitle>
@@ -89,26 +90,32 @@ export default function Index(){
                                      <DropdownMenuTrigger>
                                          <EllipsisVertical/>
                                      </DropdownMenuTrigger>
-                                     <DropdownMenuContent>
-                                         <DropdownMenuItem>
+                                     <DropdownMenuContent>            
+                                        <DropdownMenuItem asChild>
+                                            <Link href={route("dossiers.show", dossier.id)} className={'w-full flex gap-2 items-center'}>
+                                                <Eye />
+                                                Voir Détails
+                                            </Link>
+                                        </DropdownMenuItem>
+                                         <DropdownMenuItem asChild>
                                              <Link href={route("dossiers.edit", dossier.id)} className={'w-full flex gap-2 items-center'}>
                                                  <Pencil/>
                                                  Modifier
                                              </Link>
                                          </DropdownMenuItem>
-                                         <DropdownMenuItem>
+                                         <DropdownMenuItem asChild>
                                              <Link href={route("dossiers.demandeurs", dossier.id)} className={'w-full flex gap-2 items-center'}>
                                                  <User/>
                                                  Demandeurs
                                              </Link>
                                          </DropdownMenuItem>
-                                         <DropdownMenuItem>
+                                         <DropdownMenuItem asChild>
                                              <Link href={route("dossiers.proprietes", dossier.id)} className={'w-full flex gap-2 items-center'}>
                                                  <LandPlot/>
                                                  Propriétés
                                              </Link>
                                          </DropdownMenuItem>
-                                         <DropdownMenuItem>
+                                         <DropdownMenuItem asChild>
                                              <Link href={route("dossiers.list", dossier.id)} className={'w-full flex gap-2 items-center'}>
                                                  <List/>
                                                  Liste
@@ -120,13 +127,13 @@ export default function Index(){
                          </CardHeader>
                          <CardContent>
                              <div>
-                                 <div className={"flex"}>
-                                     <h3>
-                                         <strong>Commune</strong> {dossier.type_commune} {dossier.commune}
-                                     </h3>
-                                     <h5>
-                                         <strong>Fokontany</strong> {dossier.fokontany}
-                                     </h5>
+                                 <div className={"flex flex-col gap-2"}>
+                                     <div>
+                                         <strong>Commune:</strong> {dossier.type_commune} {dossier.commune}
+                                     </div>
+                                     <div>
+                                         <strong>Fokontany:</strong> {dossier.fokontany}
+                                     </div>
                                  </div>
                              </div>
                          </CardContent>

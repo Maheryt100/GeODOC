@@ -23,6 +23,17 @@ class Dossier extends Model
         'id_district',
         'id_user',
     ];
+    protected $appends = ['demandeurs_count', 'proprietes_count'];
+
+    public function getDemandeursCountAttribute()
+    {
+        return $this->demandeurs()->count();
+    }
+
+    public function getProprietesCountAttribute()
+    {
+        return $this->proprietes()->count();
+    }
     public function demandeurs()
     {
         return $this->belongsToMany(Demandeur::class, 'contenir', 'id_dossier', 'id_demandeur');

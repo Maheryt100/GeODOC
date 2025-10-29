@@ -17,10 +17,13 @@ class DossierController extends Controller
      */
     public function index()
     {
-        //
-        return Inertia::render('dossiers/index');
+        $dossiers = Dossier::withCount(['demandeurs', 'proprietes'])->get();
+        
+        return Inertia::render('dossiers/index', [
+            'dossiers' => $dossiers,
+        ]);
     }
-
+    
     /**
      * Show the form for creating a new resource.
      */
@@ -177,5 +180,15 @@ class DossierController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    public function show($id)
+    {
+        $dossier = Dossier::with(['demandeurs', 'proprietes'])
+            ->findOrFail($id);
+        
+        return Inertia::render('dossiers/Show', [  // Minuscule !
+            'dossier' => $dossier,
+        ]);
     }
 }
