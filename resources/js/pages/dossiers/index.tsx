@@ -1,9 +1,10 @@
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, Dossier, SharedData } from '@/types'; // ✅ Changé
+import type { BreadcrumbItem, Dossier, SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { EllipsisVertical, FolderPlus, LandPlot, List, Pencil, User, Eye } from 'lucide-react'; // ✅ Ajouté Eye
+import { EllipsisVertical, FolderPlus, List, Pencil, Eye, LandPlot, UserPlus, Link2 } from 'lucide-react';
+
 import {
     Card,
     CardAction,
@@ -13,7 +14,6 @@ import {
     CardHeader,
     CardTitle
 } from '@/components/ui/card';
-
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
@@ -21,7 +21,9 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuTrigger
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -33,9 +35,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function Index(){
     const [search, setSearch] = useState("");
-
-    const { dossiers = [] } = usePage<{ dossiers: Dossier[] }>().props; // ✅ Changé
-
+    const { dossiers = [] } = usePage<{ dossiers: Dossier[] }>().props;
     const { flash } = usePage<SharedData>().props;
 
     useEffect(() =>{
@@ -43,10 +43,9 @@ export default function Index(){
             toast.info(flash.message);
         }
     },[flash]);
-    
+
     const handleSearch = (e: React.FormEvent) =>{
         e.preventDefault();
-
         router.post(route("dossiers.search"),{
             search: search
         },{
@@ -80,44 +79,62 @@ export default function Index(){
                  </Button>
              </div>
              <div className={"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-5 mt-6"}>
-                 {dossiers?.map((dossier: Dossier)=>( // ✅ Ajouté le type
-                     <Card key={dossier.id} className="w-full flex justify-self-center max-w-sm">
+                 {dossiers?.map((dossier: Dossier)=>(
+                     <Card 
+                         key={dossier.id} 
+                         className="w-full flex justify-self-center max-w-sm cursor-pointer hover:shadow-lg transition-shadow"
+                         onClick={() => router.visit(route('dossiers.show', dossier.id))}
+                     >
                          <CardHeader>
                              <CardTitle>{dossier.circonscription}</CardTitle>
                              <CardDescription><strong>Dossier:</strong> {dossier.nom_dossier}</CardDescription>
-                             <CardAction>
+                             <CardAction onClick={(e) => e.stopPropagation()}>
                                  <DropdownMenu>
                                      <DropdownMenuTrigger>
                                          <EllipsisVertical/>
                                      </DropdownMenuTrigger>
-                                     <DropdownMenuContent>            
-                                        <DropdownMenuItem asChild>
-                                            <Link href={route("dossiers.show", dossier.id)} className={'w-full flex gap-2 items-center'}>
-                                                <Eye />
-                                                Voir Détails
-                                            </Link>
-                                        </DropdownMenuItem>
+                                     <DropdownMenuContent>
+                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                         <DropdownMenuItem asChild>
+                                             <Link href={route("dossiers.show", dossier.id)} className={'w-full flex gap-2 items-center'}>
+                                                 <Eye className="h-4 w-4" />
+                                                 Voir Détails
+                                             </Link>
+                                         </DropdownMenuItem>
                                          <DropdownMenuItem asChild>
                                              <Link href={route("dossiers.edit", dossier.id)} className={'w-full flex gap-2 items-center'}>
-                                                 <Pencil/>
+                                                 <Pencil className="h-4 w-4"/>
                                                  Modifier
                                              </Link>
                                          </DropdownMenuItem>
+                                         
+                                         <DropdownMenuSeparator />
+                                         <DropdownMenuLabel>Ajouter</DropdownMenuLabel>
+                                         
                                          <DropdownMenuItem asChild>
-                                             <Link href={route("dossiers.demandeurs", dossier.id)} className={'w-full flex gap-2 items-center'}>
-                                                 <User/>
-                                                 Demandeurs
+                                             <Link href={route("nouveau-lot.create", dossier.id)} className={'w-full flex gap-2 items-center'}>
+                                                 <LandPlot className="h-4 w-4"/>
+                                                 Nouveau Lot
                                              </Link>
                                          </DropdownMenuItem>
                                          <DropdownMenuItem asChild>
-                                             <Link href={route("dossiers.proprietes", dossier.id)} className={'w-full flex gap-2 items-center'}>
-                                                 <LandPlot/>
-                                                 Propriétés
+                                             <Link href={route("ajouter-demandeur.create", dossier.id)} className={'w-full flex gap-2 items-center'}>
+                                                 <UserPlus className="h-4 w-4"/>
+                                                 Ajouter Demandeur à un lot
                                              </Link>
                                          </DropdownMenuItem>
+                                         <DropdownMenuItem asChild>
+                                             <Link href={route("lier-demandeur.create", dossier.id)} className={'w-full flex gap-2 items-center'}>
+                                                 <Link2 className="h-4 w-4"/>
+                                                 Lier Demandeur existant
+                                             </Link>
+                                         </DropdownMenuItem>
+                                         
+                                         <DropdownMenuSeparator />
+                                         
                                          <DropdownMenuItem asChild>
                                              <Link href={route("dossiers.list", dossier.id)} className={'w-full flex gap-2 items-center'}>
-                                                 <List/>
+                                                 <List className="h-4 w-4"/>
                                                  Liste
                                              </Link>
                                          </DropdownMenuItem>

@@ -4,10 +4,12 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ConsortController;
 use App\Http\Controllers\DemandeController;
 use App\Http\Controllers\DemandeurController;
+use App\Http\Controllers\DemandeurProprieteController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DossierController;
 use App\Http\Controllers\ProprieteController;
 use App\Http\Controllers\StatController;
+
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -30,6 +32,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get("/{id}/edit", [DossierController::class, 'edit'])->name('dossiers.edit');
         Route::post("update/{id}", [DossierController::class, 'update'])->name('dossiers.update');
         Route::get('{id}/list',[DemandeController::class, 'list'])->name('dossiers.list');
+
+         // Nouveau Lot (Propriété + Demandeurs)
+        Route::get('/{id}/nouveau-lot', [DemandeurProprieteController::class, 'create'])
+            ->name('nouveau-lot.create');
+        Route::post('/nouveau-lot/store', [DemandeurProprieteController::class, 'store'])
+            ->name('nouveau-lot.store');
+
+        // 2. Ajouter Demandeur à une propriété existante
+        Route::get('/{id}/ajouter-demandeur', [DemandeurProprieteController::class, 'addToProperty'])
+            ->name('ajouter-demandeur.create');
+        Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])
+            ->name('ajouter-demandeur.store');
+
+        // 3. Lier Demandeur existant à Propriété existante
+        Route::get('/{id}/lier-demandeur', [DemandeurProprieteController::class, 'linkExisting'])
+            ->name('lier-demandeur.create');
+        Route::post('/lier-demandeur/search', [DemandeurProprieteController::class, 'searchToLink'])
+            ->name('lier-demandeur.search');
+        Route::post('/lier-demandeur/store', [DemandeurProprieteController::class, 'storeLink'])
+            ->name('lier-demandeur.store');
+
+        //Route pour la fusionForm (propriete et demandeur)
+        Route::get('/{id}/fusion/create', [DemandeurProprieteController::class, 'create'])->name('demandeur-propriete.create');
+        Route::post('/fusion/store', [DemandeurProprieteController::class, 'store'])->name('demandeur-propriete.store');
 
         //Route concernant les demandeurs
         Route::get('/{id}/demandeurs', [DossierController::class, 'demandeurs'])->name('dossiers.demandeurs');

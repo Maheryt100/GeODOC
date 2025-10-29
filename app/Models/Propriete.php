@@ -18,6 +18,7 @@ class Propriete extends Model
         'charge',
         'situation',
         'nature',
+        'vocation', //ajout
         'numero_FN',
         'numero_requisition',
         'date_requisition',

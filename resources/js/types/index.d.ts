@@ -59,6 +59,7 @@ export interface Propriete{
     charge: string;
     situation: string;
     nature: string;
+    vocation: string; //nouveau
     numero_FN: string;
     numero_requisition: string;
     status: string;
@@ -66,6 +67,8 @@ export interface Propriete{
     date_inscription: string;
     dep_vol: string;
     id_dossier: string;
+    demandeurs?: Demandeur[]; //pour afficher les demandeurs liés
+    is_incomplete?: boolean;
 }
 
 export interface Dossier{
@@ -82,6 +85,7 @@ export interface Dossier{
     demandeurs?: Demandeur[];
     demandeurs_count: number;
     proprietes_count: number;
+    is_incomplete?: boolean; //ajout
 }
 
 export interface Demandeur{
@@ -108,6 +112,8 @@ export interface Demandeur{
     nationalite: string;
     marie_a: string;
     telephone: string;
+    is_incomplete?: boolean; //ajout
+    [key: string]: string; //ajout
 }
 
 export interface Demander{
