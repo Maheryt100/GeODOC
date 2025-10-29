@@ -2,15 +2,12 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { UserPlus, LandPlot, Pencil, Trash, UserRoundSearch, Ellipsis } from 'lucide-react';
+import { LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import type { BreadcrumbItem, Dossier, Demandeur, Propriete, SharedData } from '@/types';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 interface PageProps {
     dossier: Dossier & {
@@ -20,21 +17,17 @@ interface PageProps {
     [key: string]: unknown;
 }
 
-
 export default function Show() {
     const { dossier } = usePage<PageProps>().props;
     const { flash } = usePage<SharedData>().props;
     const { delete: destroy } = useForm();
-    
-    const [showDemandeurDialog, setShowDemandeurDialog] = useState(false);
-    const [searchCin, setSearchCin] = useState('');
 
     // Afficher les messages flash
     useEffect(() => {
-            if (flash.message) {
-                toast.info(flash.message);
-            }
-        }, [flash.message]);
+        if (flash.message) {
+            toast.info(flash.message);
+        }
+    }, [flash.message]);
 
     const handleDeleteDemandeur = (id: number) => {
         if (confirm('Voulez-vous vraiment supprimer ce demandeur ?')) {
@@ -54,19 +47,6 @@ export default function Show() {
         }
     };
 
-    const handleSearchCin = () => {
-        const cinIsValid = /^\d{12}$/.test(searchCin);
-        if (!cinIsValid) {
-            toast.warning('CIN invalide, le CIN doit comporter 12 chiffres!');
-            return;
-        }
-        router.post(route('demandeurs.searchCin'), {
-            id_dossier: dossier.id,
-            cin: searchCin
-        });
-        setShowDemandeurDialog(false);
-    };
-
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dossiers', href: route('dossiers') },
         { title: dossier.nom_dossier, href: '#' }
@@ -78,14 +58,38 @@ export default function Show() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Dossier ${dossier.nom_dossier}`} />
-            <Toaster position="top-right" />
+            <Toaster position="top-right" richColors />
 
             <div className="flex flex-col gap-6 p-6">
                 {/* Section Informations du Dossier */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-2xl">{dossier.nom_dossier}</CardTitle>
-                        <CardDescription>Informations du dossier</CardDescription>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <CardTitle className="text-2xl">{dossier.nom_dossier}</CardTitle>
+                                <CardDescription>Informations du dossier</CardDescription>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button asChild variant="outline" size="sm">
+                                    <Link href={route('dossiers.edit', dossier.id)}>
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Modifier
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="default" size="sm">
+                                    <Link href={route('nouveau-lot.create', dossier.id)}>
+                                        <LandPlot className="mr-2 h-4 w-4" />
+                                        Nouveau Lot
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="outline" size="sm">
+                                    <Link href={route('dossiers.list', dossier.id)}>
+                                        <List className="mr-2 h-4 w-4" />
+                                        Liste
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -123,47 +127,12 @@ export default function Show() {
                                 <CardTitle>Demandeurs</CardTitle>
                                 <CardDescription>Liste des demandeurs du dossier ({demandeurs.length})</CardDescription>
                             </div>
-                            <div className="flex gap-2">
-                                <Dialog open={showDemandeurDialog} onOpenChange={setShowDemandeurDialog}>
-                                    <DialogTrigger asChild>
-                                        <Button variant="outline" size="sm">
-                                            <UserRoundSearch className="mr-2 h-4 w-4" />
-                                            Existant
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                        <DialogHeader>
-                                            <DialogTitle>Recherche par CIN</DialogTitle>
-                                            <DialogDescription>
-                                                Rechercher un demandeur dans un autre dossier
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="grid gap-4 py-4">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="cin">CIN</Label>
-                                                <Input
-                                                    id="cin"
-                                                    placeholder="123456789012"
-                                                    minLength={12}
-                                                    maxLength={12}
-                                                    value={searchCin}
-                                                    onChange={(e) => setSearchCin(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                        <DialogFooter>
-                                            <Button onClick={handleSearchCin}>Rechercher</Button>
-                                        </DialogFooter>
-                                    </DialogContent>
-                                </Dialog>
-
-                                <Button asChild size="sm">
-                                    <Link href={route('demandeurs.create', dossier.id)}>
-                                        <UserPlus className="mr-2 h-4 w-4" />
-                                        Nouveau
-                                    </Link>
-                                </Button>
-                            </div>
+                            <Button asChild size="sm">
+                                <Link href={route('ajouter-demandeur.create', dossier.id)}>
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    Ajouter Demandeur à un lot
+                                </Link>
+                            </Button>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -246,9 +215,9 @@ export default function Show() {
                                 <CardDescription>Liste des propriétés du dossier ({proprietes.length})</CardDescription>
                             </div>
                             <Button asChild size="sm">
-                                <Link href={route('proprietes.create', dossier.id)}>
-                                    <LandPlot className="mr-2 h-4 w-4" />
-                                    Nouvelle Propriété
+                                <Link href={route('lier-demandeur.create', dossier.id)}>
+                                    <Link2 className="mr-2 h-4 w-4" />
+                                    Lier Demandeur existant
                                 </Link>
                             </Button>
                         </div>
@@ -290,7 +259,7 @@ export default function Show() {
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem asChild>
-                                                                <Link 
+                                                                <Link
                                                                     href={route('proprietes.edit', propriete.id)}
                                                                     className="flex items-center"
                                                                 >

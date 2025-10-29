@@ -1,8 +1,6 @@
 import { LucideIcon } from 'lucide-react';
 import type { Config } from 'ziggy-js';
 import { ReactNode } from 'react';
-import type { BreadcrumbItem, Dossiers, SharedData } from '@/types';
-
 
 export interface Auth {
     user: User;
@@ -46,9 +44,9 @@ export interface User {
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
-    [key: string]: unknown;
 }
-export interface Propriete{
+
+export interface Propriete {
     id: number;
     lot: string;
     titre: string;
@@ -56,22 +54,23 @@ export interface Propriete{
     proprietaire: string;
     propriete_mere: string;
     titre_mere: string;
-    charge: string;
+    charge: 'Voie(s) publique(s)' | 'Voie(s) d\'accès' | 'Servitude(s)' | null;
     situation: string;
     nature: string;
-    vocation: string; //nouveau
+    vocation: string;
     numero_FN: string;
     numero_requisition: string;
     status: string;
+    type_operation: 'morcellement' | 'immatriculation';
     date_requisition: string;
     date_inscription: string;
     dep_vol: string;
-    id_dossier: string;
-    demandeurs?: Demandeur[]; //pour afficher les demandeurs liés
+    id_dossier: number;
+    demandeurs?: Demandeur[];
     is_incomplete?: boolean;
 }
 
-export interface Dossier{
+export interface Dossier {
     id: number;
     nom_dossier: string;
     type: string;
@@ -83,12 +82,13 @@ export interface Dossier{
     circonscription: string;
     id_district: number;
     demandeurs?: Demandeur[];
+    proprietes?: Propriete[];
     demandeurs_count: number;
     proprietes_count: number;
-    is_incomplete?: boolean; //ajout
+    is_incomplete?: boolean;
 }
 
-export interface Demandeur{
+export interface Demandeur {
     id: number;
     titre_demandeur: string;
     nom_demandeur: string;
@@ -112,11 +112,10 @@ export interface Demandeur{
     nationalite: string;
     marie_a: string;
     telephone: string;
-    is_incomplete?: boolean; //ajout
-    [key: string]: string; //ajout
+    is_incomplete?: boolean;
 }
 
-export interface Demander{
+export interface Demander {
     propriete: Propriete;
     demandeur: Demandeur;
     id: number;
@@ -128,51 +127,34 @@ export interface Demander{
     motif_archive: string;
 }
 
-export interface District{
+export interface District {
     id: number;
     nom_district: string;
     edilitaire: string;
     agricole: string;
 }
-export interface PageProps{
+
+export interface PageProps {
     dossier: Dossier;
-    Demandeurs: Demandeurs;
-    document: Paginated<Demander>;
-    districts: Districts;
+    demandeurs?: Demandeur[];
+    proprietes?: Propriete[];
+    documents?: Paginated<Demander>;
+    districts?: District[];
 }
 
-export interface Paginated<T>{
+export interface Paginated<T> {
     data: T[];
     links: Link[];
 }
 
-export interface Link{
+export interface Link {
     active: boolean;
     label: string;
-    url: string;
-}
-type Dossiers = {
-    dossiers: Dossier[];
-}
-type Demandeurs = {
-    demandeurs: Demandeur[];
-}
-type Proprietes = {
-    proprietes: Propriete[];
-}
-type Demanders = {
-    documents: Demander[];
-}
-type Districts = {
-    districts: District[];
-}
-type Users = {
-    users: User[];
+    url: string | null;
 }
 
-export {}; // Pour rendre ce fichier un module
 declare global {
-  interface Window {
-    route: any; // tu peux typer selon ton besoin, ex: route: (args: any) => any;
-  }
+    interface Window {
+        route: (name: string, params?: any) => string;
+    }
 }

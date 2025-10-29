@@ -9,24 +9,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 class ProprieteController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request, $id_dossier)
     {
         $dossier = Dossier::findOrFail($id_dossier);
-
         $query = Propriete::where('id_dossier', $dossier->id);
 
         if ($request->filled('search')) {
             $search = $request->search;
-
             $query->where(function ($q) use ($search) {
                 $q->where('lot', 'ilike', "%{$search}%")
                     ->orWhere('titre', 'ilike', "%{$search}%")
@@ -37,31 +32,22 @@ class ProprieteController extends Controller
 
         $proprietes = $query->paginate(20);
 
-
         return Inertia::render('proprietes/index', [
             'dossier' => $dossier,
             'proprietes' => $proprietes,
         ]);
-
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create($id)
     {
-        $dossier = Dossier::find($id);
+        $dossier = Dossier::findOrFail($id);
         return Inertia::render('proprietes/create', [
            'dossier' => $dossier,
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
         $validate = $request->validate([
             'lot' => 'required|string|max:15',
             'propriete_mere' => 'nullable|string|max:20',
@@ -69,9 +55,11 @@ class ProprieteController extends Controller
             'titre' => 'nullable|string|max:20',
             'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric|min:1',
-            'charge' => 'nullable|string|max:40',
+            'charge' => 'nullable|in:Voie(s) publique(s),Voie(s) d\'accès,Servitude(s)',
             'situation' => 'nullable|string',
-            'nature' => 'required|string|max:40',
+            'nature' => 'nullable|string|max:40',
+            'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
+            'type_operation' => 'required|in:morcellement,immatriculation',
             'numero_FN' => 'nullable|string|max:10',
             'numero_requisition' => 'nullable|string|max:30',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
@@ -79,54 +67,47 @@ class ProprieteController extends Controller
             'date_inscription' => 'nullable|date',
             'dep_vol' => 'nullable|string',
         ],[
-            'lot.required' => 'Le Lot is obligatoire',
+            'lot.required' => 'Le lot est obligatoire',
+            'type_operation.required' => 'Le type d\'opération est obligatoire',
             'id_dossier.exists' => 'Le dossier n\'existe pas',
-            'contenance.min' => 'La contenance invalide'
+            'contenance.min' => 'La contenance est invalide'
         ]);
+        
         try {
-            $request->merge(['id_user' => Auth::user()->getAuthIdentifier()]);
-            $propriete = Propriete::create($request->all());
-            return Redirect::route('dossiers.proprietes', $request->id_dossier)->with('message', 'Propriété ajouté avec succès');
-        }catch (\Exception $exception){
-            return $exception->getMessage();
+            $request->merge(['id_user' => Auth::id()]);
+            Propriete::create($request->all());
+            return Redirect::route('dossiers.proprietes', $request->id_dossier)
+                ->with('message', 'Propriété ajoutée avec succès');
+        } catch (\Exception $exception) {
+            return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show($id)
     {
-        //
-        $propriete = Propriete::find($id);
+        $propriete = Propriete::findOrFail($id);
         return Inertia::render('proprietes/read', [
             'propriete' => $propriete,
         ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(string $id)
     {
-        $propriete = Propriete::find($id);
-        $dossier = Dossier::find($propriete->id_dossier);
+        $propriete = Propriete::findOrFail($id);
+        $dossier = Dossier::findOrFail($propriete->id_dossier);
+        
         return Inertia::render('proprietes/update', [
             'propriete' => $propriete,
             'dossier' => $dossier,
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
-        //
         $existPropriete = Propriete::find($id);
 
         if (!$existPropriete) {
-            return redirect()->route('proprietes.index')->with('Propriété introuvable ou n\'existe pas');
+            return back()->with('message', 'Propriété introuvable');
         }
 
         $validate = $request->validate([
@@ -136,40 +117,42 @@ class ProprieteController extends Controller
             'titre' => 'nullable|string|max:20',
             'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric|min:1',
-            'charge' => 'nullable|string|max:40',
+            'charge' => 'nullable|in:Voie(s) publique(s),Voie(s) d\'accès,Servitude(s)',
             'situation' => 'nullable|string',
-            'nature' => 'required|string|max:40',
+            'nature' => 'nullable|string|max:40',
+            'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
+            'type_operation' => 'required|in:morcellement,immatriculation',
             'numero_FN' => 'nullable|string|max:10',
             'numero_requisition' => 'nullable|string|max:30',
             'date_requisition' => 'nullable|date',
             'date_inscription' => 'nullable|date',
             'dep_vol' => 'nullable|string',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
-        ],[
-            'lot.required' => 'Le Lot is obligatoire',
-            'id_dossier.exists' => 'Le dossier n\'existe pas',
-            'contenance.min' => 'La contenance invalide'
         ]);
+        
         try {
             $existPropriete->update($validate);
-            return Redirect::route('dossiers.proprietes', $request->id_dossier)->with('message','Propriété modifié avec succès');
-        }catch (\Exception $exception){
-            return redirect()->back()->with('message', $exception->getMessage());
+            return Redirect::route('dossiers.proprietes', $request->id_dossier)
+                ->with('message', 'Propriété modifiée avec succès');
+        } catch (\Exception $exception) {
+            return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }
 
     public function downloadRequisition($id_dossier, $id)
     {
-        $propriete = Propriete::find($id);
-        $dossier = Dossier::find($id_dossier);
+        $propriete = Propriete::findOrFail($id);
+        $dossier = Dossier::findOrFail($id_dossier);
 
-        if (!$propriete) {
-            return redirect()->route('proprietes.index')->with('message', 'Propriété introuvable');
-        }
-        if ($dossier->type == 'morcellement') {
-            $requision_model = new TemplateProcessor(storage_path('app/public/modele_odoc/requisition_MO.docx'));
-        }elseif ($dossier->type == 'immatriculation') {
-            $requision_model = new TemplateProcessor(storage_path('app/public/modele_odoc/requisition_IM.docx'));
+        // Utiliser type_operation au lieu de dossier->type
+        if ($propriete->type_operation == 'morcellement') {
+            $requision_model = new TemplateProcessor(
+                storage_path('app/public/modele_odoc/requisition_MO.docx')
+            );
+        } else {
+            $requision_model = new TemplateProcessor(
+                storage_path('app/public/modele_odoc/requisition_IM.docx')
+            );
         }
 
         $place = DB::table('dossiers')
@@ -195,27 +178,29 @@ class ProprieteController extends Controller
             'Titre_mere' => $propriete->titre_mere,
         ]);
 
-        $fileName = 'Requisition_' . $propriete->titre . '_' . $propriete->lot . '_' . $propriete->type . '_' .'.docx';
-
-        $requision_model->saveAs(storage_path('app/public/modele_odoc/document_requisition/' .$fileName));
-        $userRequisition = UserRequisition::create([
-            'id_user' => Auth::user()->getAuthIdentifier(),
+        $fileName = 'Requisition_' . $propriete->titre . '_' . $propriete->lot . '_' . $propriete->type_operation . '.docx';
+        $requision_model->saveAs(storage_path('app/public/modele_odoc/document_requisition/' . $fileName));
+        
+        UserRequisition::create([
+            'id_user' => Auth::id(),
             'id_propriete' => $propriete->id,
         ]);
-        return response()->download(storage_path('app/public/modele_odoc/document_requisition/' .$fileName));
+        
+        return response()->download(storage_path('app/public/modele_odoc/document_requisition/' . $fileName));
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(string $id)
     {
         $propriete = Propriete::find($id);
-        $id_dossier = $propriete->id_dossier;
+        
         if (!$propriete) {
-            return \redirect()->back()->with('message', 'propriete introuvable');
+            return back()->with('message', 'Propriété introuvable');
         }
+        
+        $id_dossier = $propriete->id_dossier;
         $propriete->delete();
-        return Redirect::route('dossiers.proprietes', $id_dossier)->with('message', 'Propriété supprimer avec succes');
+        
+        return Redirect::route('dossiers.proprietes', $id_dossier)
+            ->with('message', 'Propriété supprimée avec succès');
     }
 }
