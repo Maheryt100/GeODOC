@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Dossier;
+use App\Models\District;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,7 @@ class DossierController extends Controller
     public function create()
     {
         $districts = \App\Models\District::all();
-        return Inertia::render('dossiers/create', [
+        return Inertia::render('dossiers/reate', [
             'districts' => $districts,
         ]);
     }
@@ -82,45 +83,50 @@ class DossierController extends Controller
         }
     }
 
+    // public function edit($id)
+    // {
+    //     $dossier = Dossier::find($id);
+
+    //     if (!$dossier) {
+    //         return redirect()->route('dossiers')->with("message", "Dossier introuvable");
+    //     }
+
+    //     return Inertia::render('dossiers/update', [
+    //        'dossier' => $dossier,
+    //        'district' => \App\Models\District::all(),
+    //     ]);
+    // }
+
     public function edit($id)
     {
-        $dossier = Dossier::find($id);
-
-        if (!$dossier) {
-            return redirect()->route('dossiers')->with("message", "Dossier introuvable");
-        }
-
+        $dossier = Dossier::findOrFail($id);
+        $districts = District::all();
+        
+        // IMPORTANT : Le nom doit être exactement 'dossiers/Update'
         return Inertia::render('dossiers/update', [
-           'dossier' => $dossier,
-           'district' => \App\Models\District::all(),
+            'dossier' => $dossier,
+            'districts' => $districts,
         ]);
     }
-
-    public function update(Request $request, $id)
+     public function update(Request $request, $id)
     {
-        $dossier = Dossier::find($id);
-        
-        if (!$dossier) {
-            return Redirect::back()->with("message", "Dossier introuvable");
-        }
-        
-        $validate = $request->validate([
+        $validated = $request->validate([
+            'nom_dossier' => 'required|string|max:255',
             'type_commune' => 'required|string',
-            'commune' => 'required|string|max:70',
-            'fokontany' => 'required|string|max:70',
-            'circonscription' => 'required|string|max:50',
-            'date_descente_debut' => 'required|date|before:today',
-            'date_descente_fin' => 'required|date|after:date_descente_debut',
-            'id_district' => 'required|numeric|exists:districts,id',
-            'nom_dossier' => 'required|string|max:100',
+            'commune' => 'required|string|max:255',
+            'fokontany' => 'required|string|max:255',
+            'date_descente_debut' => 'required|date',
+            'date_descente_fin' => 'required|date',
+            'circonscription' => 'required|string|max:255',
+            'id_district' => 'required|exists:districts,id',
         ]);
-        
-        try {
-            $dossier->update($request->all());
-            return Redirect::route("dossiers")->with("message", "Dossier modifié avec succès");
-        } catch (\Exception $exception) {
-            return back()->withErrors(['error' => $exception->getMessage()]);
-        }
+
+        $dossier = Dossier::findOrFail($id);
+        $dossier->update($validated);
+
+        return redirect()
+            ->route('dossiers.show', $id)
+            ->with('message', 'Dossier modifié avec succès');
     }
 
     public function demandeurs($id)
