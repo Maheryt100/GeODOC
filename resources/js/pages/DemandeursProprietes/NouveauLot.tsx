@@ -3,12 +3,13 @@ import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast, Toaster } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserPlus, Trash2, Save } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { BreadcrumbItem, Dossier } from '@/types';
 
 interface DemandeurForm {
@@ -34,15 +35,15 @@ interface DemandeurForm {
     lieu_mariage: string;
     marie_a: string;
     telephone: string;
-    [key: string]: string; // Index signature
+    [key: string]: string;
 }
 
 interface PageProps {
     dossier: Dossier;
-    [key: string]: unknown; // Index signature
+    [key: string]: unknown;
 }
 
-export default function FusionForm() {
+export default function NouveauLot() {
     const { dossier } = usePage<PageProps>().props;
     const dossierType = dossier.type;
 
@@ -71,9 +72,17 @@ export default function FusionForm() {
         telephone: ''
     }]);
 
-    //Utiliser un type simple pour useForm
+    const [selectedCharges, setSelectedCharges] = useState<string[]>([]);
+
+    const chargeOptions = [
+        "Voie(s) publique(s)",
+        "Voie(s) d'accès",
+        "Servitude(s)",
+        "Aucune"
+    ];
+
     const { data, setData, post, processing } = useForm({
-        // Propriété
+        type_operation: '',
         lot: '',
         propriete_mere: '',
         titre_mere: '',
@@ -90,7 +99,6 @@ export default function FusionForm() {
         date_inscription: '',
         dep_vol: '',
         id_dossier: dossier.id,
-        // Demandeurs stockés comme string JSON
         demandeurs_json: JSON.stringify([{
             titre_demandeur: '',
             nom_demandeur: '',
@@ -124,10 +132,27 @@ export default function FusionForm() {
         }
     }, [dossierType, setData]);
 
-    // ✅ Synchroniser demandeurs avec le form data
     useEffect(() => {
         setData('demandeurs_json', JSON.stringify(demandeurs));
     }, [demandeurs]);
+
+    const handleChargeChange = (charge: string, checked: boolean) => {
+        let newCharges: string[];
+        if (checked) {
+            // Si "Aucune" est sélectionné, désélectionner les autres
+            if (charge === "Aucune") {
+                newCharges = ["Aucune"];
+            } else {
+                // Retirer "Aucune" si elle était sélectionnée
+                newCharges = selectedCharges.filter(c => c !== "Aucune");
+                newCharges = [...newCharges, charge];
+            }
+        } else {
+            newCharges = selectedCharges.filter(c => c !== charge);
+        }
+        setSelectedCharges(newCharges);
+        setData('charge', newCharges.join(', '));
+    };
 
     const handleTitre = (value: string, index: number) => {
         const newDemandeurs = [...demandeurs];
@@ -181,22 +206,72 @@ export default function FusionForm() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation du lot
+        // Validation de la propriété
         if (!data.lot) {
             toast.error('Le numéro de lot est obligatoire');
+            return;
+        }
+        if (!data.nature) {
+            toast.error('La nature de la propriété est obligatoire');
             return;
         }
 
         // Validation des demandeurs
         for (let i = 0; i < demandeurs.length; i++) {
             const d = demandeurs[i];
-            if (!d.nom_demandeur || !d.cin || !d.titre_demandeur) {
-                toast.error(`Demandeur ${i + 1}: Le nom, le CIN et le titre de civilité sont obligatoires`);
+            
+            // Champs obligatoires selon la migration
+            if (!d.titre_demandeur) {
+                toast.error(`Demandeur ${i + 1}: Le titre de civilité est obligatoire`);
                 return;
             }
-            const cinIsValid = /^\d+$/.test(d.cin);
+            if (!d.nom_demandeur) {
+                toast.error(`Demandeur ${i + 1}: Le nom est obligatoire`);
+                return;
+            }
+            if (!d.date_naissance) {
+                toast.error(`Demandeur ${i + 1}: La date de naissance est obligatoire`);
+                return;
+            }
+            if (!d.lieu_naissance) {
+                toast.error(`Demandeur ${i + 1}: Le lieu de naissance est obligatoire`);
+                return;
+            }
+            if (!d.occupation) {
+                toast.error(`Demandeur ${i + 1}: L'occupation est obligatoire`);
+                return;
+            }
+            if (!d.nom_mere) {
+                toast.error(`Demandeur ${i + 1}: Le nom de la mère est obligatoire`);
+                return;
+            }
+            if (!d.cin) {
+                toast.error(`Demandeur ${i + 1}: Le CIN est obligatoire`);
+                return;
+            }
+            const cinIsValid = /^\d{12}$/.test(d.cin);
             if (!cinIsValid) {
-                toast.error(`Demandeur ${i + 1}: Le CIN ne doit contenir que des chiffres`);
+                toast.error(`Demandeur ${i + 1}: Le CIN doit contenir exactement 12 chiffres`);
+                return;
+            }
+            if (!d.date_delivrance) {
+                toast.error(`Demandeur ${i + 1}: La date de délivrance du CIN est obligatoire`);
+                return;
+            }
+            if (!d.lieu_delivrance) {
+                toast.error(`Demandeur ${i + 1}: Le lieu de délivrance du CIN est obligatoire`);
+                return;
+            }
+            if (!d.domiciliation) {
+                toast.error(`Demandeur ${i + 1}: La domiciliation est obligatoire`);
+                return;
+            }
+            if (!d.situation_familiale) {
+                toast.error(`Demandeur ${i + 1}: La situation familiale est obligatoire`);
+                return;
+            }
+            if (!d.nationalite) {
+                toast.error(`Demandeur ${i + 1}: La nationalité est obligatoire`);
                 return;
             }
         }
@@ -217,17 +292,17 @@ export default function FusionForm() {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dossiers', href: route('dossiers') },
         { title: dossier.nom_dossier, href: route('dossiers.show', dossier.id) },
-        { title: 'Nouveau Demandeur + Propriété', href: '#' }
+        { title: 'Nouveau Lot', href: '#' }
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Ajouter Demandeur + Propriété" />
+            <Head title="Nouveau Lot" />
             <Toaster position="top-right" richColors />
 
             <div className="container mx-auto p-6 max-w-7xl">
                 <div className="mb-6">
-                    <h1 className="text-3xl font-bold">Nouveau Demandeur + Propriété</h1>
+                    <h1 className="text-3xl font-bold">Nouveau Lot (Propriété + Demandeurs)</h1>
                     <p className="text-muted-foreground">Dossier: {dossier.nom_dossier}</p>
                 </div>
 
@@ -236,10 +311,9 @@ export default function FusionForm() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Informations de la Propriété</CardTitle>
-                            <CardDescription>Lot obligatoire - Les autres champs peuvent être remplis ultérieurement</CardDescription>
+                            <CardDescription>Champs obligatoires: Lot et Nature</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            {/* Lot (en haut) */}
                             <div className="grid gap-4 md:grid-cols-3">
                                 <div className="md:col-span-1">
                                     <Label className="text-red-500">Lot *</Label>
@@ -251,9 +325,26 @@ export default function FusionForm() {
                                         required
                                     />
                                 </div>
+                                {/* Type d'opération */}
                                 <div>
-                                    <Label>Nature</Label>
-                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)}>
+                                    <Label className="text-red-500">Type d'opération *</Label>
+                                    <Select
+                                        value={data.type_operation}
+                                        onValueChange={(value) => setData('type_operation', value)}
+                                        required
+                                    >
+                                        <SelectTrigger className="w-[220px]">
+                                            <SelectValue placeholder="Sélectionner le type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="morcellement">Morcellement</SelectItem>
+                                            <SelectItem value="immatriculation">Immatriculation</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-red-500">Nature *</Label>
+                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)} required>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
@@ -281,7 +372,7 @@ export default function FusionForm() {
                             </div>
 
                             <div className="grid gap-4 md:grid-cols-2">
-                                {dossierType === 'morcellement' && (
+                                { data.type_operation === 'morcellement' && (
                                     <>
                                         <div>
                                             <Label>Propriété mère</Label>
@@ -352,11 +443,23 @@ export default function FusionForm() {
                                 )}
                                 <div>
                                     <Label>Charge</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.charge}
-                                        onChange={(e) => setData('charge', e.target.value)}
-                                    />
+                                    <div className="space-y-2 mt-2">
+                                        {chargeOptions.map((charge) => (
+                                            <div key={charge} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={`charge-${charge}`}
+                                                    checked={selectedCharges.includes(charge)}
+                                                    onCheckedChange={(checked) => handleChargeChange(charge, checked as boolean)}
+                                                />
+                                                <label
+                                                    htmlFor={`charge-${charge}`}
+                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                                >
+                                                    {charge}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -405,7 +508,7 @@ export default function FusionForm() {
                                     <div>
                                         <CardTitle>Demandeur {index + 1}</CardTitle>
                                         <CardDescription>
-                                            Champs obligatoires: Titre, Nom, CIN
+                                            Champs obligatoires: Titre, Nom, Date et Lieu naissance, Occupation, Nom mère, CIN, Délivrance, Domiciliation, Situation, Nationalité
                                         </CardDescription>
                                     </div>
                                     {demandeurs.length > 1 && (
@@ -465,19 +568,22 @@ export default function FusionForm() {
                                 {/* Ligne 2: Date naissance, Lieu naissance, Nom père, Nom mère */}
                                 <div className="grid gap-4 md:grid-cols-4">
                                     <div>
-                                        <Label>Date de naissance</Label>
+                                        <Label className="text-red-500">Date de naissance *</Label>
                                         <Input
                                             type="date"
                                             value={demandeur.date_naissance}
                                             onChange={(e) => updateDemandeur(index, 'date_naissance', e.target.value)}
+                                            required
                                         />
                                     </div>
                                     <div>
-                                        <Label>Lieu de naissance</Label>
+                                        <Label className="text-red-500">Lieu de naissance *</Label>
                                         <Input
                                             type="text"
                                             value={demandeur.lieu_naissance}
                                             onChange={(e) => updateDemandeur(index, 'lieu_naissance', e.target.value)}
+                                            placeholder="Antananarivo"
+                                            required
                                         />
                                     </div>
                                     <div>
@@ -489,11 +595,12 @@ export default function FusionForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label>Nom complet Mère</Label>
+                                        <Label className="text-red-500">Nom complet Mère *</Label>
                                         <Input
                                             type="text"
                                             value={demandeur.nom_mere}
                                             onChange={(e) => updateDemandeur(index, 'nom_mere', e.target.value)}
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -537,19 +644,22 @@ export default function FusionForm() {
                                 {/* Délivrance CIN */}
                                 <div className="grid gap-4 md:grid-cols-4">
                                     <div>
-                                        <Label>Date Délivrance</Label>
+                                        <Label className="text-red-500">Date Délivrance *</Label>
                                         <Input
                                             type="date"
                                             value={demandeur.date_delivrance}
                                             onChange={(e) => updateDemandeur(index, 'date_delivrance', e.target.value)}
+                                            required
                                         />
                                     </div>
                                     <div>
-                                        <Label>Lieu Délivrance</Label>
+                                        <Label className="text-red-500">Lieu Délivrance *</Label>
                                         <Input
                                             type="text"
                                             value={demandeur.lieu_delivrance}
                                             onChange={(e) => updateDemandeur(index, 'lieu_delivrance', e.target.value)}
+                                            placeholder="Antananarivo"
+                                            required
                                         />
                                     </div>
                                     <div>
@@ -573,19 +683,23 @@ export default function FusionForm() {
                                 {/* Occupation, Domiciliation, Téléphone */}
                                 <div className="grid gap-4 md:grid-cols-3">
                                     <div>
-                                        <Label>Occupation</Label>
+                                        <Label className="text-red-500">Occupation *</Label>
                                         <Input
                                             type="text"
                                             value={demandeur.occupation}
                                             onChange={(e) => updateDemandeur(index, 'occupation', e.target.value)}
+                                            placeholder="Agriculteur"
+                                            required
                                         />
                                     </div>
                                     <div>
-                                        <Label>Domiciliation</Label>
+                                        <Label className="text-red-500">Domiciliation *</Label>
                                         <Input
                                             type="text"
                                             value={demandeur.domiciliation}
                                             onChange={(e) => updateDemandeur(index, 'domiciliation', e.target.value)}
+                                            placeholder="Lot II A 45 Ambohimanarina"
+                                            required
                                         />
                                     </div>
                                     <div>
@@ -594,6 +708,7 @@ export default function FusionForm() {
                                             type="text"
                                             value={demandeur.telephone}
                                             onChange={(e) => updateDemandeur(index, 'telephone', e.target.value)}
+                                            placeholder="0340000000"
                                             maxLength={10}
                                         />
                                     </div>
@@ -602,16 +717,16 @@ export default function FusionForm() {
                                 {/* Situation familiale, Régime, Nationalité */}
                                 <div className="grid gap-4 md:grid-cols-3">
                                     <div>
-                                        <Label>Situation Familiale</Label>
+                                        <Label className="text-red-500">Situation Familiale *</Label>
                                         <Select
                                             value={demandeur.situation_familiale}
                                             onValueChange={(value) => updateDemandeur(index, 'situation_familiale', value)}
+                                            required
                                         >
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Situation Familiale" />
+                                                <SelectValue placeholder="Sélectionner" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
                                                 <SelectItem value="Célibataire">Célibataire</SelectItem>
                                                 <SelectItem value="Marié(e)">Marié(e)</SelectItem>
                                                 <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
@@ -626,10 +741,9 @@ export default function FusionForm() {
                                             onValueChange={(value) => updateDemandeur(index, 'regime_matrimoniale', value)}
                                         >
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Régime Matrimonial" />
+                                                <SelectValue placeholder="Sélectionner" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Non spécifié">Non spécifié</SelectItem>
                                                 <SelectItem value="zara-mira">Zara-Mira</SelectItem>
                                                 <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
                                                 <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
@@ -637,11 +751,12 @@ export default function FusionForm() {
                                         </Select>
                                     </div>
                                     <div>
-                                        <Label>Nationalité</Label>
+                                        <Label className="text-red-500">Nationalité *</Label>
                                         <Input
                                             type="text"
                                             value={demandeur.nationalite}
                                             onChange={(e) => updateDemandeur(index, 'nationalite', e.target.value)}
+                                            required
                                         />
                                     </div>
                                 </div>

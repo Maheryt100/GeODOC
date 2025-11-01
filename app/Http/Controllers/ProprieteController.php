@@ -48,6 +48,12 @@ class ProprieteController extends Controller
 
     public function store(Request $request)
     {
+        if (is_array($request->charge)) {
+            $request->merge([
+                'charge' => implode(', ', $request->charge),
+            ]);
+        }
+
         $validate = $request->validate([
             'lot' => 'required|string|max:15',
             'propriete_mere' => 'nullable|string|max:20',
@@ -55,7 +61,7 @@ class ProprieteController extends Controller
             'titre' => 'nullable|string|max:20',
             'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric|min:1',
-            'charge' => 'nullable|in:Voie(s) publique(s),Voie(s) d\'accès,Servitude(s)',
+            'charge' => 'nullable|string|max:255',
             'situation' => 'nullable|string',
             'nature' => 'nullable|string|max:40',
             'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
@@ -76,7 +82,7 @@ class ProprieteController extends Controller
         try {
             $request->merge(['id_user' => Auth::id()]);
             Propriete::create($request->all());
-            return Redirect::route('dossiers.proprietes', $request->id_dossier)
+            return Redirect::route('dossiers.show', $request->id_dossier)
                 ->with('message', 'Propriété ajoutée avec succès');
         } catch (\Exception $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);
@@ -109,6 +115,11 @@ class ProprieteController extends Controller
         if (!$existPropriete) {
             return back()->with('message', 'Propriété introuvable');
         }
+        if (is_array($request->charge)) {
+            $request->merge([
+                'charge' => implode(', ', $request->charge),
+            ]);
+        }
 
         $validate = $request->validate([
             'lot' => 'required|string|max:15',
@@ -117,7 +128,7 @@ class ProprieteController extends Controller
             'titre' => 'nullable|string|max:20',
             'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric|min:1',
-            'charge' => 'nullable|in:Voie(s) publique(s),Voie(s) d\'accès,Servitude(s)',
+            'charge' => 'nullable|string|max:255',
             'situation' => 'nullable|string',
             'nature' => 'nullable|string|max:40',
             'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
@@ -132,7 +143,7 @@ class ProprieteController extends Controller
         
         try {
             $existPropriete->update($validate);
-            return Redirect::route('dossiers.proprietes', $request->id_dossier)
+            return Redirect::route('dossiers.show', $request->id_dossier)
                 ->with('message', 'Propriété modifiée avec succès');
         } catch (\Exception $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);

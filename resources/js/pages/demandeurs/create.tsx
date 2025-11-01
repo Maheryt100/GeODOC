@@ -363,12 +363,14 @@ export default function Create() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Célibataire">Célibataire</SelectItem>
-                                            <SelectItem value="Marié(e)">Marié(e)</SelectItem>
-                                            <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
-                                            <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
-                                        </SelectContent>
+                                    <SelectContent>
+                                        <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
+                                        <SelectItem value="Célibataire">Célibataire</SelectItem>
+                                        <SelectItem value="Marié(e)">Marié(e)</SelectItem>
+                                        <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
+                                        <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
+                                    </SelectContent>
+
                                     </Select>
                                 </div>
                                 <div>
@@ -381,10 +383,12 @@ export default function Create() {
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
                                         <SelectContent>
+                                            <SelectItem value="Non spécifié">Non spécifié</SelectItem>
                                             <SelectItem value="zara-mira">Zara-Mira</SelectItem>
                                             <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
                                             <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
                                         </SelectContent>
+
                                     </Select>
                                 </div>
                                 <div>

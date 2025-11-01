@@ -1,55 +1,58 @@
 import AppLayout from '@/layouts/app-layout';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { toast, Toaster } from 'sonner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BreadcrumbItem, Dossier } from '@/types';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Save } from 'lucide-react';
+import type { BreadcrumbItem, Dossier } from '@/types';
 
 export default function Create() {
     const { dossier } = usePage<{ dossier: Dossier }>().props;
+
     const [selectedCharges, setSelectedCharges] = useState<string[]>([]);
 
-    const { data, setData, post } = useForm({
+    const chargeOptions = [
+        "Voie(s) publique(s)",
+        "Voie(s) d'accès",
+        "Servitude(s)",
+        "Aucune"
+    ];
+
+    const { data, setData, post, processing } = useForm({
         id_dossier: dossier.id,
         lot: '',
         propriete_mere: '',
-        titre_mere: '',
         titre: '',
+        titre_mere: '',
         proprietaire: '',
         contenance: '',
         charge: '',
         situation: '',
         nature: '',
         vocation: '',
-        type_operation: '' as 'morcellement' | 'immatriculation',
+        type_operation: dossier.type || 'immatriculation',
         numero_FN: '',
         numero_requisition: '',
         date_requisition: '',
         date_inscription: '',
         dep_vol: '',
     });
-
-    const chargeOptions = [
-        "Voie(s) publique(s)",
-        "Voie(s) d'accès",
-        "Servitude(s)"
-    ];
-
     const handleChargeChange = (charge: string, checked: boolean) => {
         let newCharges: string[];
         if (checked) {
-            newCharges = [...selectedCharges, charge];
+            // Si "Aucune" est sélectionné, désélectionner les autres
+            if (charge === "Aucune") {
+                newCharges = ["Aucune"];
+            } else {
+                // Retirer "Aucune" si elle était sélectionnée
+                newCharges = selectedCharges.filter(c => c !== "Aucune");
+                newCharges = [...newCharges, charge];
+            }
         } else {
             newCharges = selectedCharges.filter(c => c !== charge);
         }
@@ -59,21 +62,29 @@ export default function Create() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
+        // Validation du lot
         if (!data.lot) {
-            toast.warning('Le numéro de lot est obligatoire');
+            toast.error('Le numéro de lot est obligatoire');
             return;
         }
-        
+
+        // Validation de la nature
+        if (!data.nature) {
+            toast.error('La nature de la propriété est obligatoire');
+            return;
+        }
+
+        // Validation du type d'opération
         if (!data.type_operation) {
-            toast.warning('Veuillez sélectionner le type d\'opération (Morcellement ou Immatriculation)');
+            toast.error('Le type d\'opération est obligatoire');
             return;
         }
 
         post(route('proprietes.store'), {
             onError: (errors) => {
                 const messages = Object.values(errors).flat();
-                toast.error('Erreur de validation: ', {
+                toast.error('Erreur de validation', {
                     description: messages.join('\n'),
                 });
             },
@@ -84,52 +95,37 @@ export default function Create() {
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: dossier.nom_dossier,
-            href: '#',
-        },
-        {
-            title: (
-                <DropdownMenu>
-                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1">
-                        Propriétés
-                        <ChevronDown className="h-3.5 w-3.5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.list', dossier.id)}>Liste</Link>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            ),
-            href: route('dossiers.proprietes', dossier.id),
-        },
-        {
-            title: 'Insertion',
-            href: '#',
-        },
+        { title: 'Dossiers', href: route('dossiers') },
+        { title: dossier.nom_dossier, href: route('dossiers.show', dossier.id) },
+        { title: 'Nouvelle Propriété', href: '#' },
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Nouvelle Propriété" />
             <Toaster richColors position="top-right" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <form onSubmit={handleSubmit}>
-                        <div className={'mt-15'}>
-                            {/* Type d'opération (OBLIGATOIRE) */}
-                            <div className={'my-5 mx-5'}>
+
+            <div className="container mx-auto p-6 max-w-7xl">
+                <div className="mb-6">
+                    <h1 className="text-3xl font-bold">Nouvelle Propriété</h1>
+                    <p className="text-muted-foreground">Dossier: {dossier.nom_dossier}</p>
+                </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Informations de la Propriété</CardTitle>
+                        <CardDescription>
+                            Champs obligatoires: Lot, Nature et Type d'opération
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-6">
+                            {/* Type d'opération */}
+                            <div>
                                 <Label className="text-red-500">Type d'opération *</Label>
-                                <Select 
-                                    onValueChange={(e) => setData('type_operation', e as 'morcellement' | 'immatriculation')} 
-                                    required
+                                <Select
                                     value={data.type_operation}
+                                    onValueChange={(value) => setData('type_operation', value)}
                                 >
                                     <SelectTrigger className="w-[220px]">
                                         <SelectValue placeholder="Sélectionner le type" />
@@ -139,15 +135,27 @@ export default function Create() {
                                         <SelectItem value="immatriculation">Immatriculation</SelectItem>
                                     </SelectContent>
                                 </Select>
+
+                                
                             </div>
 
-                            {/* Nature et Vocation */}
-                            <div className={'flex flex-col md:flex-row gap-6 mx-5'}>
-                                <div className={'my-auto'}>
-                                    <Label>Nature</Label>
-                                    <Select onValueChange={(e) => setData('nature', e)}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Nature" />
+                            {/* Ligne 1: Lot, Nature, Vocation */}
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div>
+                                    <Label className="text-red-500">Lot *</Label>
+                                    <Input
+                                        type="text"
+                                        value={data.lot}
+                                        onChange={(e) => setData('lot', e.target.value)}
+                                        placeholder="T 45"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="text-red-500">Nature *</Label>
+                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)} required>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="Urbaine">Urbaine</SelectItem>
@@ -156,11 +164,11 @@ export default function Create() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className={'my-auto'}>
+                                <div>
                                     <Label>Vocation</Label>
-                                    <Select onValueChange={(e) => setData('vocation', e)}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Vocation" />
+                                    <Select value={data.vocation} onValueChange={(e) => setData('vocation', e)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="Editaire">Editaire</SelectItem>
@@ -172,103 +180,90 @@ export default function Create() {
                                 </div>
                             </div>
 
-                            {/* Champs conditionnels pour Morcellement */}
-                            {data.type_operation === 'morcellement' && (
-                                <div className={'flex flex-col md:flex-row gap-6 m-5'}>
-                                    <div className={'w-full'}>
-                                        <Label>Nom propriété mère</Label>
-                                        <Input
-                                            type={'text'}
-                                            value={data.propriete_mere}
-                                            onChange={(e) => setData('propriete_mere', e.target.value)}
-                                        />
-                                    </div>
-                                    <div className={'w-full'}>
-                                        <Label>Titre mère</Label>
-                                        <Input
-                                            type={'text'}
-                                            value={data.titre_mere}
-                                            onChange={(e) => setData('titre_mere', e.target.value)}
-                                            placeholder={"12.54-B"}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Titre et Propriétaire */}
-                            <div className={'flex flex-col md:flex-row gap-6 m-5'}>
-                                <div className={'w-full md:w-1/4'}>
+                            {/* Ligne 2: Propriété mère et Titre mère (si morcellement) */}
+                            <div className="grid gap-4 md:grid-cols-2">
+                                {data.type_operation === 'morcellement' && (
+                                    <>
+                                        <div>
+                                            <Label>Propriété mère</Label>
+                                            <Input
+                                                type="text"
+                                                value={data.propriete_mere}
+                                                onChange={(e) => setData('propriete_mere', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Titre mère</Label>
+                                            <Input
+                                                type="text"
+                                                value={data.titre_mere}
+                                                onChange={(e) => setData('titre_mere', e.target.value)}
+                                                placeholder="12.54-B"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                                <div>
                                     <Label>Titre</Label>
                                     <Input
-                                        type={'text'}
+                                        type="text"
+                                        value={data.titre}
                                         onChange={(e) => setData('titre', e.target.value)}
-                                        placeholder={"54.21-A"}
+                                        placeholder="54.21-A"
                                     />
                                 </div>
-                                <div className={'w-full md:w-1/4'}>
+                                <div>
                                     <Label>Nom propriété / Propriétaire</Label>
-                                    <Input type={'text'} onChange={(e) => setData('proprietaire', e.target.value)} />
+                                    <Input
+                                        type="text"
+                                        value={data.proprietaire}
+                                        onChange={(e) => setData('proprietaire', e.target.value)}
+                                    />
                                 </div>
                             </div>
 
-                            {/* Lot, Numero FN, Nº Requisition */}
-                            <div className={'flex flex-col md:flex-row gap-6 m-5'}>
-                                <div className={'w-full md:w-1/4'}>
-                                    <Label className="text-red-500">Lot *</Label>
+                            {/* Ligne 3: Contenance, Numero FN, Nº Requisition, Charge */}
+                            <div className="grid gap-4 md:grid-cols-4">
+                                <div>
+                                    <Label>Contenance (m²)</Label>
                                     <Input
-                                        type='text'
-                                        onChange={(e) => setData('lot', e.target.value)}
-                                        required
-                                        placeholder={"T 45"}
+                                        type="number"
+                                        min={1}
+                                        value={data.contenance}
+                                        onChange={(e) => setData('contenance', e.target.value)}
                                     />
                                 </div>
-                                <div className={'w-full md:w-1/4'}>
+                                <div>
                                     <Label>Numero FNº</Label>
                                     <Input
-                                        type={'text'}
+                                        type="text"
+                                        value={data.numero_FN}
                                         onChange={(e) => setData('numero_FN', e.target.value)}
-                                        placeholder={"78-A/25"}
+                                        placeholder="78-A/25"
                                     />
                                 </div>
                                 {data.type_operation === 'immatriculation' && (
-                                    <div className={'w-full md:w-1/4'}>
+                                    <div>
                                         <Label>Nº Requisition</Label>
                                         <Input
-                                            type={'text'}
+                                            type="text"
                                             value={data.numero_requisition}
                                             onChange={(e) => setData('numero_requisition', e.target.value)}
                                         />
                                     </div>
                                 )}
-                            </div>
-
-                            {/* Contenance, Charge (ENUM), Situation */}
-                            <div className={'flex flex-col md:flex-row gap-6 m-5'}>
-                                <div className={'w-full md:w-1/4'}>
-                                    <Label>Contenance</Label>
-                                    <Input
-                                        type={'number'}
-                                        min={1}
-                                        placeholder={'en m²'}
-                                        onChange={(e) => setData('contenance', e.target.value)}
-                                    />
-                                </div>
-                                <div className={'w-full md:w-1/4'}>
-                                    <Label>Situation (sise à)</Label>
-                                    <Input type={'text'} onChange={(e) => setData('situation', e.target.value)} />
-                                </div>
-                                <div className={'w-full md:w-1/3'}>
+                                <div>
                                     <Label>Charge</Label>
                                     <div className="space-y-2 mt-2">
                                         {chargeOptions.map((charge) => (
                                             <div key={charge} className="flex items-center space-x-2">
                                                 <Checkbox
-                                                    id={charge}
+                                                    id={`charge-${charge}`}
                                                     checked={selectedCharges.includes(charge)}
                                                     onCheckedChange={(checked) => handleChargeChange(charge, checked as boolean)}
                                                 />
                                                 <label
-                                                    htmlFor={charge}
+                                                    htmlFor={`charge-${charge}`}
                                                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                                 >
                                                     {charge}
@@ -277,39 +272,61 @@ export default function Create() {
                                         ))}
                                     </div>
                                 </div>
-                                
                             </div>
 
-                            {/* Dates et Dep Vol */}
-                            <div className="flex flex-col md:flex-row gap-6 m-5">
-                                <div className="w-full md:w-1/4">
+                            {/* Ligne 4: Situation, Date inscription, Date requisition, Dep Vol */}
+                            <div className="grid gap-4 md:grid-cols-4">
+                                <div>
+                                    <Label>Situation (sise à)</Label>
+                                    <Input
+                                        type="text"
+                                        value={data.situation}
+                                        onChange={(e) => setData('situation', e.target.value)}
+                                    />
+                                </div>
+                                <div>
                                     <Label>Date inscription</Label>
                                     <Input
                                         type="date"
+                                        value={data.date_inscription}
                                         onChange={(e) => setData('date_inscription', e.target.value)}
-                                        className="w-full"
                                     />
                                 </div>
-                                <div className="w-full md:w-1/4">
+                                <div>
                                     <Label>Date requisition</Label>
                                     <Input
                                         type="date"
+                                        value={data.date_requisition}
                                         onChange={(e) => setData('date_requisition', e.target.value)}
-                                        className="w-full"
                                     />
                                 </div>
-                                <div className={'w-full md:w-1/4'}>
+                                <div>
                                     <Label>Dep Vol</Label>
-                                    <Input type={'text'} onChange={(e) => setData('dep_vol', e.target.value)} />
+                                    <Input
+                                        type="text"
+                                        value={data.dep_vol}
+                                        onChange={(e) => setData('dep_vol', e.target.value)}
+                                    />
                                 </div>
                             </div>
-                        </div>
 
-                        <div className={'flex justify-end mx-10 mt-10'}>
-                            <Button type={'submit'} className={'w-[200px]'}>Valider</Button>
+                            {/* Boutons de soumission */}
+                            <div className="flex gap-4 justify-end">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => router.visit(route('dossiers.show', dossier.id))}
+                                >
+                                    Annuler
+                                </Button>
+                                <Button type="button" onClick={handleSubmit} disabled={processing}>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {processing ? 'Enregistrement...' : 'Enregistrer'}
+                                </Button>
+                            </div>
                         </div>
-                    </form>
-                </div>
+                    </CardContent>
+                </Card>
             </div>
         </AppLayout>
     );

@@ -54,7 +54,7 @@ export interface Propriete {
     proprietaire: string;
     propriete_mere: string;
     titre_mere: string;
-    charge: 'Voie(s) publique(s)' | 'Voie(s) d\'accès' | 'Servitude(s)' | null;
+    charge: string;
     situation: string;
     nature: string;
     vocation: string;

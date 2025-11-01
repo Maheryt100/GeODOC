@@ -6,7 +6,6 @@ use App\Models\Dossier;
 use App\Models\District;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 
@@ -14,7 +13,9 @@ class DossierController extends Controller
 {
     public function index()
     {
-        $dossiers = Dossier::withCount(['demandeurs', 'proprietes'])->get();
+        $dossiers = Dossier::withCount(['demandeurs', 'proprietes'])
+            ->orderBy('date_descente_debut', 'desc')
+            ->get();
         
         return Inertia::render('dossiers/index', [
             'dossiers' => $dossiers,
@@ -23,92 +24,95 @@ class DossierController extends Controller
     
     public function create()
     {
-        $districts = \App\Models\District::all();
-        return Inertia::render('dossiers/reate', [
+        $districts = District::all();
+        return Inertia::render('dossiers/create', [
             'districts' => $districts,
         ]);
     }
 
     public function store(Request $request)
     {
-        $validate = $request->validate([
+        $validated = $request->validate([
+            'nom_dossier' => 'required|string|max:100',
             'type_commune' => 'required|string',
             'commune' => 'required|string|max:70',
             'fokontany' => 'required|string|max:70',
             'circonscription' => 'required|string|max:50',
-            'date_descente_debut' => 'required|date|before:today',
-            'date_descente_fin' => 'required|date|after:date_descente_debut',
+            'date_descente_debut' => 'required|date',
+            'date_descente_fin' => 'required|date|after_or_equal:date_descente_debut',
             'id_district' => 'required|numeric|exists:districts,id',
-            'nom_dossier' => 'required|string|max:100',
-        ],[
+        ], [
+            'nom_dossier.required' => 'Le nom du dossier est obligatoire',
+            'type_commune.required' => 'Le type de commune est obligatoire',
             'commune.required' => 'La commune est obligatoire',
             'fokontany.required' => 'Le fokontany est obligatoire',
-            'date_descente_fin.after' => 'La date de fin doit être après la date de début',
+            'type.required' => 'Le type de dossier est obligatoire',
+            'date_descente_fin.after_or_equal' => 'La date de fin doit être après ou égale à la date de début',
         ]);
         
         try {
-            $request->merge(['id_user' => Auth::id()]);
-            Dossier::create($request->all());
-            return Redirect::route('dossiers')->with('message', 'Dossier créé avec succès');
+            $validated['id_user'] = Auth::id();
+            
+            Dossier::create($validated);
+            
+            return Redirect::route('dossiers')
+                ->with('message', 'Dossier créé avec succès');
         } catch (\Exception $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }
 
+    /**
+     * Recherche améliorée - accepte n'importe quelle longueur
+     * Si vide, retourne tous les dossiers
+     */
     public function search(Request $request)
     {
-        $validate = $request->validate([
-           'search' => 'required|string|max:30',
-        ]);
+        // Pas de validation de longueur minimale
+        $search = $request->input('search', '');
 
         try {
             $query = Dossier::withCount('demandeurs', 'proprietes');
 
-            if ($request->filled('search')) {
-                $search = $request->search;
-                $query->where('nom_dossier', 'ilike', "%{$search}%");
+            // Si recherche vide, retourner tous les dossiers
+            if (!empty($search)) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('nom_dossier', 'ilike', "%{$search}%")
+                      ->orWhere('commune', 'ilike', "%{$search}%")
+                      ->orWhere('circonscription', 'ilike', "%{$search}%")
+                      ->orWhere('fokontany', 'ilike', "%{$search}%");
+                });
             }
 
-            $dossiers = $query->get();
+            $dossiers = $query->orderBy('date_descente_debut', 'desc')->get();
             
-            if ($dossiers->isEmpty()) {
-                return back()->with('message', 'Aucun dossier ne correspond');
-            }
+            $message = empty($search) 
+                ? 'Tous les dossiers' 
+                : ($dossiers->isEmpty() 
+                    ? "Aucun dossier ne correspond à '{$search}'" 
+                    : "{$dossiers->count()} dossier(s) trouvé(s)");
             
             return Inertia::render('dossiers/index', [
                 'dossiers' => $dossiers,
-            ]);
+            ])->with('message', $message);
+            
         } catch (\Exception $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }
-
-    // public function edit($id)
-    // {
-    //     $dossier = Dossier::find($id);
-
-    //     if (!$dossier) {
-    //         return redirect()->route('dossiers')->with("message", "Dossier introuvable");
-    //     }
-
-    //     return Inertia::render('dossiers/update', [
-    //        'dossier' => $dossier,
-    //        'district' => \App\Models\District::all(),
-    //     ]);
-    // }
 
     public function edit($id)
     {
         $dossier = Dossier::findOrFail($id);
         $districts = District::all();
         
-        // IMPORTANT : Le nom doit être exactement 'dossiers/Update'
         return Inertia::render('dossiers/update', [
             'dossier' => $dossier,
             'districts' => $districts,
         ]);
     }
-     public function update(Request $request, $id)
+
+    public function update(Request $request, $id)
     {
         $validated = $request->validate([
             'nom_dossier' => 'required|string|max:255',
@@ -116,7 +120,7 @@ class DossierController extends Controller
             'commune' => 'required|string|max:255',
             'fokontany' => 'required|string|max:255',
             'date_descente_debut' => 'required|date',
-            'date_descente_fin' => 'required|date',
+            'date_descente_fin' => 'required|date|after_or_equal:date_descente_debut',
             'circonscription' => 'required|string|max:255',
             'id_district' => 'required|exists:districts,id',
         ]);
@@ -151,11 +155,25 @@ class DossierController extends Controller
         ]);
     }
 
+    // public function show($id)
+    // {
+    //     $dossier = Dossier::with(['demandeurs', 'proprietes'])
+    //         ->findOrFail($id);
+        
+    //     return Inertia::render('dossiers/Show', [
+    //         'dossier' => $dossier,
+    //     ]);
+    // }
     public function show($id)
     {
-        $dossier = Dossier::with(['demandeurs', 'proprietes'])
-            ->findOrFail($id);
-        
+        $dossier = Dossier::with([
+            'demandeurs',
+            'proprietes' => function($query) {
+                $query->with('demandeurs')
+                    ->select('*'); // S'assurer que type_operation est inclus
+            }
+        ])->findOrFail($id);
+
         return Inertia::render('dossiers/Show', [
             'dossier' => $dossier,
         ]);

@@ -128,7 +128,7 @@ class DemandeurController extends Controller
 //                return back()->with('error', 'Erreur lors de la création du demandeur.');
 //            }
 
-            return redirect::route('dossiers.demandeurs', $request->id_dossier)->with('success', 'Demandeur ajouté avec succès');
+            return redirect::route('dossiers.show', $request->id_dossier)->with('success', 'Demandeur ajouté avec succès');
         } catch (\Exception $e) {
             return back()->with('error', 'Une erreur est survenue : ' . $e->getMessage());
         }
@@ -227,7 +227,7 @@ class DemandeurController extends Controller
             $existDemandeur->update(
                 collect($validateData)->except(['id_dossier'])->toArray()
             );
-            return redirect::route('dossiers.demandeurs', $request->id_dossier)->with('success', 'Demandeur modifié avec succès');
+            return redirect::route('dossiers.show', $request->id_dossier)->with('success', 'Demandeur modifié avec succès');
         } catch (\Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
         }

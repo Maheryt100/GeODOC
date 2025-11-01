@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 #[CollectedBy(DossierCollection::class)]
 class Dossier extends Model
 {
-    //
     protected $fillable = [
         'nom_dossier',
         'date_descente_debut',
@@ -18,11 +17,11 @@ class Dossier extends Model
         'type_commune',
         'commune',
         'fokontany',
-        'type',
         'circonscription',
         'id_district',
         'id_user',
     ];
+
     protected $appends = ['demandeurs_count', 'proprietes_count'];
 
     public function getDemandeursCountAttribute()
