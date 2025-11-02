@@ -39,11 +39,11 @@ class DemandeurProprieteController extends Controller
             return back()->withErrors(['demandeurs' => 'Au moins un demandeur est requis']);
         }
         
-        // Validation de la propriété
+        // Validation de la propriété - CORRIGÉ: Edilitaire
         $request->validate([
             'lot' => 'required|string|max:15',
-            'nature' => 'required|string|max:40',
-            'vocation' => 'required|in:Editaire,Agricole,Forestière,Touristique',
+            'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
+            'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
             'proprietaire' => 'required|string|max:50',
             'situation' => 'required|string',
             'type_operation' => 'required|in:morcellement,immatriculation',
@@ -52,6 +52,7 @@ class DemandeurProprieteController extends Controller
             'lot.required' => 'Le numéro de lot est obligatoire',
             'nature.required' => 'La nature est obligatoire',
             'vocation.required' => 'La vocation est obligatoire',
+            'vocation.in' => 'La vocation doit être: Edilitaire, Agricole, Forestière ou Touristique',
             'proprietaire.required' => 'Le nom de la propriété est obligatoire',
             'situation.required' => 'La situation est obligatoire',
             'type_operation.required' => 'Le type d\'opération est obligatoire',
@@ -230,7 +231,7 @@ class DemandeurProprieteController extends Controller
                     return back()->withErrors(['cin' => 'Ce demandeur est déjà lié à cette propriété']);
                 }
                 
-                // Ajouter au dossier s'il n'y est pas encore (uniquement après confirmation)
+                // Ajouter au dossier s'il n'y est pas encore
                 $existeInDossier = Contenir::where('id_demandeur', $demandeur->id)
                     ->where('id_dossier', $propriete->id_dossier)
                     ->exists();
@@ -243,7 +244,7 @@ class DemandeurProprieteController extends Controller
                 }
                 
             } else {
-                // Créer nouveau demandeur - tous les champs obligatoires
+                // Créer nouveau demandeur
                 $request->validate([
                     'titre_demandeur' => 'required|string|max:12',
                     'nom_demandeur' => 'required|string|max:40',
@@ -288,7 +289,7 @@ class DemandeurProprieteController extends Controller
                     'id_user' => $id_user,
                 ]);
                 
-                // Ajouter au dossier (après création et confirmation)
+                // Ajouter au dossier
                 Contenir::create([
                     'id_demandeur' => $demandeur->id,
                     'id_dossier' => $propriete->id_dossier,
@@ -321,6 +322,7 @@ class DemandeurProprieteController extends Controller
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }
+
     /**
      * 3. LIER EXISTANT : Afficher le formulaire pour lier un demandeur existant
      */
@@ -351,14 +353,11 @@ class DemandeurProprieteController extends Controller
             'id_dossier' => 'required|exists:dossiers,id'
         ]);
         
-        // Recherche par CIN exact ou par nom partiel
         $demandeur = null;
         
         if (preg_match('/^\d{12}$/', $request->cin)) {
-            // Recherche par CIN
             $demandeur = Demandeur::where('cin', $request->cin)->first();
         } else {
-            // Recherche par nom
             $demandeur = Demandeur::where('nom_demandeur', 'ilike', '%' . $request->cin . '%')
                 ->orWhere('prenom_demandeur', 'ilike', '%' . $request->cin . '%')
                 ->first();
@@ -375,7 +374,6 @@ class DemandeurProprieteController extends Controller
             ]);
         }
         
-        // Vérifier si le demandeur n'est pas déjà dans le dossier, l'ajouter
         $existeInDossier = Contenir::where('id_demandeur', $demandeur->id)
             ->where('id_dossier', $dossier->id)
             ->exists();
@@ -411,7 +409,6 @@ class DemandeurProprieteController extends Controller
             $id_user = Auth::id();
             
             if ($request->mode === 'nouveau') {
-                // Créer un nouveau demandeur
                 $request->validate([
                     'titre_demandeur' => 'required|string|max:12',
                     'nom_demandeur' => 'required|string|max:40',
@@ -453,7 +450,6 @@ class DemandeurProprieteController extends Controller
                     'id_user' => $id_user,
                 ]);
                 
-                // Ajouter au dossier
                 $propriete = Propriete::findOrFail($request->id_propriete);
                 Contenir::create([
                     'id_demandeur' => $demandeur->id,
@@ -466,7 +462,6 @@ class DemandeurProprieteController extends Controller
                 $id_demandeur = $request->id_demandeur;
             }
 
-            // Vérifier si le lien n'existe pas déjà
             $existingLink = Demander::where('id_demandeur', $id_demandeur)
                 ->where('id_propriete', $request->id_propriete)
                 ->exists();
@@ -475,7 +470,6 @@ class DemandeurProprieteController extends Controller
                 return back()->withErrors(['error' => 'Ce demandeur est déjà lié à cette propriété']);
             }
 
-            // Compter les demandeurs existants pour cette propriété
             $demandeursCount = Demander::where('id_propriete', $request->id_propriete)->count();
             
             Demander::create([
@@ -487,7 +481,6 @@ class DemandeurProprieteController extends Controller
                 'total_prix' => 0,
             ]);
 
-            // Mettre à jour le status de la propriété
             Propriete::where('id', $request->id_propriete)->update(['status' => true]);
 
             DB::commit();

@@ -8,6 +8,20 @@ import { route } from 'ziggy-js';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
+import axios from 'axios';
+
+
+const token = document.head.querySelector('meta[name="csrf-token"]');
+if (token) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = token.getAttribute('content');
+} else {
+    console.error('CSRF token not found in meta tags');
+}
+
+axios.defaults.withCredentials = true;
+axios.defaults.withXSRFToken = true;
+
+
 window.route = route;
 
 createInertiaApp({

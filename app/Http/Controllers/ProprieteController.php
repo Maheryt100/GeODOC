@@ -85,9 +85,6 @@ class ProprieteController extends Controller
             'contenance.min' => 'La contenance est invalide'
         ]);
         
-        // INFORMATION: Le prix sera calculé selon la VOCATION uniquement
-        // Nature est utilisée pour la description du terrain
-        
         try {
             $request->merge(['id_user' => Auth::id()]);
             Propriete::create($request->all());
@@ -135,7 +132,7 @@ class ProprieteController extends Controller
             'lot' => 'required|string|max:15',
             'type_operation' => 'required|in:morcellement,immatriculation',
             'nature' => 'required|string|max:40',
-            'vocation' => 'required|in:Editaire,Agricole,Forestière,Touristique',
+            'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
             'proprietaire' => 'required|string|max:50',
             'situation' => 'required|string',
             'propriete_mere' => 'nullable|string|max:20',
@@ -154,6 +151,7 @@ class ProprieteController extends Controller
             'type_operation.required' => 'Le type d\'opération est obligatoire',
             'nature.required' => 'La nature est obligatoire',
             'vocation.required' => 'La vocation est obligatoire',
+            'vocation.in' => 'La vocation doit être: Edilitaire, Agricole, Forestière ou Touristique',
             'proprietaire.required' => 'Le nom de la propriété est obligatoire',
             'situation.required' => 'La situation est obligatoire',
         ]);
@@ -172,7 +170,6 @@ class ProprieteController extends Controller
         $propriete = Propriete::findOrFail($id);
         $dossier = Dossier::findOrFail($id_dossier);
 
-        // Utiliser type_operation au lieu de dossier->type
         if ($propriete->type_operation == 'morcellement') {
             $requisition_model = new TemplateProcessor(
                 storage_path('app/public/modele_odoc/requisition_MO.docx')

@@ -2,7 +2,7 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, AlertCircle, Eye, MapPin, Calendar, Building2 } from 'lucide-react';
+import { LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, AlertCircle, Eye, MapPin, Calendar, Building2, FileText, FileOutput } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
+
 
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
@@ -219,7 +220,23 @@ export default function Show() {
                                         Nouveau Lot
                                     </Link>
                                 </Button>
-                               
+                                
+                                {/* NOUVEAU BOUTON */}
+                                <Button asChild variant="secondary" size="sm">
+                                    <Link href={route('dossiers.list', dossier.id)}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Documents générés
+                                    </Link>
+                                </Button>
+                                
+                                {/* NOUVEAU BOUTON - Génération */}
+                                <Button asChild size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                                    <Link href={route('documents.generate', dossier.id)}>
+                                        <FileOutput className="mr-2 h-4 w-4" />
+                                        Générer documents
+                                    </Link>
+                                </Button>
+                            
                                 <Button asChild variant="outline" size="sm">
                                     <Link href={route('dossiers.list', dossier.id)}>
                                         <List className="mr-2 h-4 w-4" />

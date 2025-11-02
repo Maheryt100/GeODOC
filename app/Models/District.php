@@ -11,8 +11,8 @@ class District extends Model
         'region_id',
         'edilitaire',
         'agricole',
-        'forestiere',      // ✅ AJOUTER
-        'touristique',     // ✅ AJOUTER
+        'forestiere',      
+        'touristique',   
     ];
 
     public function region() {

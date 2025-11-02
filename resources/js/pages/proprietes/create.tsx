@@ -35,7 +35,7 @@ export default function Create() {
         situation: '',
         nature: '',
         vocation: '',
-        type_operation: dossier.type || 'immatriculation',
+        type_operation: 'immatriculation',
         numero_FN: '',
         numero_requisition: '',
         date_requisition: '',

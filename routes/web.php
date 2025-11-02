@@ -6,6 +6,7 @@ use App\Http\Controllers\DemandeController;
 use App\Http\Controllers\DemandeurController;
 use App\Http\Controllers\DemandeurProprieteController;
 use App\Http\Controllers\DistrictController;
+use App\Http\Controllers\DocumentGenerationController;
 use App\Http\Controllers\DossierController;
 use App\Http\Controllers\ProprieteController;
 use App\Http\Controllers\StatController;
@@ -34,6 +35,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{id}/list', [DemandeController::class, 'list'])->name('dossiers.list');
 
         // ==========================================
+        // GÉNÉRATION DE DOCUMENTS MODERNE
+        // ==========================================
+        Route::get('/{id}/documents/generate', [DocumentGenerationController::class, 'index'])
+            ->name('documents.generate');
+        Route::post('/documents/preview', [DocumentGenerationController::class, 'preview'])
+            ->name('documents.preview');
+        Route::post('/documents/generate/acte', [DocumentGenerationController::class, 'generateActeVente'])
+            ->name('documents.generate.acte');
+        Route::post('/documents/generate/csf', [DocumentGenerationController::class, 'generateCsf'])
+            ->name('documents.generate.csf');
+        Route::post('/documents/generate/requisition', [DocumentGenerationController::class, 'generateRequisition'])
+            ->name('documents.generate.requisition');
+
+        // ==========================================
         // SECTION DEMANDEUR-PROPRIETE (3 WORKFLOWS)
         // ==========================================
         
@@ -44,26 +59,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('nouveau-lot.store');
 
         // 2. AJOUTER DEMANDEUR : Ajouter un demandeur (nouveau ou existant) à une propriété existante
-        // MODIFIÉ: Support du paramètre optionnel id_propriete dans l'URL
         Route::get('/{id}/ajouter-demandeur/{id_propriete?}', [DemandeurProprieteController::class, 'addToProperty'])
             ->name('ajouter-demandeur.create');
         Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])
             ->name('ajouter-demandeur.store');
 
         // 3. LIER EXISTANT : Lier un demandeur existant à une propriété existante
-        // MODIFIÉ: Support des paramètres optionnels id_demandeur et id_propriete
         Route::get('/{id}/lier-demandeur/{id_demandeur?}/{id_propriete?}', [DemandeurProprieteController::class, 'linkExisting'])
             ->name('lier-demandeur.create');
         Route::post('/lier-demandeur/search', [DemandeurProprieteController::class, 'searchToLink'])
             ->name('lier-demandeur.search');
         Route::post('/lier-demandeur/store', [DemandeurProprieteController::class, 'storeLink'])
             ->name('lier-demandeur.store');
-
-        // ⚠️ SUPPRIMÉ: Route fusion dupliquée (même fonctionnalité que nouveau-lot)
-        // Route::get('/{id}/fusion/create', [DemandeurProprieteController::class, 'create'])
-        //     ->name('demandeur-propriete.create');
-        // Route::post('/fusion/store', [DemandeurProprieteController::class, 'store'])
-        //     ->name('demandeur-propriete.store');
 
         // ==========================================
         // SECTION DEMANDEURS
@@ -91,7 +98,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('proprietes.requisition');
 
         // ==========================================
-        // SECTION DOCUMENTS & LISTES
+        // SECTION DOCUMENTS & LISTES (ANCIEN SYSTÈME)
         // ==========================================
         Route::get('/list/search/{dossier}', [DemandeController::class, 'index'])->name('documents.index');
         Route::get('{id}/lier/document', [DemandeController::class, 'create'])->name('lier.document');
@@ -110,7 +117,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('proprietes/{id}/show', [ProprieteController::class, 'show'])->name('proprietes.show');
 
     // ==========================================
-    // GENERATION DOCUMENTS WORD
+    // GENERATION DOCUMENTS WORD (ANCIEN - à supprimer après migration)
     // ==========================================
     Route::get('documents/create', [DemandeController::class, 'create'])->name('documents.create');
     Route::post('documents/store', [DemandeController::class, 'store'])->name('documents.store');

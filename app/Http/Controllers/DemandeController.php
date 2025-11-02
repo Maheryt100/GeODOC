@@ -27,9 +27,6 @@ class DemandeController extends Controller
 {
 
 
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request, $dossierId)
     {
         $dossier = Dossier::findOrFail($dossierId);
@@ -62,9 +59,6 @@ class DemandeController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create($id)
     {
         $dossier = Dossier::find($id);
@@ -76,7 +70,6 @@ class DemandeController extends Controller
         ]);
     }
 
-    
     public function list($id)
     {
         $dossier = Dossier::find($id);
@@ -146,14 +139,14 @@ class DemandeController extends Controller
         return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');
         }, $fileName);
-
     }
+
     /**
      * Normalise le nom de la vocation pour correspondre aux colonnes de districts
+     * CORRECTION: edilitaire au lieu de edilitaire
      */
     private function normalizeVocation(string $vocation): string
     {
-        // Mapping des vocations vers les noms de colonnes
         $mapping = [
             'Edilitaire' => 'edilitaire',
             'Agricole' => 'agricole',
