@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { Head, useForm, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast, Toaster } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { UserPlus, Trash2, Save } from 'lucide-react';
+import { Save, Plus, Trash2, UserPlus } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { BreadcrumbItem, Dossier } from '@/types';
 
@@ -18,10 +18,10 @@ interface DemandeurForm {
     prenom_demandeur: string;
     date_naissance: string;
     lieu_naissance: string;
-    nom_pere: string;
-    nom_mere: string;
     sexe: string;
     occupation: string;
+    nom_pere: string;
+    nom_mere: string;
     cin: string;
     date_delivrance: string;
     lieu_delivrance: string;
@@ -35,43 +35,36 @@ interface DemandeurForm {
     lieu_mariage: string;
     marie_a: string;
     telephone: string;
-    [key: string]: string;
 }
 
-interface PageProps {
-    dossier: Dossier;
-    [key: string]: unknown;
-}
+const emptyDemandeur: DemandeurForm = {
+    titre_demandeur: '',
+    nom_demandeur: '',
+    prenom_demandeur: '',
+    date_naissance: '',
+    lieu_naissance: '',
+    sexe: '',
+    occupation: '',
+    nom_pere: '',
+    nom_mere: '',
+    cin: '',
+    date_delivrance: '',
+    lieu_delivrance: '',
+    date_delivrance_duplicata: '',
+    lieu_delivrance_duplicata: '',
+    domiciliation: '',
+    nationalite: 'Malagasy',
+    situation_familiale: 'Non spécifiée',
+    regime_matrimoniale: 'Non spécifié',
+    date_mariage: '',
+    lieu_mariage: '',
+    marie_a: '',
+    telephone: ''
+};
 
 export default function NouveauLot() {
-    const { dossier } = usePage<PageProps>().props;
-    const dossierType = dossier.type;
-
-    const [demandeurs, setDemandeurs] = useState<DemandeurForm[]>([{
-        titre_demandeur: '',
-        nom_demandeur: '',
-        prenom_demandeur: '',
-        date_naissance: '',
-        lieu_naissance: '',
-        nom_pere: '',
-        nom_mere: '',
-        sexe: '',
-        occupation: '',
-        cin: '',
-        date_delivrance: '',
-        lieu_delivrance: '',
-        date_delivrance_duplicata: '',
-        lieu_delivrance_duplicata: '',
-        domiciliation: '',
-        nationalite: 'Malagasy',
-        situation_familiale: '',
-        regime_matrimoniale: '',
-        date_mariage: '',
-        lieu_mariage: '',
-        marie_a: '',
-        telephone: ''
-    }]);
-
+    const { dossier } = usePage<{ dossier: Dossier }>().props;
+    const [demandeurs, setDemandeurs] = useState<DemandeurForm[]>([{ ...emptyDemandeur }]);
     const [selectedCharges, setSelectedCharges] = useState<string[]>([]);
 
     const chargeOptions = [
@@ -82,68 +75,32 @@ export default function NouveauLot() {
     ];
 
     const { data, setData, post, processing } = useForm({
-        type_operation: '',
+        id_dossier: dossier.id,
         lot: '',
         propriete_mere: '',
-        titre_mere: '',
         titre: '',
+        titre_mere: '',
         proprietaire: '',
         contenance: '',
         charge: '',
         situation: '',
         nature: '',
         vocation: '',
+        type_operation: 'immatriculation' as 'morcellement' | 'immatriculation',
         numero_FN: '',
         numero_requisition: '',
         date_requisition: '',
         date_inscription: '',
         dep_vol: '',
-        id_dossier: dossier.id,
-        demandeurs_json: JSON.stringify([{
-            titre_demandeur: '',
-            nom_demandeur: '',
-            prenom_demandeur: '',
-            date_naissance: '',
-            lieu_naissance: '',
-            nom_pere: '',
-            nom_mere: '',
-            sexe: '',
-            occupation: '',
-            cin: '',
-            date_delivrance: '',
-            lieu_delivrance: '',
-            date_delivrance_duplicata: '',
-            lieu_delivrance_duplicata: '',
-            domiciliation: '',
-            nationalite: 'Malagasy',
-            situation_familiale: '',
-            regime_matrimoniale: '',
-            date_mariage: '',
-            lieu_mariage: '',
-            marie_a: '',
-            telephone: ''
-        }])
+        demandeurs_json: ''
     });
-
-    useEffect(() => {
-        if (dossierType === 'immatriculation') {
-            setData('propriete_mere', '');
-            setData('titre_mere', '');
-        }
-    }, [dossierType, setData]);
-
-    useEffect(() => {
-        setData('demandeurs_json', JSON.stringify(demandeurs));
-    }, [demandeurs]);
 
     const handleChargeChange = (charge: string, checked: boolean) => {
         let newCharges: string[];
         if (checked) {
-            // Si "Aucune" est sélectionné, désélectionner les autres
             if (charge === "Aucune") {
                 newCharges = ["Aucune"];
             } else {
-                // Retirer "Aucune" si elle était sélectionnée
                 newCharges = selectedCharges.filter(c => c !== "Aucune");
                 newCharges = [...newCharges, charge];
             }
@@ -154,79 +111,69 @@ export default function NouveauLot() {
         setData('charge', newCharges.join(', '));
     };
 
-    const handleTitre = (value: string, index: number) => {
-        const newDemandeurs = [...demandeurs];
-        newDemandeurs[index].titre_demandeur = value;
-        newDemandeurs[index].sexe = value === 'Monsieur' ? 'Homme' : 'Femme';
+    const addDemandeur = () => {
+        setDemandeurs([...demandeurs, { ...emptyDemandeur }]);
+    };
+
+    const removeDemandeur = (index: number) => {
+        if (demandeurs.length === 1) {
+            toast.error('Au moins un demandeur est requis');
+            return;
+        }
+        const newDemandeurs = demandeurs.filter((_, i) => i !== index);
         setDemandeurs(newDemandeurs);
     };
 
     const updateDemandeur = (index: number, field: keyof DemandeurForm, value: string) => {
         const newDemandeurs = [...demandeurs];
-        newDemandeurs[index][field] = value;
-        setDemandeurs(newDemandeurs);
-    };
-
-    const ajouterDemandeur = () => {
-        const nouveauDemandeur: DemandeurForm = {
-            titre_demandeur: '',
-            nom_demandeur: '',
-            prenom_demandeur: '',
-            date_naissance: '',
-            lieu_naissance: '',
-            nom_pere: '',
-            nom_mere: '',
-            sexe: '',
-            occupation: '',
-            cin: '',
-            date_delivrance: '',
-            lieu_delivrance: '',
-            date_delivrance_duplicata: '',
-            lieu_delivrance_duplicata: '',
-            domiciliation: '',
-            nationalite: 'Malagasy',
-            situation_familiale: '',
-            regime_matrimoniale: '',
-            date_mariage: '',
-            lieu_mariage: '',
-            marie_a: '',
-            telephone: ''
-        };
-        setDemandeurs([...demandeurs, nouveauDemandeur]);
-    };
-
-    const supprimerDemandeur = (index: number) => {
-        if (demandeurs.length === 1) {
-            toast.error('Vous devez avoir au moins un demandeur');
-            return;
+        newDemandeurs[index] = { ...newDemandeurs[index], [field]: value };
+        
+        // Auto-update sexe based on titre
+        if (field === 'titre_demandeur') {
+            newDemandeurs[index].sexe = value === 'Monsieur' ? 'Homme' : 'Femme';
         }
-        setDemandeurs(demandeurs.filter((_, i) => i !== index));
+        
+        setDemandeurs(newDemandeurs);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation de la propriété
+        // Validation propriété
         if (!data.lot) {
             toast.error('Le numéro de lot est obligatoire');
             return;
         }
+        if (!data.type_operation) {
+            toast.error('Le type d\'opération est obligatoire');
+            return;
+        }
         if (!data.nature) {
-            toast.error('La nature de la propriété est obligatoire');
+            toast.error('La nature est obligatoire');
+            return;
+        }
+        if (!data.vocation) {
+            toast.error('La vocation est obligatoire');
+            return;
+        }
+        if (!data.proprietaire) {
+            toast.error('Le nom de la propriété est obligatoire');
+            return;
+        }
+        if (!data.situation) {
+            toast.error('La situation est obligatoire');
             return;
         }
 
-        // Validation des demandeurs
+        // Validation demandeurs
         for (let i = 0; i < demandeurs.length; i++) {
             const d = demandeurs[i];
-            
-            // Champs obligatoires selon la migration
-            if (!d.titre_demandeur) {
-                toast.error(`Demandeur ${i + 1}: Le titre de civilité est obligatoire`);
+            if (!d.titre_demandeur || !d.nom_demandeur || !d.cin) {
+                toast.error(`Demandeur ${i + 1}: Titre, nom et CIN sont obligatoires`);
                 return;
             }
-            if (!d.nom_demandeur) {
-                toast.error(`Demandeur ${i + 1}: Le nom est obligatoire`);
+            if (!/^\d{12}$/.test(d.cin)) {
+                toast.error(`Demandeur ${i + 1}: Le CIN doit contenir exactement 12 chiffres`);
                 return;
             }
             if (!d.date_naissance) {
@@ -245,15 +192,6 @@ export default function NouveauLot() {
                 toast.error(`Demandeur ${i + 1}: Le nom de la mère est obligatoire`);
                 return;
             }
-            if (!d.cin) {
-                toast.error(`Demandeur ${i + 1}: Le CIN est obligatoire`);
-                return;
-            }
-            const cinIsValid = /^\d{12}$/.test(d.cin);
-            if (!cinIsValid) {
-                toast.error(`Demandeur ${i + 1}: Le CIN doit contenir exactement 12 chiffres`);
-                return;
-            }
             if (!d.date_delivrance) {
                 toast.error(`Demandeur ${i + 1}: La date de délivrance du CIN est obligatoire`);
                 return;
@@ -266,17 +204,12 @@ export default function NouveauLot() {
                 toast.error(`Demandeur ${i + 1}: La domiciliation est obligatoire`);
                 return;
             }
-            if (!d.situation_familiale) {
-                toast.error(`Demandeur ${i + 1}: La situation familiale est obligatoire`);
-                return;
-            }
-            if (!d.nationalite) {
-                toast.error(`Demandeur ${i + 1}: La nationalité est obligatoire`);
-                return;
-            }
         }
 
-        post(route('demandeur-propriete.store'), {
+        // ✅ Mettre à jour demandeurs_json AVANT la soumission
+        data.demandeurs_json = JSON.stringify(demandeurs);
+
+        post(route('nouveau-lot.store'), {
             onError: (errors) => {
                 const messages = Object.values(errors).flat();
                 toast.error('Erreur de validation', {
@@ -284,7 +217,7 @@ export default function NouveauLot() {
                 });
             },
             onSuccess: () => {
-                toast.success('Demandeur(s) et propriété créés avec succès !');
+                toast.success('Lot créé avec succès !');
             }
         });
     };
@@ -310,41 +243,40 @@ export default function NouveauLot() {
                     {/* SECTION PROPRIÉTÉ */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Informations de la Propriété</CardTitle>
-                            <CardDescription>Champs obligatoires: Lot et Nature</CardDescription>
+                            <CardTitle>1. Informations de la Propriété</CardTitle>
+                            <CardDescription>Champs obligatoires: Lot, Type d'opération, Nature, Vocation, Nom Propriété, Situation</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            {/* Type d'opération */}
+                            <div>
+                                <Label>Type d'opération *</Label>
+                                <Select
+                                    value={data.type_operation}
+                                    onValueChange={(value) => setData('type_operation', value as 'morcellement' | 'immatriculation')}
+                                >
+                                    <SelectTrigger className="w-[220px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="morcellement">Morcellement</SelectItem>
+                                        <SelectItem value="immatriculation">Immatriculation</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Ligne 1 */}
                             <div className="grid gap-4 md:grid-cols-3">
-                                <div className="md:col-span-1">
-                                    <Label className="text-red-500">Lot *</Label>
+                                <div>
+                                    <Label>Lot *</Label>
                                     <Input
-                                        type="text"
                                         value={data.lot}
                                         onChange={(e) => setData('lot', e.target.value)}
                                         placeholder="T 45"
-                                        required
                                     />
                                 </div>
-                                {/* Type d'opération */}
                                 <div>
-                                    <Label className="text-red-500">Type d'opération *</Label>
-                                    <Select
-                                        value={data.type_operation}
-                                        onValueChange={(value) => setData('type_operation', value)}
-                                        required
-                                    >
-                                        <SelectTrigger className="w-[220px]">
-                                            <SelectValue placeholder="Sélectionner le type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="morcellement">Morcellement</SelectItem>
-                                            <SelectItem value="immatriculation">Immatriculation</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Nature *</Label>
-                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)} required>
+                                    <Label>Nature *</Label>
+                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
@@ -356,7 +288,7 @@ export default function NouveauLot() {
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label>Vocation</Label>
+                                    <Label>Vocation *</Label>
                                     <Select value={data.vocation} onValueChange={(e) => setData('vocation', e)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
@@ -371,13 +303,13 @@ export default function NouveauLot() {
                                 </div>
                             </div>
 
+                            {/* Ligne 2 */}
                             <div className="grid gap-4 md:grid-cols-2">
-                                { data.type_operation === 'morcellement' && (
+                                {data.type_operation === 'morcellement' && (
                                     <>
                                         <div>
                                             <Label>Propriété mère</Label>
                                             <Input
-                                                type="text"
                                                 value={data.propriete_mere}
                                                 onChange={(e) => setData('propriete_mere', e.target.value)}
                                             />
@@ -385,10 +317,8 @@ export default function NouveauLot() {
                                         <div>
                                             <Label>Titre mère</Label>
                                             <Input
-                                                type="text"
                                                 value={data.titre_mere}
                                                 onChange={(e) => setData('titre_mere', e.target.value)}
-                                                placeholder="12.54-B"
                                             />
                                         </div>
                                     </>
@@ -396,22 +326,20 @@ export default function NouveauLot() {
                                 <div>
                                     <Label>Titre</Label>
                                     <Input
-                                        type="text"
                                         value={data.titre}
                                         onChange={(e) => setData('titre', e.target.value)}
-                                        placeholder="54.21-A"
                                     />
                                 </div>
                                 <div>
-                                    <Label>Nom propriété / Propriétaire</Label>
+                                    <Label>Nom Propriété / Propriétaire *</Label>
                                     <Input
-                                        type="text"
                                         value={data.proprietaire}
                                         onChange={(e) => setData('proprietaire', e.target.value)}
                                     />
                                 </div>
                             </div>
 
+                            {/* Ligne 3 */}
                             <div className="grid gap-4 md:grid-cols-4">
                                 <div>
                                     <Label>Contenance (m²)</Label>
@@ -425,17 +353,14 @@ export default function NouveauLot() {
                                 <div>
                                     <Label>Numero FNº</Label>
                                     <Input
-                                        type="text"
                                         value={data.numero_FN}
                                         onChange={(e) => setData('numero_FN', e.target.value)}
-                                        placeholder="78-A/25"
                                     />
                                 </div>
-                                {dossierType === 'immatriculation' && (
+                                {data.type_operation === 'immatriculation' && (
                                     <div>
                                         <Label>Nº Requisition</Label>
                                         <Input
-                                            type="text"
                                             value={data.numero_requisition}
                                             onChange={(e) => setData('numero_requisition', e.target.value)}
                                         />
@@ -451,10 +376,7 @@ export default function NouveauLot() {
                                                     checked={selectedCharges.includes(charge)}
                                                     onCheckedChange={(checked) => handleChargeChange(charge, checked as boolean)}
                                                 />
-                                                <label
-                                                    htmlFor={`charge-${charge}`}
-                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                                >
+                                                <label htmlFor={`charge-${charge}`} className="text-sm">
                                                     {charge}
                                                 </label>
                                             </div>
@@ -463,11 +385,11 @@ export default function NouveauLot() {
                                 </div>
                             </div>
 
+                            {/* Ligne 4 */}
                             <div className="grid gap-4 md:grid-cols-4">
                                 <div>
-                                    <Label>Situation (sise à)</Label>
+                                    <Label>Situation (sise à) *</Label>
                                     <Input
-                                        type="text"
                                         value={data.situation}
                                         onChange={(e) => setData('situation', e.target.value)}
                                     />
@@ -491,7 +413,6 @@ export default function NouveauLot() {
                                 <div>
                                     <Label>Dep Vol</Label>
                                     <Input
-                                        type="text"
                                         value={data.dep_vol}
                                         onChange={(e) => setData('dep_vol', e.target.value)}
                                     />
@@ -501,315 +422,290 @@ export default function NouveauLot() {
                     </Card>
 
                     {/* SECTION DEMANDEURS */}
-                    {demandeurs.map((demandeur, index) => (
-                        <Card key={index}>
-                            <CardHeader>
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <CardTitle>Demandeur {index + 1}</CardTitle>
-                                        <CardDescription>
-                                            Champs obligatoires: Titre, Nom, Date et Lieu naissance, Occupation, Nom mère, CIN, Délivrance, Domiciliation, Situation, Nationalité
-                                        </CardDescription>
-                                    </div>
-                                    {demandeurs.length > 1 && (
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => supprimerDemandeur(index)}
-                                        >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Retirer
-                                        </Button>
-                                    )}
+                    <Card>
+                        <CardHeader>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle>2. Demandeurs ({demandeurs.length})</CardTitle>
+                                    <CardDescription>Tous les champs sont obligatoires</CardDescription>
                                 </div>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                {/* Ligne 1: Titre, Nom, Prénom */}
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div>
-                                        <Label className="text-red-500">Titre de civilité *</Label>
-                                        <Select
-                                            value={demandeur.titre_demandeur}
-                                            onValueChange={(value) => handleTitre(value, index)}
-                                            required
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Sélectionner" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Monsieur">Monsieur</SelectItem>
-                                                <SelectItem value="Madame">Madame</SelectItem>
-                                                <SelectItem value="Mademoiselle">Mademoiselle</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                <Button type="button" onClick={addDemandeur} size="sm">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Ajouter un demandeur
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-8">
+                            {demandeurs.map((demandeur, index) => (
+                                <div key={index} className="border rounded-lg p-6 space-y-6 relative">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">Demandeur {index + 1}</h3>
+                                        {demandeurs.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => removeDemandeur(index)}
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Retirer
+                                            </Button>
+                                        )}
                                     </div>
-                                    <div>
-                                        <Label className="text-red-500">Nom *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.nom_demandeur}
-                                            onChange={(e) => updateDemandeur(index, 'nom_demandeur', e.target.value)}
-                                            placeholder="RAKOTO"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Prénom</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.prenom_demandeur}
-                                            onChange={(e) => updateDemandeur(index, 'prenom_demandeur', e.target.value)}
-                                            placeholder="Jean"
-                                        />
-                                    </div>
-                                </div>
 
-                                {/* Ligne 2: Date naissance, Lieu naissance, Nom père, Nom mère */}
-                                <div className="grid gap-4 md:grid-cols-4">
-                                    <div>
-                                        <Label className="text-red-500">Date de naissance *</Label>
-                                        <Input
-                                            type="date"
-                                            value={demandeur.date_naissance}
-                                            onChange={(e) => updateDemandeur(index, 'date_naissance', e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label className="text-red-500">Lieu de naissance *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.lieu_naissance}
-                                            onChange={(e) => updateDemandeur(index, 'lieu_naissance', e.target.value)}
-                                            placeholder="Antananarivo"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Nom complet Père</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.nom_pere}
-                                            onChange={(e) => updateDemandeur(index, 'nom_pere', e.target.value)}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label className="text-red-500">Nom complet Mère *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.nom_mere}
-                                            onChange={(e) => updateDemandeur(index, 'nom_mere', e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* CIN */}
-                                <div className="w-1/2">
-                                    <Label className="text-red-500">CIN *</Label>
-                                    <InputOTP
-                                        maxLength={12}
-                                        minLength={12}
-                                        value={demandeur.cin}
-                                        onChange={(value) => updateDemandeur(index, 'cin', value)}
-                                        required
-                                    >
-                                        <InputOTPGroup>
-                                            <InputOTPSlot index={0} />
-                                            <InputOTPSlot index={1} />
-                                            <InputOTPSlot index={2} />
-                                        </InputOTPGroup>
-                                        <InputOTPSeparator />
-                                        <InputOTPGroup>
-                                            <InputOTPSlot index={3} />
-                                            <InputOTPSlot index={4} />
-                                            <InputOTPSlot index={5} />
-                                        </InputOTPGroup>
-                                        <InputOTPSeparator />
-                                        <InputOTPGroup>
-                                            <InputOTPSlot index={6} />
-                                            <InputOTPSlot index={7} />
-                                            <InputOTPSlot index={8} />
-                                        </InputOTPGroup>
-                                        <InputOTPSeparator />
-                                        <InputOTPGroup>
-                                            <InputOTPSlot index={9} />
-                                            <InputOTPSlot index={10} />
-                                            <InputOTPSlot index={11} />
-                                        </InputOTPGroup>
-                                    </InputOTP>
-                                </div>
-
-                                {/* Délivrance CIN */}
-                                <div className="grid gap-4 md:grid-cols-4">
-                                    <div>
-                                        <Label className="text-red-500">Date Délivrance *</Label>
-                                        <Input
-                                            type="date"
-                                            value={demandeur.date_delivrance}
-                                            onChange={(e) => updateDemandeur(index, 'date_delivrance', e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label className="text-red-500">Lieu Délivrance *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.lieu_delivrance}
-                                            onChange={(e) => updateDemandeur(index, 'lieu_delivrance', e.target.value)}
-                                            placeholder="Antananarivo"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Date Délivrance Duplicata</Label>
-                                        <Input
-                                            type="date"
-                                            value={demandeur.date_delivrance_duplicata}
-                                            onChange={(e) => updateDemandeur(index, 'date_delivrance_duplicata', e.target.value)}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Lieu Délivrance Duplicata</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.lieu_delivrance_duplicata}
-                                            onChange={(e) => updateDemandeur(index, 'lieu_delivrance_duplicata', e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Occupation, Domiciliation, Téléphone */}
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div>
-                                        <Label className="text-red-500">Occupation *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.occupation}
-                                            onChange={(e) => updateDemandeur(index, 'occupation', e.target.value)}
-                                            placeholder="Agriculteur"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label className="text-red-500">Domiciliation *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.domiciliation}
-                                            onChange={(e) => updateDemandeur(index, 'domiciliation', e.target.value)}
-                                            placeholder="Lot II A 45 Ambohimanarina"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Téléphone</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.telephone}
-                                            onChange={(e) => updateDemandeur(index, 'telephone', e.target.value)}
-                                            placeholder="0340000000"
-                                            maxLength={10}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Situation familiale, Régime, Nationalité */}
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div>
-                                        <Label className="text-red-500">Situation Familiale *</Label>
-                                        <Select
-                                            value={demandeur.situation_familiale}
-                                            onValueChange={(value) => updateDemandeur(index, 'situation_familiale', value)}
-                                            required
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Sélectionner" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Célibataire">Célibataire</SelectItem>
-                                                <SelectItem value="Marié(e)">Marié(e)</SelectItem>
-                                                <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
-                                                <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label>Régime matrimonial</Label>
-                                        <Select
-                                            value={demandeur.regime_matrimoniale}
-                                            onValueChange={(value) => updateDemandeur(index, 'regime_matrimoniale', value)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Sélectionner" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="zara-mira">Zara-Mira</SelectItem>
-                                                <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
-                                                <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label className="text-red-500">Nationalité *</Label>
-                                        <Input
-                                            type="text"
-                                            value={demandeur.nationalite}
-                                            onChange={(e) => updateDemandeur(index, 'nationalite', e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Infos mariage si marié */}
-                                {demandeur.situation_familiale === 'Marié(e)' && (
+                                    {/* Ligne 1: Titre, Nom, Prénom */}
                                     <div className="grid gap-4 md:grid-cols-3">
                                         <div>
-                                            <Label>Marié(e) à</Label>
+                                            <Label>Titre de civilité *</Label>
+                                            <Select
+                                                value={demandeur.titre_demandeur}
+                                                onValueChange={(value) => updateDemandeur(index, 'titre_demandeur', value)}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Sélectionner" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Monsieur">Monsieur</SelectItem>
+                                                    <SelectItem value="Madame">Madame</SelectItem>
+                                                    <SelectItem value="Mademoiselle">Mademoiselle</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label>Nom *</Label>
                                             <Input
-                                                type="text"
-                                                value={demandeur.marie_a}
-                                                onChange={(e) => updateDemandeur(index, 'marie_a', e.target.value)}
+                                                value={demandeur.nom_demandeur}
+                                                onChange={(e) => updateDemandeur(index, 'nom_demandeur', e.target.value)}
+                                                placeholder="RAKOTO"
                                             />
                                         </div>
                                         <div>
-                                            <Label>Date de Mariage</Label>
+                                            <Label>Prénom</Label>
                                             <Input
-                                                type="date"
-                                                value={demandeur.date_mariage}
-                                                onChange={(e) => updateDemandeur(index, 'date_mariage', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Lieu de Mariage</Label>
-                                            <Input
-                                                type="text"
-                                                value={demandeur.lieu_mariage}
-                                                onChange={(e) => updateDemandeur(index, 'lieu_mariage', e.target.value)}
+                                                value={demandeur.prenom_demandeur}
+                                                onChange={(e) => updateDemandeur(index, 'prenom_demandeur', e.target.value)}
+                                                placeholder="Jean"
                                             />
                                         </div>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
 
-                    {/* Bouton Ajouter Demandeur */}
-                    <div className="flex justify-center">
-                        <Button type="button" variant="outline" onClick={ajouterDemandeur}>
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Ajouter un autre demandeur (consort)
-                        </Button>
-                    </div>
+                                    {/* Ligne 2: Date naissance, Lieu, Père, Mère */}
+                                    <div className="grid gap-4 md:grid-cols-4">
+                                        <div>
+                                            <Label>Date de naissance *</Label>
+                                            <Input
+                                                type="date"
+                                                value={demandeur.date_naissance}
+                                                onChange={(e) => updateDemandeur(index, 'date_naissance', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Lieu de naissance *</Label>
+                                            <Input
+                                                value={demandeur.lieu_naissance}
+                                                onChange={(e) => updateDemandeur(index, 'lieu_naissance', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Nom Père</Label>
+                                            <Input
+                                                value={demandeur.nom_pere}
+                                                onChange={(e) => updateDemandeur(index, 'nom_pere', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Nom Mère *</Label>
+                                            <Input
+                                                value={demandeur.nom_mere}
+                                                onChange={(e) => updateDemandeur(index, 'nom_mere', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* CIN */}
+                                    <div className="w-1/2">
+                                        <Label>CIN *</Label>
+                                        <InputOTP
+                                            maxLength={12}
+                                            value={demandeur.cin}
+                                            onChange={(value) => updateDemandeur(index, 'cin', value)}
+                                        >
+                                            <InputOTPGroup>
+                                                <InputOTPSlot index={0} />
+                                                <InputOTPSlot index={1} />
+                                                <InputOTPSlot index={2} />
+                                            </InputOTPGroup>
+                                            <InputOTPSeparator />
+                                            <InputOTPGroup>
+                                                <InputOTPSlot index={3} />
+                                                <InputOTPSlot index={4} />
+                                                <InputOTPSlot index={5} />
+                                            </InputOTPGroup>
+                                            <InputOTPSeparator />
+                                            <InputOTPGroup>
+                                                <InputOTPSlot index={6} />
+                                                <InputOTPSlot index={7} />
+                                                <InputOTPSlot index={8} />
+                                            </InputOTPGroup>
+                                            <InputOTPSeparator />
+                                            <InputOTPGroup>
+                                                <InputOTPSlot index={9} />
+                                                <InputOTPSlot index={10} />
+                                                <InputOTPSlot index={11} />
+                                            </InputOTPGroup>
+                                        </InputOTP>
+                                    </div>
+
+                                    {/* Délivrance */}
+                                    <div className="grid gap-4 md:grid-cols-4">
+                                        <div>
+                                            <Label>Date Délivrance *</Label>
+                                            <Input
+                                                type="date"
+                                                value={demandeur.date_delivrance}
+                                                onChange={(e) => updateDemandeur(index, 'date_delivrance', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Lieu Délivrance *</Label>
+                                            <Input
+                                                value={demandeur.lieu_delivrance}
+                                                onChange={(e) => updateDemandeur(index, 'lieu_delivrance', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Date Duplicata</Label>
+                                            <Input
+                                                type="date"
+                                                value={demandeur.date_delivrance_duplicata}
+                                                onChange={(e) => updateDemandeur(index, 'date_delivrance_duplicata', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Lieu Duplicata</Label>
+                                            <Input
+                                                value={demandeur.lieu_delivrance_duplicata}
+                                                onChange={(e) => updateDemandeur(index, 'lieu_delivrance_duplicata', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Occupation, Domiciliation, Téléphone */}
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                        <div>
+                                            <Label>Occupation *</Label>
+                                            <Input
+                                                value={demandeur.occupation}
+                                                onChange={(e) => updateDemandeur(index, 'occupation', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Domiciliation *</Label>
+                                            <Input
+                                                value={demandeur.domiciliation}
+                                                onChange={(e) => updateDemandeur(index, 'domiciliation', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Téléphone</Label>
+                                            <Input
+                                                value={demandeur.telephone}
+                                                onChange={(e) => updateDemandeur(index, 'telephone', e.target.value)}
+                                                maxLength={10}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Situation familiale, Régime, Nationalité */}
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                        <div>
+                                            <Label>Situation Familiale *</Label>
+                                            <Select
+                                                value={demandeur.situation_familiale}
+                                                onValueChange={(value) => updateDemandeur(index, 'situation_familiale', value)}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
+                                                    <SelectItem value="Célibataire">Célibataire</SelectItem>
+                                                    <SelectItem value="Marié(e)">Marié(e)</SelectItem>
+                                                    <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
+                                                    <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label>Régime matrimonial</Label>
+                                            <Select
+                                                value={demandeur.regime_matrimoniale}
+                                                onValueChange={(value) => updateDemandeur(index, 'regime_matrimoniale', value)}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Non spécifié">Non spécifié</SelectItem>
+                                                    <SelectItem value="zara-mira">Zara-Mira</SelectItem>
+                                                    <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
+                                                    <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label>Nationalité *</Label>
+                                            <Input
+                                                value={demandeur.nationalite}
+                                                onChange={(e) => updateDemandeur(index, 'nationalite', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Infos mariage */}
+                                    {demandeur.situation_familiale === 'Marié(e)' && (
+                                        <div className="grid gap-4 md:grid-cols-3">
+                                            <div>
+                                                <Label>Marié(e) à</Label>
+                                                <Input
+                                                    value={demandeur.marie_a}
+                                                    onChange={(e) => updateDemandeur(index, 'marie_a', e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label>Date de Mariage</Label>
+                                                <Input
+                                                    type="date"
+                                                    value={demandeur.date_mariage}
+                                                    onChange={(e) => updateDemandeur(index, 'date_mariage', e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label>Lieu de Mariage</Label>
+                                                <Input
+                                                    value={demandeur.lieu_mariage}
+                                                    onChange={(e) => updateDemandeur(index, 'lieu_mariage', e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
 
                     {/* Boutons de soumission */}
                     <div className="flex gap-4 justify-end">
-                        <Button type="button" variant="outline" onClick={() => router.visit(route('dossiers.show', dossier.id))}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => router.visit(route('dossiers.show', dossier.id))}
+                        >
                             Annuler
                         </Button>
                         <Button type="button" onClick={handleSubmit} disabled={processing}>
                             <Save className="mr-2 h-4 w-4" />
-                            {processing ? 'Enregistrement...' : 'Enregistrer'}
+                            {processing ? 'Enregistrement...' : 'Créer le lot'}
                         </Button>
                     </div>
                 </div>

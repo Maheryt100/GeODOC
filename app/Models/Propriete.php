@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Propriete extends Model
 {
-    //
     protected $fillable = [
         'lot',
         'propriete_mere',
@@ -18,20 +17,30 @@ class Propriete extends Model
         'charge',
         'situation',
         'nature',
-        'vocation', //ajout
+        'vocation',
         'numero_FN',
         'numero_requisition',
         'date_requisition',
         'date_inscription',
         'dep_vol',
         'status',
+        'type_operation', // AJOUT IMPORTANT
         'id_dossier',
         'id_user'
     ];
+
+    protected $casts = [
+        'date_requisition' => 'date',
+        'date_inscription' => 'date',
+        'status' => 'boolean',
+        'contenance' => 'integer',
+    ];
+
     public function dossier()
     {
         return $this->belongsTo(Dossier::class, 'id_dossier');
     }
+
     public function demandes(): HasMany
     {
         return $this->hasMany(Demander::class, 'id_propriete')->where('status', 'active');
@@ -39,6 +48,7 @@ class Propriete extends Model
 
     public function demandeurs()
     {
-        return $this->belongsToMany(Demandeur::class, 'demander', 'id_propriete', 'id_demandeur');
+        return $this->belongsToMany(Demandeur::class, 'demander', 'id_propriete', 'id_demandeur')
+            ->wherePivot('status', 'active');
     }
 }

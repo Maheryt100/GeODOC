@@ -1,3 +1,4 @@
+
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
 import React, { useState } from 'react';
@@ -12,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { BreadcrumbItem, Demandeurs, Dossier, Proprietes } from '@/types';
+import { BreadcrumbItem, Demandeur, Dossier, Propriete } from '@/types';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,48 +21,51 @@ import {
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 
-export default function Create({ proprietes, demandeurs, dossier} : {
-    proprietes: Proprietes;
-    demandeurs: Demandeurs
-    dossier: Dossier
-}){
+interface CreateProps {
+    proprietes: Propriete[];
+    demandeurs: Demandeur[];
+    dossier: Dossier;
+}
+
+export default function Create({ proprietes, demandeurs, dossier }: CreateProps) {
     console.log(dossier);
     const [proprieteOpen, setProprieteOpen] = useState(false);
     const [demandeurOpen, setDemandeurOpen] = useState(false);
     const [consortOpen, setConsortOpen] = useState(false);
 
     const [lot, setLot] = useState("");
-    const [selectedProprieteId, setSelectedProprieteId] = useState("");
-    const selectedPropriete = proprietes.find(p => p.id === selectedProprieteId);
+    const [selectedProprieteId, setSelectedProprieteId] = useState<string>("");
+    const selectedPropriete = proprietes.find((p: Propriete) => p.id === Number(selectedProprieteId));
 
-    const [selectedDemandeurId, setSelectedDemandeurId] = useState(null);
-    const [selectedDemandeur, setSelectedDemandeur] = useState(null);
+    const [selectedDemandeurId, setSelectedDemandeurId] = useState<number | null>(null);
+    const [selectedDemandeur, setSelectedDemandeur] = useState<Demandeur | null>(null);
     const [showCoDemandeur, setShowCoDemandeur] = useState(false);
-    const [selectedCoDemandeurs, setSelectedCoDemandeurs] = useState([]);
+    const [selectedCoDemandeurs, setSelectedCoDemandeurs] = useState<Demandeur[]>([]);
 
     const [statusConsort, setStatusConsort] = useState(false);
 
     const handleValidate = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log(selectedProprieteId,selectedDemandeurId, selectedCoDemandeurs);
+        console.log(selectedProprieteId, selectedDemandeurId, selectedCoDemandeurs);
 
-        if(selectedProprieteId === ''){
-            toast.warning('Veuillez sélectionxner une propriété!');
+        if (selectedProprieteId === '') {
+            toast.warning('Veuillez sélectionner une propriété!');
             return;
-        }else if(selectedDemandeurId == null){
-            toast.warning('Veuillez séléctionner un demandeur principale');
+        } else if (selectedDemandeurId == null) {
+            toast.warning('Veuillez sélectionner un demandeur principal');
             return;
         }
-        router.post('/documents/store',{
+        
+        router.post('/documents/store', {
             id_dossier: dossier.id,
             propriete_id: selectedProprieteId,
             demandeur_id: selectedDemandeurId,
             consort: selectedCoDemandeurs.map(cd => cd.id),
             status_consort: statusConsort,
-        },{
-            onError: (errors) =>{
+        }, {
+            onError: (errors) => {
                 Object.values(errors).forEach((error) => {
-                    toast.error(error);
+                    toast.error(String(error));
                 });
             },
         });
@@ -100,44 +104,44 @@ export default function Create({ proprietes, demandeurs, dossier} : {
         },
     ];
 
-    return(
-         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={'Liaison Document'}/>
-             <Toaster position={'top-right'}/>
-             <form onSubmit={handleValidate} className={'w-1/2'}>
-                 <div className={'flex justify-end'}>
-                     <Button type={'submit'}>
-                         <Download/>
-                         Generer
-                     </Button>
-                 </div>
-                 <div className={'flex'}>
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={'Liaison Document'} />
+            <Toaster position={'top-right'} />
+            <form onSubmit={handleValidate} className={'w-1/2'}>
+                <div className={'flex justify-end'}>
+                    <Button type={'submit'}>
+                        <Download />
+                        Generer
+                    </Button>
+                </div>
+                <div className={'flex'}>
                     <div className={'flex gap-4 m-5'}>
                         <div>
                             <Popover open={proprieteOpen} onOpenChange={setProprieteOpen}>
                                 <PopoverTrigger asChild>
                                     <Button variant={'outline'}
-                                            role={'combobox'}
-                                            aria-expanded={proprieteOpen}
+                                        role={'combobox'}
+                                        aria-expanded={proprieteOpen}
                                     >
-                                        { lot || 'Lot de propriété'}
-                                        <ChevronsUpDown/>
+                                        {lot || 'Lot de propriété'}
+                                        <ChevronsUpDown />
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent>
                                     <Command>
-                                        <CommandInput placeholder={'Rechercher un lot...'}/>
+                                        <CommandInput placeholder={'Rechercher un lot...'} />
                                         <CommandList>
                                             <CommandEmpty>Aucun Lot de propriété ne correspond</CommandEmpty>
                                         </CommandList>
                                         <CommandGroup>
-                                            {proprietes.map((propriete) =>(
+                                            {proprietes.map((propriete: Propriete) => (
                                                 <CommandItem
                                                     key={propriete.id}
                                                     value={propriete.lot}
-                                                    onSelect={() =>{
+                                                    onSelect={() => {
                                                         setProprieteOpen(false);
-                                                        setSelectedProprieteId(propriete.id)
+                                                        setSelectedProprieteId(String(propriete.id))
                                                         setLot(propriete.lot)
                                                     }}
                                                 >
@@ -145,7 +149,7 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                                     <Check className={cn(
                                                         "ml-auto",
                                                         lot === propriete.lot ? "opacity-100" : "opacity-0"
-                                                    )}/>
+                                                    )} />
                                                 </CommandItem>
                                             ))}
                                         </CommandGroup>
@@ -156,10 +160,11 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                         <div>
                             <Sheet>
                                 <SheetTrigger asChild>
-                                    <Button variant={'outline'} className={`cursor-pointer hover:underline border-0 shadow-none' +
-                                    ${selectedProprieteId === '' ? 'hidden' : 'flex'}`
-                                    }>
-                                        <Eye/>
+                                    <Button variant={'outline'} className={cn(
+                                        'cursor-pointer hover:underline border-0 shadow-none',
+                                        selectedProprieteId === '' ? 'hidden' : 'flex'
+                                    )}>
+                                        <Eye />
                                         Visualiser
                                     </Button>
                                 </SheetTrigger>
@@ -167,55 +172,51 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                     <SheetHeader>
                                         <SheetTitle>Propriété</SheetTitle>
                                         <SheetDescription>
-                                            Verifier les informations du propiété.
-                                            Si l'information n'est pas correct ou vide, veuillez réctifier la propriété
+                                            Vérifier les informations de la propriété.
+                                            Si l'information n'est pas correcte ou vide, veuillez rectifier la propriété
                                         </SheetDescription>
                                     </SheetHeader>
                                     {selectedPropriete ? (
                                         <div className="mt-4 flex flex-col gap-3 rounded-md pl-10 h-full space-y-2">
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Type: </Label>
-                                                <Input value={selectedPropriete.type} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Type: </Label>
+                                                <Input value={selectedPropriete.type_operation} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Lot: </Label>
-                                                <Input value={selectedPropriete.lot} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Lot: </Label>
+                                                <Input value={selectedPropriete.lot} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Titre: </Label>
-                                                <Input value={selectedPropriete.titre} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Titre: </Label>
+                                                <Input value={selectedPropriete.titre || ''} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Propriété mère: </Label>
-                                                <Input value={selectedPropriete.propriete_mere} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Propriété mère: </Label>
+                                                <Input value={selectedPropriete.propriete_mere || ''} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Commune: </Label>
-                                                <Input value={selectedPropriete.commune} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Nature: </Label>
+                                                <Input value={selectedPropriete.nature} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Fokotany: </Label>
-                                                <Input value={selectedPropriete.quartier} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Vocation: </Label>
+                                                <Input value={selectedPropriete.vocation} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Contenance: </Label>
-                                                <Input value={selectedPropriete.contenance} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Contenance: </Label>
+                                                <Input value={selectedPropriete.contenance} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Nom propriété: </Label>
-                                                <Input value={selectedPropriete.proprietaire} className={"flex-1"} readOnly/>
-                                            </div>
-                                            <div className={'w-3/4 items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Circonscription: </Label>
-                                                <Input value={selectedPropriete.circonscription} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Nom propriété: </Label>
+                                                <Input value={selectedPropriete.proprietaire} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>Charge: </Label>
-                                                <Input value={selectedPropriete.charge} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Charge: </Label>
+                                                <Input value={selectedPropriete.charge || ''} className={"flex-1"} readOnly />
                                             </div>
                                             <div className={'w-3/4 flex items-center gap-2'}>
-                                                <Label className={'min-w-[60px'}>situation: </Label>
-                                                <Input value={selectedPropriete.situation} className={"flex-1"} readOnly/>
+                                                <Label className={'min-w-[60px]'}>Situation: </Label>
+                                                <Input value={selectedPropriete.situation} className={"flex-1"} readOnly />
                                             </div>
                                         </div>
                                     ) : (
@@ -234,7 +235,7 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                         <Popover open={demandeurOpen} onOpenChange={setDemandeurOpen}>
                                             <PopoverTrigger asChild>
                                                 <Button variant={'outline'} role={'combobox'} aria-expanded={demandeurOpen}>
-                                                    {selectedDemandeur ? `${selectedDemandeur.nom_demandeur} ${selectedDemandeur.prenom_demandeur}` : 'Sélectionner un demandeur'}
+                                                    {selectedDemandeur ? `${selectedDemandeur.nom_demandeur} ${selectedDemandeur.prenom_demandeur || ''}` : 'Sélectionner un demandeur'}
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
@@ -244,7 +245,7 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                                     <CommandList>
                                                         <CommandEmpty>Aucun résultat</CommandEmpty>
                                                         <CommandGroup>
-                                                            {demandeurs.map(d => (
+                                                            {demandeurs.map((d: Demandeur) => (
                                                                 <CommandItem
                                                                     key={d.id}
                                                                     onSelect={() => {
@@ -254,7 +255,7 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                                                         setSelectedCoDemandeurs([]);
                                                                     }}
                                                                 >
-                                                                    {d.nom_demandeur} {d.prenom_demandeur}
+                                                                    {d.nom_demandeur} {d.prenom_demandeur || ''}
                                                                     <Check
                                                                         className={cn("ml-auto", selectedDemandeurId === d.id ? "opacity-100" : "opacity-0")}
                                                                     />
@@ -269,9 +270,11 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                     <div>
                                         <Sheet>
                                             <SheetTrigger asChild>
-                                                <Button variant={'outline'} className={`border-0 shadow-none hover:underline
-                                             ${selectedDemandeurId === null ? 'hidden' : 'flex'}`}>
-                                                    <Eye/>
+                                                <Button variant={'outline'} className={cn(
+                                                    'border-0 shadow-none hover:underline',
+                                                    selectedDemandeurId === null ? 'hidden' : 'flex'
+                                                )}>
+                                                    <Eye />
                                                     Visualiser
                                                 </Button>
                                             </SheetTrigger>
@@ -279,51 +282,51 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                                 <SheetHeader>
                                                     <SheetTitle>Demandeur</SheetTitle>
                                                     <SheetDescription>
-                                                        Verifier les informations du demandeur.
-                                                        Si l'information n'est pas correct ou vide, veuillez réctifier la propriété
+                                                        Vérifier les informations du demandeur.
+                                                        Si l'information n'est pas correcte ou vide, veuillez rectifier le demandeur
                                                     </SheetDescription>
                                                 </SheetHeader>
                                                 {selectedDemandeur ? (
                                                     <div className="mt-4 flex flex-col gap-3 rounded-md pl-10 h-full space-y-2">
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Nom complet: </Label>
-                                                            <Input value={selectedDemandeur.nom_demandeur} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>Nom: </Label>
+                                                            <Input value={selectedDemandeur.nom_demandeur} className={"flex-1"} readOnly />
                                                         </div>
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Prénom: </Label>
-                                                            <Input value={selectedDemandeur.prenom_demandeur} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>Prénom: </Label>
+                                                            <Input value={selectedDemandeur.prenom_demandeur || ''} className={"flex-1"} readOnly />
                                                         </div>
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Domiciliation: </Label>
-                                                            <Input value={selectedDemandeur.domiciliation} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>Domiciliation: </Label>
+                                                            <Input value={selectedDemandeur.domiciliation} className={"flex-1"} readOnly />
                                                         </div>
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Cin: </Label>
-                                                            <Input value={selectedDemandeur.cin} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>CIN: </Label>
+                                                            <Input value={selectedDemandeur.cin} className={"flex-1"} readOnly />
                                                         </div>
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Situation Familiale: </Label>
-                                                            <Input value={selectedDemandeur.situation_familiale} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>Situation: </Label>
+                                                            <Input value={selectedDemandeur.situation_familiale} className={"flex-1"} readOnly />
                                                         </div>
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>sexe: </Label>
-                                                            <Input value={selectedDemandeur.sexe} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>Sexe: </Label>
+                                                            <Input value={selectedDemandeur.sexe} className={"flex-1"} readOnly />
                                                         </div>
                                                         <div className={'w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Occupation: </Label>
-                                                            <Input value={selectedDemandeur.occupation} className={"flex-1"} readOnly/>
+                                                            <Label className={'min-w-[60px]'}>Occupation: </Label>
+                                                            <Input value={selectedDemandeur.occupation} className={"flex-1"} readOnly />
                                                         </div>
-                                                        <div className={'w-3/4 items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Regime Matrimonial: </Label>
-                                                            <Input value={selectedDemandeur.regime_matrimoniale} className={"flex-1"} readOnly/>
+                                                        <div className={'w-3/4 flex items-center gap-2'}>
+                                                            <Label className={'min-w-[60px]'}>Régime: </Label>
+                                                            <Input value={selectedDemandeur.regime_matrimoniale || ''} className={"flex-1"} readOnly />
                                                         </div>
-                                                        <div className={' w-3/4 flex items-center gap-2'}>
-                                                            <Label className={'min-w-[60px'}>Téléphone: </Label>
-                                                            <Input value={selectedDemandeur.telephone || ''} className={"flex-1"} readOnly/>
+                                                        <div className={'w-3/4 flex items-center gap-2'}>
+                                                            <Label className={'min-w-[60px]'}>Téléphone: </Label>
+                                                            <Input value={selectedDemandeur.telephone || ''} className={"flex-1"} readOnly />
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <p className="mt-4 text-muted-foreground">Aucun Demandeur sélectionnée.</p>
+                                                    <p className="mt-4 text-muted-foreground">Aucun Demandeur sélectionné.</p>
                                                 )}
                                             </SheetContent>
                                         </Sheet>
@@ -332,11 +335,11 @@ export default function Create({ proprietes, demandeurs, dossier} : {
 
                                 <div className="flex items-center space-x-2">
                                     <Switch id="co-demandeur"
-                                            checked={statusConsort}
-                                            onCheckedChange={(checked) =>{
-                                                setStatusConsort(checked);
-                                                setShowCoDemandeur(!showCoDemandeur);
-                                            }}
+                                        checked={statusConsort}
+                                        onCheckedChange={(checked) => {
+                                            setStatusConsort(checked);
+                                            setShowCoDemandeur(!showCoDemandeur);
+                                        }}
                                     />
                                     <Label htmlFor="co-demandeur">Consort?</Label>
                                 </div>
@@ -357,8 +360,8 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                                     <CommandEmpty>Aucun résultat</CommandEmpty>
                                                     <CommandGroup>
                                                         {demandeurs
-                                                            .filter(d => d.id !== selectedDemandeurId)
-                                                            .map(d => (
+                                                            .filter((d: Demandeur) => d.id !== selectedDemandeurId)
+                                                            .map((d: Demandeur) => (
                                                                 <CommandItem
                                                                     key={d.id}
                                                                     onSelect={() => {
@@ -370,7 +373,7 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                                                         setConsortOpen(false)
                                                                     }}
                                                                 >
-                                                                    {d.nom_demandeur} {d.prenom_demandeur}
+                                                                    {d.nom_demandeur} {d.prenom_demandeur || ''}
                                                                     <Check
                                                                         className={cn("ml-auto", selectedCoDemandeurs.some(cd => cd.id === d.id) ? "opacity-100" : "opacity-0")}
                                                                     />
@@ -383,14 +386,13 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                                     </Popover>
                                 )}
 
-
                                 {selectedCoDemandeurs.length > 0 && (
                                     <div className="mt-2 p-4 border rounded-md bg-gray-50">
                                         <h4 className="font-bold mb-2">Consort sélectionnés :</h4>
                                         <ul className="list-disc pl-6">
-                                            {selectedCoDemandeurs.map(cd => (
+                                            {selectedCoDemandeurs.map((cd: Demandeur) => (
                                                 <li key={cd.id}>
-                                                    {cd.nom_demandeur} {cd.prenom_demandeur}
+                                                    {cd.nom_demandeur} {cd.prenom_demandeur || ''}
                                                 </li>
                                             ))}
                                         </ul>
@@ -400,7 +402,7 @@ export default function Create({ proprietes, demandeurs, dossier} : {
                         </div>
                     </div>
                 </div>
-             </form>
-         </AppLayout>
+            </form>
+        </AppLayout>
     );
 }

@@ -56,16 +56,16 @@ class ProprieteController extends Controller
 
         $validate = $request->validate([
             'lot' => 'required|string|max:15',
+            'type_operation' => 'required|in:morcellement,immatriculation',
+            'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
+            'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
+            'proprietaire' => 'required|string|max:50',
+            'situation' => 'required|string',
             'propriete_mere' => 'nullable|string|max:20',
             'titre_mere' => 'nullable|string|max:20',
             'titre' => 'nullable|string|max:20',
-            'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric|min:1',
             'charge' => 'nullable|string|max:255',
-            'situation' => 'nullable|string',
-            'nature' => 'nullable|string|max:40',
-            'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
-            'type_operation' => 'required|in:morcellement,immatriculation',
             'numero_FN' => 'nullable|string|max:10',
             'numero_requisition' => 'nullable|string|max:30',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
@@ -75,9 +75,18 @@ class ProprieteController extends Controller
         ],[
             'lot.required' => 'Le lot est obligatoire',
             'type_operation.required' => 'Le type d\'opération est obligatoire',
+            'nature.required' => 'La nature est obligatoire',
+            'nature.in' => 'La nature doit être: Urbaine, Suburbaine ou Rurale',
+            'vocation.required' => 'La vocation est obligatoire',
+            'vocation.in' => 'La vocation doit être: Edilitaire, Agricole, Forestière ou Touristique',
+            'proprietaire.required' => 'Le nom de la propriété est obligatoire',
+            'situation.required' => 'La situation est obligatoire',
             'id_dossier.exists' => 'Le dossier n\'existe pas',
             'contenance.min' => 'La contenance est invalide'
         ]);
+        
+        // INFORMATION: Le prix sera calculé selon la VOCATION uniquement
+        // Nature est utilisée pour la description du terrain
         
         try {
             $request->merge(['id_user' => Auth::id()]);
@@ -115,6 +124,7 @@ class ProprieteController extends Controller
         if (!$existPropriete) {
             return back()->with('message', 'Propriété introuvable');
         }
+        
         if (is_array($request->charge)) {
             $request->merge([
                 'charge' => implode(', ', $request->charge),
@@ -123,22 +133,29 @@ class ProprieteController extends Controller
 
         $validate = $request->validate([
             'lot' => 'required|string|max:15',
+            'type_operation' => 'required|in:morcellement,immatriculation',
+            'nature' => 'required|string|max:40',
+            'vocation' => 'required|in:Editaire,Agricole,Forestière,Touristique',
+            'proprietaire' => 'required|string|max:50',
+            'situation' => 'required|string',
             'propriete_mere' => 'nullable|string|max:20',
             'titre_mere' => 'nullable|string|max:20',
             'titre' => 'nullable|string|max:20',
-            'proprietaire' => 'nullable|string|max:50',
             'contenance' => 'nullable|numeric|min:1',
             'charge' => 'nullable|string|max:255',
-            'situation' => 'nullable|string',
-            'nature' => 'nullable|string|max:40',
-            'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
-            'type_operation' => 'required|in:morcellement,immatriculation',
             'numero_FN' => 'nullable|string|max:10',
             'numero_requisition' => 'nullable|string|max:30',
             'date_requisition' => 'nullable|date',
             'date_inscription' => 'nullable|date',
             'dep_vol' => 'nullable|string',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
+        ], [
+            'lot.required' => 'Le lot est obligatoire',
+            'type_operation.required' => 'Le type d\'opération est obligatoire',
+            'nature.required' => 'La nature est obligatoire',
+            'vocation.required' => 'La vocation est obligatoire',
+            'proprietaire.required' => 'Le nom de la propriété est obligatoire',
+            'situation.required' => 'La situation est obligatoire',
         ]);
         
         try {
@@ -149,7 +166,7 @@ class ProprieteController extends Controller
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }
-
+    
     public function downloadRequisition($id_dossier, $id)
     {
         $propriete = Propriete::findOrFail($id);
@@ -157,11 +174,11 @@ class ProprieteController extends Controller
 
         // Utiliser type_operation au lieu de dossier->type
         if ($propriete->type_operation == 'morcellement') {
-            $requision_model = new TemplateProcessor(
+            $requisition_model = new TemplateProcessor(
                 storage_path('app/public/modele_odoc/requisition_MO.docx')
             );
         } else {
-            $requision_model = new TemplateProcessor(
+            $requisition_model = new TemplateProcessor(
                 storage_path('app/public/modele_odoc/requisition_IM.docx')
             );
         }
@@ -174,7 +191,7 @@ class ProprieteController extends Controller
             ->select('provinces.nom_province', 'regions.nom_region', 'districts.nom_district')
             ->first();
 
-        $requision_model->setValues([
+        $requisition_model->setValues([
             'Province' => $place->nom_province,
             'Region' => $place->nom_region,
             'District' => $place->nom_district,
@@ -190,7 +207,7 @@ class ProprieteController extends Controller
         ]);
 
         $fileName = 'Requisition_' . $propriete->titre . '_' . $propriete->lot . '_' . $propriete->type_operation . '.docx';
-        $requision_model->saveAs(storage_path('app/public/modele_odoc/document_requisition/' . $fileName));
+        $requisition_model->saveAs(storage_path('app/public/modele_odoc/document_requisition/' . $fileName));
         
         UserRequisition::create([
             'id_user' => Auth::id(),

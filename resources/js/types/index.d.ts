@@ -28,7 +28,9 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
-    flash: { message?: string};
+    flash: {
+        error: any; message?: string
+};
     districts: District[];
     ziggy: Config & { location: string };
     sidebarOpen: boolean;
@@ -46,6 +48,11 @@ export interface User {
     updated_at: string;
 }
 
+// DÉFINITIONS DES TYPES (Solution simplifiée)
+export type Nature = 'Urbaine' | 'Suburbaine' | 'Rurale';
+export type Vocation = 'Edilitaire' | 'Agricole' | 'Forestière' | 'Touristique';
+export type TypeOperation = 'morcellement' | 'immatriculation';
+
 export interface Propriete {
     id: number;
     lot: string;
@@ -56,12 +63,12 @@ export interface Propriete {
     titre_mere: string;
     charge: string;
     situation: string;
-    nature: string;
-    vocation: string;
+    nature: Nature;              // Urbaine | Suburbaine | Rurale
+    vocation: Vocation;          // Edilitaire | Agricole | Forestière | Touristique
     numero_FN: string;
     numero_requisition: string;
-    status: string;
-    type_operation: 'morcellement' | 'immatriculation';
+    status: boolean;
+    type_operation: TypeOperation;
     date_requisition: string;
     date_inscription: string;
     dep_vol: string;
@@ -73,7 +80,6 @@ export interface Propriete {
 export interface Dossier {
     id: number;
     nom_dossier: string;
-    type: string;
     type_commune: string;
     commune: string;
     fokontany: string;
@@ -127,11 +133,15 @@ export interface Demander {
     motif_archive: string;
 }
 
+// ✅ DISTRICT CORRIGÉ (4 colonnes au lieu de 12)
 export interface District {
     id: number;
     nom_district: string;
-    edilitaire: string;
-    agricole: string;
+    // COLONNES DE PRIX BASÉES SUR LA VOCATION
+    edilitaire: number;      // Prix pour vocation Edilitaire
+    agricole: number;        // Prix pour vocation Agricole
+    forestiere: number;      // Prix pour vocation Forestière
+    touristique: number;     // Prix pour vocation Touristique
 }
 
 export interface PageProps {
@@ -152,6 +162,10 @@ export interface Link {
     label: string;
     url: string | null;
 }
+
+// TYPES HELPERS
+export type Proprietes = Propriete[];
+export type Demandeurs = Demandeur[];
 
 declare global {
     interface Window {

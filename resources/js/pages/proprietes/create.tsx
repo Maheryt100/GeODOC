@@ -63,21 +63,29 @@ export default function Create() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation du lot
+        // Validation des champs obligatoires
         if (!data.lot) {
             toast.error('Le numéro de lot est obligatoire');
             return;
         }
-
-        // Validation de la nature
-        if (!data.nature) {
-            toast.error('La nature de la propriété est obligatoire');
-            return;
-        }
-
-        // Validation du type d'opération
         if (!data.type_operation) {
             toast.error('Le type d\'opération est obligatoire');
+            return;
+        }
+        if (!data.nature) {
+            toast.error('La nature est obligatoire');
+            return;
+        }
+        if (!data.vocation) {
+            toast.error('La vocation est obligatoire');
+            return;
+        }
+        if (!data.proprietaire) {
+            toast.error('Le nom de la propriété / propriétaire est obligatoire');
+            return;
+        }
+        if (!data.situation) {
+            toast.error('La situation est obligatoire');
             return;
         }
 
@@ -93,6 +101,7 @@ export default function Create() {
             },
         });
     };
+
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dossiers', href: route('dossiers') },

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Contenir;
 use App\Models\Demandeur;
 use App\Models\Demander;
 use App\Models\Dossier;
@@ -41,27 +42,62 @@ class DemandeurProprieteController extends Controller
         // Validation de la propriété
         $request->validate([
             'lot' => 'required|string|max:15',
-            'nature' => 'nullable|string|max:40',
-            'vocation' => 'nullable|in:Editaire,Agricole,Forestière,Touristique',
+            'nature' => 'required|string|max:40',
+            'vocation' => 'required|in:Editaire,Agricole,Forestière,Touristique',
+            'proprietaire' => 'required|string|max:50',
+            'situation' => 'required|string',
+            'type_operation' => 'required|in:morcellement,immatriculation',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
         ], [
             'lot.required' => 'Le numéro de lot est obligatoire',
+            'nature.required' => 'La nature est obligatoire',
+            'vocation.required' => 'La vocation est obligatoire',
+            'proprietaire.required' => 'Le nom de la propriété est obligatoire',
+            'situation.required' => 'La situation est obligatoire',
+            'type_operation.required' => 'Le type d\'opération est obligatoire',
         ]);
         
         // Validation manuelle des demandeurs
         foreach ($demandeurs as $index => $demandeur) {
+            $num = $index + 1;
+            
+            if (empty($demandeur['titre_demandeur'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le titre est obligatoire"]);
+            }
             if (empty($demandeur['nom_demandeur'])) {
-                return back()->withErrors(['demandeurs' => "Demandeur " . ($index + 1) . ": Le nom est obligatoire"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le nom est obligatoire"]);
             }
             if (empty($demandeur['cin'])) {
-                return back()->withErrors(['demandeurs' => "Demandeur " . ($index + 1) . ": Le CIN est obligatoire"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN est obligatoire"]);
             }
-            if (empty($demandeur['titre_demandeur'])) {
-                return back()->withErrors(['demandeurs' => "Demandeur " . ($index + 1) . ": Le titre de civilité est obligatoire"]);
+            if (!preg_match('/^\d{12}$/', $demandeur['cin'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN doit contenir exactement 12 chiffres"]);
             }
+            if (empty($demandeur['date_naissance'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: La date de naissance est obligatoire"]);
+            }
+            if (empty($demandeur['lieu_naissance'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le lieu de naissance est obligatoire"]);
+            }
+            if (empty($demandeur['occupation'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: L'occupation est obligatoire"]);
+            }
+            if (empty($demandeur['nom_mere'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le nom de la mère est obligatoire"]);
+            }
+            if (empty($demandeur['date_delivrance'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: La date de délivrance du CIN est obligatoire"]);
+            }
+            if (empty($demandeur['lieu_delivrance'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le lieu de délivrance du CIN est obligatoire"]);
+            }
+            if (empty($demandeur['domiciliation'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: La domiciliation est obligatoire"]);
+            }
+            
             // Vérifier l'unicité du CIN
             if (Demandeur::where('cin', $demandeur['cin'])->exists()) {
-                return back()->withErrors(['demandeurs' => "Demandeur " . ($index + 1) . ": Ce CIN existe déjà"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Ce CIN existe déjà"]);
             }
         }
 
@@ -87,8 +123,10 @@ class DemandeurProprieteController extends Controller
                 'date_requisition' => $request->date_requisition,
                 'date_inscription' => $request->date_inscription,
                 'dep_vol' => $request->dep_vol,
+                'type_operation' => $request->type_operation,
                 'id_dossier' => $request->id_dossier,
                 'id_user' => $id_user,
+                'status' => true, // Propriété avec demandeurs
             ]);
 
             // 2. Créer chaque demandeur et le lier à la propriété
@@ -98,26 +136,32 @@ class DemandeurProprieteController extends Controller
                     'titre_demandeur' => $demandeurData['titre_demandeur'],
                     'nom_demandeur' => $demandeurData['nom_demandeur'],
                     'prenom_demandeur' => $demandeurData['prenom_demandeur'] ?? null,
-                    'date_naissance' => $demandeurData['date_naissance'] ?: null,
-                    'lieu_naissance' => $demandeurData['lieu_naissance'] ?: null,
+                    'date_naissance' => $demandeurData['date_naissance'],
+                    'lieu_naissance' => $demandeurData['lieu_naissance'],
                     'sexe' => $demandeurData['sexe'],
-                    'occupation' => $demandeurData['occupation'] ?: null,
+                    'occupation' => $demandeurData['occupation'],
                     'nom_pere' => $demandeurData['nom_pere'] ?: null,
-                    'nom_mere' => $demandeurData['nom_mere'] ?: null,
+                    'nom_mere' => $demandeurData['nom_mere'],
                     'cin' => $demandeurData['cin'],
-                    'date_delivrance' => $demandeurData['date_delivrance'] ?: null,
-                    'lieu_delivrance' => $demandeurData['lieu_delivrance'] ?: null,
+                    'date_delivrance' => $demandeurData['date_delivrance'],
+                    'lieu_delivrance' => $demandeurData['lieu_delivrance'],
                     'date_delivrance_duplicata' => $demandeurData['date_delivrance_duplicata'] ?: null,
                     'lieu_delivrance_duplicata' => $demandeurData['lieu_delivrance_duplicata'] ?: null,
-                    'domiciliation' => $demandeurData['domiciliation'] ?: null,
+                    'domiciliation' => $demandeurData['domiciliation'],
                     'nationalite' => $demandeurData['nationalite'] ?: 'Malagasy',
                     'situation_familiale' => $demandeurData['situation_familiale'] ?: 'Non spécifiée',
-                    'regime_matrimoniale' => $demandeurData['regime_matrimoniale'] ?: null,
+                    'regime_matrimoniale' => $demandeurData['regime_matrimoniale'] ?: 'Non spécifié',
                     'date_mariage' => $demandeurData['date_mariage'] ?: null,
                     'lieu_mariage' => $demandeurData['lieu_mariage'] ?: null,
                     'marie_a' => $demandeurData['marie_a'] ?: null,
                     'telephone' => $demandeurData['telephone'] ?: null,
                     'id_user' => $id_user,
+                ]);
+
+                // Ajouter le demandeur au dossier (table contenir)
+                Contenir::create([
+                    'id_demandeur' => $demandeur->id,
+                    'id_dossier' => $request->id_dossier,
                 ]);
 
                 // Lier le demandeur à la propriété dans la table 'demander'
@@ -145,13 +189,14 @@ class DemandeurProprieteController extends Controller
     /**
      * 2. AJOUTER DEMANDEUR : Afficher la liste des propriétés pour ajouter un demandeur
      */
-    public function addToProperty($id)
+    public function addToProperty($id, $id_propriete = null)
     {
         $dossier = Dossier::with('proprietes')->findOrFail($id);
         
         return Inertia::render('DemandeursProprietes/AjouterDemandeur', [
             'dossier' => $dossier,
             'proprietes' => $dossier->proprietes,
+            'id_propriete' => $id_propriete,
         ]);
     }
 
@@ -169,6 +214,7 @@ class DemandeurProprieteController extends Controller
         
         try {
             $id_user = Auth::id();
+            $propriete = Propriete::findOrFail($request->id_propriete);
             
             if ($request->mode === 'existant') {
                 // Rechercher le demandeur par CIN
@@ -183,12 +229,37 @@ class DemandeurProprieteController extends Controller
                 if ($existingLink) {
                     return back()->withErrors(['cin' => 'Ce demandeur est déjà lié à cette propriété']);
                 }
+                
+                // Ajouter au dossier s'il n'y est pas encore (uniquement après confirmation)
+                $existeInDossier = Contenir::where('id_demandeur', $demandeur->id)
+                    ->where('id_dossier', $propriete->id_dossier)
+                    ->exists();
+                    
+                if (!$existeInDossier) {
+                    Contenir::create([
+                        'id_demandeur' => $demandeur->id,
+                        'id_dossier' => $propriete->id_dossier,
+                    ]);
+                }
+                
             } else {
-                // Créer nouveau demandeur
+                // Créer nouveau demandeur - tous les champs obligatoires
                 $request->validate([
-                    'titre_demandeur' => 'required|string|max:20',
-                    'nom_demandeur' => 'required|string|max:100',
-                    'cin' => 'required|string|max:15|unique:demandeurs,cin',
+                    'titre_demandeur' => 'required|string|max:12',
+                    'nom_demandeur' => 'required|string|max:40',
+                    'cin' => 'required|string|size:12|unique:demandeurs,cin',
+                    'date_naissance' => 'required|date|before:-18 years',
+                    'lieu_naissance' => 'required|string|max:100',
+                    'occupation' => 'required|string|max:30',
+                    'nom_mere' => 'required|string',
+                    'date_delivrance' => 'required|date|before:today',
+                    'lieu_delivrance' => 'required|string|max:40',
+                    'domiciliation' => 'required|string|max:60',
+                    'situation_familiale' => 'required|string|max:40',
+                    'nationalite' => 'required|string|max:40',
+                ], [
+                    'cin.size' => 'Le CIN doit contenir exactement 12 chiffres',
+                    'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans',
                 ]);
                 
                 $demandeur = Demandeur::create([
@@ -207,14 +278,20 @@ class DemandeurProprieteController extends Controller
                     'date_delivrance_duplicata' => $request->date_delivrance_duplicata,
                     'lieu_delivrance_duplicata' => $request->lieu_delivrance_duplicata,
                     'domiciliation' => $request->domiciliation,
-                    'nationalite' => $request->nationalite ?? 'Malagasy',
-                    'situation_familiale' => $request->situation_familiale ?? 'Non spécifiée',
+                    'nationalite' => $request->nationalite,
+                    'situation_familiale' => $request->situation_familiale,
                     'regime_matrimoniale' => $request->regime_matrimoniale,
                     'date_mariage' => $request->date_mariage,
                     'lieu_mariage' => $request->lieu_mariage,
                     'marie_a' => $request->marie_a,
                     'telephone' => $request->telephone,
                     'id_user' => $id_user,
+                ]);
+                
+                // Ajouter au dossier (après création et confirmation)
+                Contenir::create([
+                    'id_demandeur' => $demandeur->id,
+                    'id_dossier' => $propriete->id_dossier,
                 ]);
             }
 
@@ -227,13 +304,15 @@ class DemandeurProprieteController extends Controller
                 'id_propriete' => $request->id_propriete,
                 'id_user' => $id_user,
                 'status' => 'active',
-                'status_consort' => $demandeursCount > 0, // C'est un consort s'il y a déjà des demandeurs
+                'status_consort' => $demandeursCount > 0,
                 'total_prix' => 0,
             ]);
 
+            // Mettre à jour le status de la propriété
+            Propriete::where('id', $request->id_propriete)->update(['status' => true]);
+
             DB::commit();
             
-            $propriete = Propriete::find($request->id_propriete);
             return Redirect::route('dossiers.show', $propriete->id_dossier)
                 ->with('message', 'Demandeur ajouté à la propriété avec succès');
                 
@@ -242,34 +321,71 @@ class DemandeurProprieteController extends Controller
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }
-
     /**
      * 3. LIER EXISTANT : Afficher le formulaire pour lier un demandeur existant
      */
-    public function linkExisting($id)
+    public function linkExisting($id, $id_demandeur = null, $id_propriete = null)
     {
-        $dossier = Dossier::with('proprietes')->findOrFail($id);
+        $dossier = Dossier::with(['proprietes', 'demandeurs'])->findOrFail($id);
+        
+        $demandeur = null;
+        if ($id_demandeur) {
+            $demandeur = Demandeur::find($id_demandeur);
+        }
         
         return Inertia::render('DemandeursProprietes/LierExistant', [
             'dossier' => $dossier,
             'proprietes' => $dossier->proprietes,
+            'demandeur' => $demandeur,
+            'id_propriete' => $id_propriete,
         ]);
     }
 
     /**
-     * 3. LIER EXISTANT : Rechercher le demandeur par CIN
+     * 3. LIER EXISTANT : Rechercher le demandeur par CIN ou Nom
      */
     public function searchToLink(Request $request)
     {
-        $request->validate(['cin' => 'required|string|max:15']);
+        $request->validate([
+            'cin' => 'required|string',
+            'id_dossier' => 'required|exists:dossiers,id'
+        ]);
         
-        $demandeur = Demandeur::where('cin', $request->cin)->first();
+        // Recherche par CIN exact ou par nom partiel
+        $demandeur = null;
         
-        if (!$demandeur) {
-            return back()->withErrors(['cin' => 'Aucun demandeur trouvé avec ce CIN']);
+        if (preg_match('/^\d{12}$/', $request->cin)) {
+            // Recherche par CIN
+            $demandeur = Demandeur::where('cin', $request->cin)->first();
+        } else {
+            // Recherche par nom
+            $demandeur = Demandeur::where('nom_demandeur', 'ilike', '%' . $request->cin . '%')
+                ->orWhere('prenom_demandeur', 'ilike', '%' . $request->cin . '%')
+                ->first();
         }
         
-        $dossier = Dossier::with('proprietes')->findOrFail($request->id_dossier);
+        $dossier = Dossier::with(['proprietes', 'demandeurs'])->findOrFail($request->id_dossier);
+        
+        if (!$demandeur) {
+            return Inertia::render('DemandeursProprietes/LierExistant', [
+                'dossier' => $dossier,
+                'proprietes' => $dossier->proprietes,
+                'demandeur' => null,
+                'cin_search' => $request->cin,
+            ]);
+        }
+        
+        // Vérifier si le demandeur n'est pas déjà dans le dossier, l'ajouter
+        $existeInDossier = Contenir::where('id_demandeur', $demandeur->id)
+            ->where('id_dossier', $dossier->id)
+            ->exists();
+            
+        if (!$existeInDossier) {
+            Contenir::create([
+                'id_demandeur' => $demandeur->id,
+                'id_dossier' => $dossier->id,
+            ]);
+        }
         
         return Inertia::render('DemandeursProprietes/LierExistant', [
             'dossier' => $dossier,
@@ -285,37 +401,103 @@ class DemandeurProprieteController extends Controller
     public function storeLink(Request $request)
     {
         $request->validate([
-            'id_demandeur' => 'required|exists:demandeurs,id',
             'id_propriete' => 'required|exists:proprietes,id',
+            'mode' => 'required|in:existant,nouveau',
         ]);
 
-        // Vérifier si le lien n'existe pas déjà
-        $existingLink = Demander::where('id_demandeur', $request->id_demandeur)
-            ->where('id_propriete', $request->id_propriete)
-            ->exists();
-            
-        if ($existingLink) {
-            return back()->withErrors(['error' => 'Ce demandeur est déjà lié à cette propriété']);
-        }
-
+        DB::beginTransaction();
+        
         try {
+            $id_user = Auth::id();
+            
+            if ($request->mode === 'nouveau') {
+                // Créer un nouveau demandeur
+                $request->validate([
+                    'titre_demandeur' => 'required|string|max:12',
+                    'nom_demandeur' => 'required|string|max:40',
+                    'cin' => 'required|string|size:12|unique:demandeurs,cin',
+                    'date_naissance' => 'required|date|before:-18 years',
+                    'lieu_naissance' => 'required|string|max:100',
+                    'occupation' => 'required|string|max:30',
+                    'nom_mere' => 'required|string',
+                    'date_delivrance' => 'required|date|before:today',
+                    'lieu_delivrance' => 'required|string|max:40',
+                    'domiciliation' => 'required|string|max:60',
+                    'situation_familiale' => 'required|string|max:40',
+                    'nationalite' => 'required|string|max:40',
+                ]);
+                
+                $demandeur = Demandeur::create([
+                    'titre_demandeur' => $request->titre_demandeur,
+                    'nom_demandeur' => $request->nom_demandeur,
+                    'prenom_demandeur' => $request->prenom_demandeur,
+                    'date_naissance' => $request->date_naissance,
+                    'lieu_naissance' => $request->lieu_naissance,
+                    'sexe' => $request->sexe,
+                    'occupation' => $request->occupation,
+                    'nom_pere' => $request->nom_pere,
+                    'nom_mere' => $request->nom_mere,
+                    'cin' => $request->cin,
+                    'date_delivrance' => $request->date_delivrance,
+                    'lieu_delivrance' => $request->lieu_delivrance,
+                    'date_delivrance_duplicata' => $request->date_delivrance_duplicata,
+                    'lieu_delivrance_duplicata' => $request->lieu_delivrance_duplicata,
+                    'domiciliation' => $request->domiciliation,
+                    'nationalite' => $request->nationalite,
+                    'situation_familiale' => $request->situation_familiale,
+                    'regime_matrimoniale' => $request->regime_matrimoniale,
+                    'date_mariage' => $request->date_mariage,
+                    'lieu_mariage' => $request->lieu_mariage,
+                    'marie_a' => $request->marie_a,
+                    'telephone' => $request->telephone,
+                    'id_user' => $id_user,
+                ]);
+                
+                // Ajouter au dossier
+                $propriete = Propriete::findOrFail($request->id_propriete);
+                Contenir::create([
+                    'id_demandeur' => $demandeur->id,
+                    'id_dossier' => $request->id_dossier,
+                ]);
+                
+                $id_demandeur = $demandeur->id;
+            } else {
+                $request->validate(['id_demandeur' => 'required|exists:demandeurs,id']);
+                $id_demandeur = $request->id_demandeur;
+            }
+
+            // Vérifier si le lien n'existe pas déjà
+            $existingLink = Demander::where('id_demandeur', $id_demandeur)
+                ->where('id_propriete', $request->id_propriete)
+                ->exists();
+                
+            if ($existingLink) {
+                return back()->withErrors(['error' => 'Ce demandeur est déjà lié à cette propriété']);
+            }
+
             // Compter les demandeurs existants pour cette propriété
             $demandeursCount = Demander::where('id_propriete', $request->id_propriete)->count();
             
             Demander::create([
-                'id_demandeur' => $request->id_demandeur,
+                'id_demandeur' => $id_demandeur,
                 'id_propriete' => $request->id_propriete,
-                'id_user' => Auth::id(),
+                'id_user' => $id_user,
                 'status' => 'active',
                 'status_consort' => $demandeursCount > 0,
                 'total_prix' => 0,
             ]);
+
+            // Mettre à jour le status de la propriété
+            Propriete::where('id', $request->id_propriete)->update(['status' => true]);
+
+            DB::commit();
 
             $propriete = Propriete::find($request->id_propriete);
             return Redirect::route('dossiers.show', $propriete->id_dossier)
                 ->with('message', 'Demandeur lié à la propriété avec succès');
                 
         } catch (\Exception $e) {
+            DB::rollBack();
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }

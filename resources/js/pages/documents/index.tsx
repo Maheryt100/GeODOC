@@ -24,7 +24,6 @@ import React, { useState } from 'react';
 
 export default function Index() {
     const { documents } = usePage<{documents: Paginated<Demander>}>().props;
-
     const { dossier } = usePage<{ dossier: Dossier }>().props;
     const [search, setSearch] = useState('');
 
@@ -40,7 +39,7 @@ export default function Index() {
     };
 
     const handleArchive = (id: number) => {
-        if (confirm("Êtes-vous sur de vouloir archiver ce document")){
+        if (confirm("Êtes-vous sûr de vouloir archiver ce document ?")){
             router.post(route("document.archive"),{
                 id: id,
                 id_dossier: dossier.id,
@@ -79,7 +78,7 @@ export default function Index() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dashboard" />
+            <Head title="Liste des documents" />
             <Toaster className={'opacity-50'} />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
                 <div className={"flex mx-5 gap-6 md:gap-0 flex-col md:flex-row justify-between"}>
@@ -167,12 +166,13 @@ export default function Index() {
                                 <TableRow>
                                     <TableHead className={'text-center'}>Lot/Titre</TableHead>
                                     <TableHead className={'text-center'}>Demandeur</TableHead>
-                                    <TableHead className={'text-center'}>situation</TableHead>
-                                    <TableHead className={'text-center'}>fokontany</TableHead>
-                                    <TableHead className={'text-center'}>Nom du Propriété</TableHead>
+                                    <TableHead className={'text-center'}>Situation</TableHead>
+                                    <TableHead className={'text-center'}>Fokontany</TableHead>
+                                    <TableHead className={'text-center'}>Nom Propriétaire</TableHead>
                                     <TableHead className={'text-center'}>Superficie</TableHead>
                                     <TableHead className={'text-center'}>Nature</TableHead>
-                                    <TableHead className={'text-center'}>Type terrain</TableHead>
+                                    <TableHead className={'text-center'}>Vocation</TableHead>
+                                    <TableHead className={'text-center'}>Type opération</TableHead>
                                     <TableHead className={'text-center'}>Consort</TableHead>
                                     <TableHead className={'text-center'}>Prix Total</TableHead>
                                     <TableHead></TableHead>
@@ -181,16 +181,47 @@ export default function Index() {
                             <TableBody>
                                 {documents.data.map((document) => (
                                     <TableRow key={document.id}>
-                                        <TableCell className={'text-center'}>{document.propriete.lot}/ TNº{document.propriete.titre}</TableCell>
-                                        <TableCell className={'text-center'}>{document.demandeur.nom_demandeur} {document.demandeur.prenom_demandeur}</TableCell>
-                                        <TableCell className={'text-center'}>{document.propriete.situation}</TableCell>
-                                        <TableCell className={'text-center'}>{dossier.fokontany}</TableCell>
-                                        <TableCell className={'text-center'}>{document.propriete.proprietaire}</TableCell>
-                                        <TableCell className={'text-center'}>{document.propriete.contenance}</TableCell>
-                                        <TableCell className={'text-center'}>{document.propriete.nature}</TableCell>
-                                        <TableCell className={'text-center'}>{dossier.type}</TableCell>
-                                        <TableCell className={'text-center'}>{document.status_consort ? 'Avec' : 'Sans'}</TableCell>
-                                        <TableCell className={'text-center'}>{document.total_prix} Ar</TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {document.propriete.lot}/ TNº{document.propriete.titre}
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {document.demandeur.nom_demandeur} {document.demandeur.prenom_demandeur}
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {document.propriete.situation}
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {dossier.fokontany}
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {document.propriete.proprietaire}
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {document.propriete.contenance} m²
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            <span className="px-2 py-1 rounded-md bg-blue-100 text-blue-800 text-xs">
+                                                {document.propriete.nature}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            <span className="px-2 py-1 rounded-md bg-green-100 text-green-800 text-xs">
+                                                {document.propriete.vocation}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className={'text-center capitalize'}>
+                                            {document.propriete.type_operation}
+                                        </TableCell>
+                                        <TableCell className={'text-center'}>
+                                            {document.status_consort ? (
+                                                <span className="text-orange-600 font-medium">Avec</span>
+                                            ) : (
+                                                <span className="text-gray-500">Sans</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className={'text-center font-semibold'}>
+                                            {document.total_prix.toLocaleString()} Ar
+                                        </TableCell>
                                         <TableCell className={'text-center'}>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger>
@@ -210,8 +241,7 @@ export default function Index() {
                                                         </a>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
-                                                        onClick={() => {handleArchive(document.id);
-                                                        }}
+                                                        onClick={() => {handleArchive(document.id);}}
                                                     >
                                                         <Archive/>
                                                         Archiver

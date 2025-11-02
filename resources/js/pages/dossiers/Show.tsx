@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
 
 interface DemandeurWithProperty extends Demandeur {
@@ -29,6 +30,14 @@ export default function Show() {
     const { delete: destroy } = useForm();
     const [selectedDemandeur, setSelectedDemandeur] = useState<DemandeurWithProperty | null>(null);
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteType, setDeleteType] = useState<'dossier' | 'definitif'>('dossier');
+    const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
+    
+    // Pagination states
+    const [currentDemandeurPage, setCurrentDemandeurPage] = useState(1);
+    const [currentProprietePage, setCurrentProprietePage] = useState(1);
+    const itemsPerPage = 10;
 
     useEffect(() => {
         if (flash?.message) {
@@ -37,10 +46,35 @@ export default function Show() {
     }, [flash?.message]);
 
     const handleDeleteDemandeur = (id: number) => {
-        if (confirm('Voulez-vous vraiment supprimer ce demandeur ?')) {
-            destroy(route('demandeurs.destroy', { dossier: dossier.id, demandeur: id }), {
+        setItemToDelete({ type: 'demandeur', id });
+        setDeleteType('dossier');
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDeleteDemandeur = () => {
+        if (!itemToDelete || itemToDelete.type !== 'demandeur') return;
+
+        if (deleteType === 'dossier') {
+            destroy(route('demandeurs.destroy', { dossier: dossier.id, demandeur: itemToDelete.id }), {
                 preserveScroll: true,
-                onSuccess: () => toast.success('Demandeur supprimé')
+                onSuccess: () => {
+                    toast.success('Demandeur retiré du dossier');
+                    setDeleteDialogOpen(false);
+                },
+                onError: (errors) => {
+                    toast.error('Erreur', { description: Object.values(errors).join('\n') });
+                }
+            });
+        } else {
+            destroy(route('demandeurs.destroy.definitive', itemToDelete.id), {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Demandeur supprimé définitivement');
+                    setDeleteDialogOpen(false);
+                },
+                onError: (errors) => {
+                    toast.error('Erreur', { description: Object.values(errors).join('\n') });
+                }
             });
         }
     };
@@ -49,16 +83,15 @@ export default function Show() {
         if (confirm('Voulez-vous vraiment supprimer cette propriété ?')) {
             destroy(route('proprietes.destroy', id), {
                 preserveScroll: true,
-                onSuccess: () => toast.success('Propriété supprimée')
+                onSuccess: () => toast.success('Propriété supprimée'),
+                onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
             });
         }
     };
 
-    // Récupérer tous les demandeurs uniques (associés et non associés)
     const getAllDemandeurs = (): DemandeurWithProperty[] => {
         const demandeursMap = new Map<number, DemandeurWithProperty>();
         
-        // Demandeurs de la relation contenir (non associés aux propriétés)
         if (dossier.demandeurs) {
             dossier.demandeurs.forEach((d: Demandeur) => {
                 if (!demandeursMap.has(d.id)) {
@@ -67,7 +100,6 @@ export default function Show() {
             });
         }
         
-        // Demandeurs associés aux propriétés
         if (dossier.proprietes) {
             dossier.proprietes.forEach((prop: Propriete) => {
                 if (prop.demandeurs) {
@@ -92,15 +124,67 @@ export default function Show() {
     const proprietes = dossier.proprietes || [];
 
     const isPropertyIncomplete = (prop: Propriete): boolean => {
-        return !prop.titre || !prop.contenance || !prop.proprietaire || !prop.nature;
+        return !prop.titre || !prop.contenance || !prop.proprietaire || !prop.nature || !prop.vocation || !prop.situation;
     };
 
     const isDemandeurIncomplete = (dem: Demandeur): boolean => {
-        return !dem.date_naissance || !dem.lieu_naissance || !dem.date_delivrance || !dem.domiciliation;
+        return !dem.date_naissance || !dem.lieu_naissance || !dem.date_delivrance || 
+               !dem.lieu_delivrance || !dem.domiciliation || !dem.occupation || !dem.nom_mere;
     };
 
     const hasLinkedDemandeurs = (prop: Propriete): boolean => {
         return prop.demandeurs !== undefined && prop.demandeurs.length > 0;
+    };
+
+    // Pagination logic
+    const paginateDemandeurs = () => {
+        const startIndex = (currentDemandeurPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return allDemandeurs.slice(startIndex, endIndex);
+    };
+
+    const paginateProprietes = () => {
+        const startIndex = (currentProprietePage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return proprietes.slice(startIndex, endIndex);
+    };
+
+    const totalDemandeurPages = Math.ceil(allDemandeurs.length / itemsPerPage);
+    const totalProprietePages = Math.ceil(proprietes.length / itemsPerPage);
+
+    const Pagination = ({ currentPage, totalPages, onPageChange }: { currentPage: number, totalPages: number, onPageChange: (page: number) => void }) => {
+        if (totalPages <= 1) return null;
+
+        return (
+            <div className="flex justify-center items-center gap-2 mt-4">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                >
+                    Précédent
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => onPageChange(page)}
+                    >
+                        {page}
+                    </Button>
+                ))}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                >
+                    Suivant
+                </Button>
+            </div>
+        );
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -114,13 +198,13 @@ export default function Show() {
             <Toaster position="top-right" richColors />
 
             <div className="flex flex-col gap-6 p-6">
-                {/* Section Informations du Dossier - Améliorée */}
+                {/* Section Informations du Dossier */}
                 <Card className="border-2">
                     <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
                                 <CardTitle className="text-3xl font-bold text-blue-900 dark:text-blue-100">{dossier.nom_dossier}</CardTitle>
-                                <CardDescription className="text-base mt-1">Dossier {dossier.type}</CardDescription>
+                                <CardDescription className="text-base mt-1">Dossier</CardDescription>
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 <Button asChild variant="outline" size="sm">
@@ -135,6 +219,7 @@ export default function Show() {
                                         Nouveau Lot
                                     </Link>
                                 </Button>
+                               
                                 <Button asChild variant="outline" size="sm">
                                     <Link href={route('dossiers.list', dossier.id)}>
                                         <List className="mr-2 h-4 w-4" />
@@ -196,11 +281,15 @@ export default function Show() {
                                 <CardTitle>Demandeurs</CardTitle>
                                 <CardDescription>
                                     Liste des demandeurs du dossier ({allDemandeurs.length})
-                                    <span className="ml-2 text-xs">
-                                        <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded mr-1"></span>
-                                        Non associé à une propriété
-                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded ml-3 mr-1"></span>
-                                        Informations incomplètes
+                                    <span className="ml-2 text-xs block mt-2">
+                                        <span className="inline-flex items-center gap-1">
+                                            <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded"></span>
+                                            <span>Données incomplètes</span>
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 ml-3">
+                                            <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded"></span>
+                                            <span>Sans propriété</span>
+                                        </span>
                                     </span>
                                 </CardDescription>
                             </div>
@@ -211,12 +300,14 @@ export default function Show() {
                                         Nouveau
                                     </Link>
                                 </Button>
-                                <Button asChild size="sm">
-                                    <Link href={route('ajouter-demandeur.create', dossier.id)}>
-                                        <UserPlus className="mr-2 h-4 w-4" />
-                                        Ajouter à un lot
-                                    </Link>
-                                </Button>
+                                {proprietes.length > 0 && (
+                                    <Button asChild size="sm">
+                                        <Link href={route('ajouter-demandeur.create', dossier.id)}>
+                                            <UserPlus className="mr-2 h-4 w-4" />
+                                            Ajouter à un lot
+                                        </Link>
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardHeader>
@@ -242,7 +333,7 @@ export default function Show() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        allDemandeurs.map((demandeur) => {
+                                        paginateDemandeurs().map((demandeur) => {
                                             const isIncomplete = isDemandeurIncomplete(demandeur);
                                             const rowClass = isIncomplete 
                                                 ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer' 
@@ -291,6 +382,20 @@ export default function Show() {
                                                                         Modifier
                                                                     </Link>
                                                                 </DropdownMenuItem>
+                                                                {proprietes.length > 0 && (
+                                                                    <DropdownMenuItem asChild>
+                                                                        <Link
+                                                                            href={route('lier-demandeur.create', {
+                                                                                id: dossier.id,
+                                                                                id_demandeur: demandeur.id
+                                                                            })}
+                                                                            className="flex items-center"
+                                                                        >
+                                                                            <Link2 className="mr-2 h-4 w-4" />
+                                                                            Lier à une propriété
+                                                                        </Link>
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                                 <DropdownMenuItem
                                                                     className="text-red-500"
                                                                     onClick={() => handleDeleteDemandeur(demandeur.id)}
@@ -308,6 +413,11 @@ export default function Show() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            currentPage={currentDemandeurPage}
+                            totalPages={totalDemandeurPages}
+                            onPageChange={setCurrentDemandeurPage}
+                        />
                     </CardContent>
                 </Card>
 
@@ -334,12 +444,14 @@ export default function Show() {
                                         Nouvelle
                                     </Link>
                                 </Button>
-                                <Button asChild size="sm">
-                                    <Link href={route('lier-demandeur.create', dossier.id)}>
-                                        <Link2 className="mr-2 h-4 w-4" />
-                                        Lier Demandeur
-                                    </Link>
-                                </Button>
+                                {allDemandeurs.length > 0 && (
+                                    <Button asChild size="sm">
+                                        <Link href={route('lier-demandeur.create', dossier.id)}>
+                                            <Link2 className="mr-2 h-4 w-4" />
+                                            Lier Demandeur
+                                        </Link>
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardHeader>
@@ -365,7 +477,7 @@ export default function Show() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        proprietes.map((propriete) => {
+                                        paginateProprietes().map((propriete) => {
                                             const isIncomplete = isPropertyIncomplete(propriete);
                                             const hasDemandeurs = hasLinkedDemandeurs(propriete);
                                             const rowClass = isIncomplete 
@@ -412,6 +524,18 @@ export default function Show() {
                                                                         Modifier
                                                                     </Link>
                                                                 </DropdownMenuItem>
+                                                                <DropdownMenuItem asChild>
+                                                                    <Link
+                                                                        href={route('ajouter-demandeur.create', {
+                                                                            id: dossier.id,
+                                                                            id_propriete: propriete.id
+                                                                        })}
+                                                                        className="flex items-center"
+                                                                    >
+                                                                        <UserPlus className="mr-2 h-4 w-4" />
+                                                                        Ajouter un demandeur
+                                                                    </Link>
+                                                                </DropdownMenuItem>
                                                                 <DropdownMenuItem
                                                                     className="text-red-500"
                                                                     onClick={() => handleDeletePropriete(propriete.id)}
@@ -429,6 +553,11 @@ export default function Show() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            currentPage={currentProprietePage}
+                            totalPages={totalProprietePages}
+                            onPageChange={setCurrentProprietePage}
+                        />
                     </CardContent>
                 </Card>
             </div>
@@ -659,9 +788,9 @@ export default function Show() {
                                     <h4 className="font-semibold mb-3">Demandeurs associés ({selectedPropriete.demandeurs.length})</h4>
                                     <div className="space-y-2">
                                         {selectedPropriete.demandeurs.map((dem) => (
-                                            <div key={dem.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div key={dem.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                 <div>
-                                                    <p className="font-medium">{dem.titre_demandeur} {dem.nom_demandeur} {dem.prenom_demandeur}</p>
+                                                    <p className="font-medium dark:text-gray-100">{dem.titre_demandeur} {dem.nom_demandeur} {dem.prenom_demandeur}</p>
                                                     <p className="text-sm text-muted-foreground">CIN: {dem.cin}</p>
                                                 </div>
                                                 <Button 
@@ -695,6 +824,73 @@ export default function Show() {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* AlertDialog pour suppression demandeur */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Supprimer le demandeur</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Choisissez le type de suppression :
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div 
+                            className={`p-4 border-2 rounded-lg cursor-pointer transition ${
+                                deleteType === 'dossier' ? 'border-primary bg-primary/5' : 'border-border'
+                            }`}
+                            onClick={() => setDeleteType('dossier')}
+                        >
+                            <div className="flex items-start gap-3">
+                                <input 
+                                    type="radio" 
+                                    checked={deleteType === 'dossier'} 
+                                    onChange={() => setDeleteType('dossier')}
+                                    className="mt-1"
+                                />
+                                <div>
+                                    <p className="font-semibold">Retirer du dossier uniquement</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Le demandeur sera retiré de ce dossier mais restera dans la base de données.
+                                        Il pourra être réutilisé dans d'autres dossiers.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div 
+                            className={`p-4 border-2 rounded-lg cursor-pointer transition ${
+                                deleteType === 'definitif' ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : 'border-border'
+                            }`}
+                            onClick={() => setDeleteType('definitif')}
+                        >
+                            <div className="flex items-start gap-3">
+                                <input 
+                                    type="radio" 
+                                    checked={deleteType === 'definitif'} 
+                                    onChange={() => setDeleteType('definitif')}
+                                    className="mt-1"
+                                />
+                                <div>
+                                    <p className="font-semibold text-red-600 dark:text-red-400">Supprimer définitivement</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        ⚠️ Le demandeur sera supprimé de tous les dossiers et de toutes les propriétés.
+                                        Cette action est irréversible.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDeleteDemandeur}
+                            className={deleteType === 'definitif' ? 'bg-red-600 hover:bg-red-700' : ''}
+                        >
+                            {deleteType === 'dossier' ? 'Retirer du dossier' : 'Supprimer définitivement'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

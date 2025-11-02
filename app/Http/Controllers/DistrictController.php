@@ -3,34 +3,46 @@
 namespace App\Http\Controllers;
 
 use App\Models\District;
-use App\Models\UserDistrict;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class DistrictController extends Controller
 {
-    //
-    public function index(){
-        return Inertia::render('circonscription/index',[
-            'districts' => District::orderBy('id','asc')->get(),
+    public function index()
+    {
+        $districts = District::all();
+        
+        return Inertia::render('circonscription/index', [
+            'districts' => $districts,
+            'natures' => ['Urbaine', 'Suburbaine', 'Rurale'],
+            'vocations' => ['Edilitaire', 'Agricole', 'Forestière', 'Touristique'],
         ]);
     }
 
-    public function update(Request $request){
-
-        $district = District::find($request->input('id'));
-
-        $district->update($request->all());
-
-        UserDistrict::create([
-            'id_user' => Auth::user()->id,
-            'id_district' => $district->id,
-            'edilitaire' => $district->edilitaire,
-            'agricole' => $district->agricole,
+    public function update(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|exists:districts,id',
+            'edilitaire' => 'required|numeric|min:0',
+            'agricole' => 'required|numeric|min:0',
+            'forestiere' => 'required|numeric|min:0',
+            'touristique' => 'required|numeric|min:0',
         ]);
 
-        return redirect()->route('districts.terrain')->with('message','Modification avec succes');
-
+        try {
+            $district = District::findOrFail($request->id);
+            
+            $district->update([
+                'edilitaire' => $request->edilitaire,
+                'agricole' => $request->agricole,
+                'forestiere' => $request->forestiere,
+                'touristique' => $request->touristique,
+            ]);
+            
+            return back()->with('message', 'Prix mis à jour avec succès pour ' . $district->nom_district);
+            
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 }
