@@ -8,8 +8,10 @@ use App\Http\Controllers\DemandeurProprieteController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DocumentGenerationController;
 use App\Http\Controllers\DossierController;
+use App\Http\Controllers\PieceJointeController;
 use App\Http\Controllers\ProprieteController;
 use App\Http\Controllers\StatController;
+use App\Http\Controllers\AssociationController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -149,6 +151,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ==========================================
     Route::get('add/users', [RegisteredUserController::class, 'create'])->name('add.users');
     Route::post('add/users', [RegisteredUserController::class, 'store'])->name('users.store');
+    
+    // ==========================================
+    // PIÈCES JOINTES
+    // ==========================================
+    Route::prefix('pieces-jointes')->group(function () {
+        Route::get('/{id_dossier}', [PieceJointeController::class, 'index'])->name('pieces-jointes.index');
+        Route::post('/upload', [PieceJointeController::class, 'store'])->name('pieces-jointes.store');
+        Route::get('/{id}/download', [PieceJointeController::class, 'download'])->name('pieces-jointes.download');
+        Route::delete('/{id}', [PieceJointeController::class, 'destroy'])->name('pieces-jointes.destroy');
+        Route::get('/{id_dossier}/documents-generes', [PieceJointeController::class, 'documentsGeneres'])->name('pieces-jointes.documents-generes');
+    });
+
+    // ==========================================
+    // GESTION DES ASSOCIATIONS DEMANDEUR ↔ PROPRIÉTÉ
+    // ==========================================
+    Route::prefix('associations')->group(function () {
+        // Récupérer les propriétés d'un demandeur
+        Route::get('/demandeur/{id_demandeur}/proprietes', [AssociationController::class, 'getDemandeurProprietes'])
+            ->name('associations.demandeur.proprietes');
+        
+        // Récupérer les demandeurs d'une propriété
+        Route::get('/propriete/{id_propriete}/demandeurs', [AssociationController::class, 'getProprieteDemandeurs'])
+            ->name('associations.propriete.demandeurs');
+        
+        // Dissocier un demandeur d'une propriété
+        Route::delete('/dissociate', [AssociationController::class, 'dissociate'])
+            ->name('associations.dissociate');
+    });
 });
 
 require __DIR__ . '/settings.php';

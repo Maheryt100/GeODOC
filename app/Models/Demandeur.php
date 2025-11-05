@@ -1,11 +1,13 @@
 <?php
 
 namespace App\Models;
+use App\Traits\HasPiecesJointes;
 
 use Illuminate\Database\Eloquent\Model;
 
 class Demandeur extends Model
 {
+    use HasPiecesJointes;
     //
     protected $fillable = [
         'titre_demandeur',

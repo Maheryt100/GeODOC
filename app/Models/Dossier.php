@@ -6,10 +6,12 @@ use App\Collection\DossierCollection;
 use Illuminate\Database\Eloquent\Attributes\CollectedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use App\Traits\HasPiecesJointes;
 
 #[CollectedBy(DossierCollection::class)]
 class Dossier extends Model
 {
+    use HasPiecesJointes;
     protected $fillable = [
         'nom_dossier',
         'date_descente_debut',

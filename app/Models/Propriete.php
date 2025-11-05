@@ -1,12 +1,15 @@
 <?php
 
 namespace App\Models;
+use App\Traits\HasPiecesJointes;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Propriete extends Model
 {
+    use HasPiecesJointes;
+    
     protected $fillable = [
         'lot',
         'propriete_mere',

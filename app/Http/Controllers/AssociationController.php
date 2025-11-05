@@ -1,0 +1,189 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Demander;
+use App\Models\Demandeur;
+use App\Models\Propriete;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+class AssociationController extends Controller
+{
+    /**
+     * Obtenir les propriétés associées à un demandeur
+     */
+    public function getDemandeurProprietes($id_demandeur)
+    {
+        try {
+            $demandeur = Demandeur::findOrFail($id_demandeur);
+            
+            $proprietes = $demandeur->proprietes()
+                ->with('dossier')
+                ->get()
+                ->map(function ($propriete) {
+                    return [
+                        'id' => $propriete->id,
+                        'lot' => $propriete->lot,
+                        'titre' => $propriete->titre,
+                        'contenance' => $propriete->contenance,
+                        'nature' => $propriete->nature,
+                        'vocation' => $propriete->vocation,
+                        'situation' => $propriete->situation,
+                        'status' => $propriete->status,
+                        'dossier_nom' => $propriete->dossier->nom_dossier ?? 'N/A',
+                        'pivot_id' => $propriete->pivot->id,
+                        'pivot_status' => $propriete->pivot->status,
+                        'is_archived' => $propriete->pivot->status === 'archive',
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'demandeur' => [
+                    'id' => $demandeur->id,
+                    'nom_complet' => trim("{$demandeur->titre_demandeur} {$demandeur->nom_demandeur} {$demandeur->prenom_demandeur}"),
+                    'cin' => $demandeur->cin,
+                ],
+                'proprietes' => $proprietes,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur getDemandeurProprietes', [
+                'id_demandeur' => $id_demandeur,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des propriétés'
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir les demandeurs associés à une propriété
+     */
+    public function getProprieteDemandeurs($id_propriete)
+    {
+        try {
+            $propriete = Propriete::findOrFail($id_propriete);
+            
+            $demandeurs = $propriete->demandeurs()
+                ->get()
+                ->map(function ($demandeur) {
+                    return [
+                        'id' => $demandeur->id,
+                        'titre' => $demandeur->titre_demandeur,
+                        'nom' => $demandeur->nom_demandeur,
+                        'prenom' => $demandeur->prenom_demandeur,
+                        'cin' => $demandeur->cin,
+                        'occupation' => $demandeur->occupation,
+                        'telephone' => $demandeur->telephone,
+                        'pivot_id' => $demandeur->pivot->id,
+                        'pivot_status' => $demandeur->pivot->status,
+                        'is_archived' => $demandeur->pivot->status === 'archive',
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'propriete' => [
+                    'id' => $propriete->id,
+                    'lot' => $propriete->lot,
+                    'titre' => $propriete->titre,
+                    'contenance' => $propriete->contenance,
+                    'status' => $propriete->status,
+                ],
+                'demandeurs' => $demandeurs,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur getProprieteDemandeurs', [
+                'id_propriete' => $id_propriete,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des demandeurs'
+            ], 500);
+        }
+    }
+
+    /**
+     * Dissocier un demandeur d'une propriété
+     */
+    public function dissociate(Request $request)
+    {
+        $validated = $request->validate([
+            'id_demandeur' => 'required|exists:demandeurs,id',
+            'id_propriete' => 'required|exists:proprietes,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Trouver l'association
+            $demander = Demander::where('id_demandeur', $validated['id_demandeur'])
+                ->where('id_propriete', $validated['id_propriete'])
+                ->where('status', 'active')
+                ->first();
+
+            if (!$demander) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Association introuvable ou déjà archivée'
+                ], 404);
+            }
+
+            // Vérifier si la propriété est archivée (acquise)
+            if ($demander->status === 'archive') {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Impossible de dissocier : cette propriété a été acquise par ce demandeur'
+                ], 422);
+            }
+
+            // Supprimer l'association
+            $demander->delete();
+
+            // Mettre à jour le statut de la propriété si elle n'a plus de demandeurs actifs
+            $propriete = Propriete::find($validated['id_propriete']);
+            $hasActiveDemandeurs = Demander::where('id_propriete', $validated['id_propriete'])
+                ->where('status', 'active')
+                ->exists();
+
+            if (!$hasActiveDemandeurs) {
+                $propriete->update(['status' => false]);
+            }
+
+            DB::commit();
+
+            Log::info('Association dissociée', [
+                'id_demandeur' => $validated['id_demandeur'],
+                'id_propriete' => $validated['id_propriete']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Association supprimée avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur dissociation', [
+                'request' => $validated,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la dissociation'
+            ], 500);
+        }
+    }
+}

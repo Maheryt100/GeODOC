@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Save, Eye } from 'lucide-react';
-import { BreadcrumbItem, Dossier, Propriete, SharedData } from '@/types';
+import { BreadcrumbItem, Dossier, Propriete, SharedData, Nature, Vocation } from '@/types';
 import {
     Sheet,
     SheetClose,
@@ -27,6 +27,8 @@ import {
     DropdownMenuItem
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
+
+
 
 export default function Update() {
     const { propriete, dossier } = usePage<{
@@ -239,7 +241,7 @@ export default function Update() {
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div>
                                     <Label>Nature</Label>
-                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)}>
+                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e as Nature)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Nature" />
                                         </SelectTrigger>
@@ -252,12 +254,12 @@ export default function Update() {
                                 </div>
                                 <div>
                                     <Label>Vocation</Label>
-                                    <Select value={data.vocation} onValueChange={(e) => setData('vocation', e)}>
+                                    <Select value={data.vocation} onValueChange={(e) => setData('vocation', e as Vocation)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Vocation" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Editaire">Editaire</SelectItem>
+                                            <SelectItem value="Edilitaire">Edilitaire</SelectItem>
                                             <SelectItem value="Agricole">Agricole</SelectItem>
                                             <SelectItem value="Forestière">Forestière</SelectItem>
                                             <SelectItem value="Touristique">Touristique</SelectItem>

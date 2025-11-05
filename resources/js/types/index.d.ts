@@ -29,7 +29,7 @@ export interface SharedData {
     quote: { message: string; author: string };
     auth: Auth;
     flash: {
-        error: any; message?: string
+        error: any; message?: string; success?: string;
 };
     districts: District[];
     ziggy: Config & { location: string };

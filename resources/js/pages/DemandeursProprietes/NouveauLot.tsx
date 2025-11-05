@@ -294,7 +294,7 @@ export default function NouveauLot() {
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Editaire">Editaire</SelectItem>
+                                            <SelectItem value="Edilitaire">Edilitaire</SelectItem>
                                             <SelectItem value="Agricole">Agricole</SelectItem>
                                             <SelectItem value="Forestière">Forestière</SelectItem>
                                             <SelectItem value="Touristique">Touristique</SelectItem>

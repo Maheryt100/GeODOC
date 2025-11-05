@@ -86,18 +86,18 @@ class DemandeController extends Controller
         ]);
     }
 
-    public function archive(Request $request)
-    {
-        $demande = Demander::find($request->id);
+    // public function archive(Request $request)
+    // {
+    //     $demande = Demander::find($request->id);
 
-        $propriete = Propriete::find($demande->id_propriete);
-        $propriete->status = false;
-        $propriete->save();
-        $demande->status = 'archive';
-        $demande->save();
+    //     $propriete = Propriete::find($demande->id_propriete);
+    //     $propriete->status = false;
+    //     $propriete->save();
+    //     $demande->status = 'archive';
+    //     $demande->save();
 
-        return to_route('dossiers.list', $request->id_dossier)->with('message', 'Document archivé avec succès');
-    }
+    //     return to_route('dossiers.list', $request->id_dossier)->with('message', 'Document archivé avec succès');
+    // }
 
     public function exportList($id)
     {
@@ -530,6 +530,53 @@ class DemandeController extends Controller
         }
     }
 
+
+
+    
+    public function archive(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'required|exists:demander,id',
+            'id_dossier' => 'required|exists:dossiers,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $demande = Demander::findOrFail($validated['id']);
+            
+            // Marquer la demande comme archivée
+            $demande->status = 'archive';
+            $demande->save();
+
+            // 🔒 BLOQUER LA PROPRIÉTÉ (propriété acquise)
+            $propriete = Propriete::findOrFail($demande->id_propriete);
+            $propriete->status = true; // true = propriété occupée/acquise
+            $propriete->save();
+
+            DB::commit();
+
+            Log::info('Document archivé et propriété bloquée', [
+                'demande_id' => $demande->id,
+                'propriete_id' => $propriete->id,
+                'propriete_lot' => $propriete->lot
+            ]);
+
+            return redirect()
+                ->route('dossiers.list', $validated['id_dossier'])
+                ->with('success', 'Document archivé et propriété bloquée avec succès');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur archivage document', [
+                'demande_id' => $request->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return back()->with('error', 'Erreur lors de l\'archivage : ' . $e->getMessage());
+        }
+    }
     public function downloadCSF($id)
     {
         $demande = Demander::with(['demandeur', 'propriete.dossier'])->findOrFail($id);
@@ -574,4 +621,7 @@ class DemandeController extends Controller
 
         return response()->download($filePath);
     }
+
+
+    
 }

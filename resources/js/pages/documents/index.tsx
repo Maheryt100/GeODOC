@@ -3,15 +3,7 @@ import { type BreadcrumbItem, Demander, Dossier, Paginated } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
-import { Archive, ChevronDown, Ellipsis, FileCheck, FileOutput, FolderPlus, FileText, Eye } from 'lucide-react';
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-    Pagination,
-    PaginationContent,
-    PaginationEllipsis,
-    PaginationItem, PaginationLink, PaginationNext,
-    PaginationPrevious
-} from '@/components/ui/pagination';
+import { Archive, ChevronDown, Ellipsis, FileCheck, FileOutput, FileText, Eye } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,15 +15,19 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function Index() {
     const { documents } = usePage<{documents: Paginated<Demander>}>().props;
     const { dossier } = usePage<{ dossier: Dossier }>().props;
     const [search, setSearch] = useState('');
     const [selectedDocument, setSelectedDocument] = useState<Demander | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearch(e.target.value);
+        setCurrentPage(1); // Reset to first page on search
 
         router.get(route('documents.index', dossier.id), {
             search: e.target.value
@@ -79,218 +75,212 @@ export default function Index() {
         },
     ];
 
+    // Pagination logic
+    const paginateDocuments = () => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return documents.data.slice(startIndex, endIndex);
+    };
+
+    const totalPages = Math.ceil(documents.data.length / itemsPerPage);
+
+    // Pagination component
+    const Pagination = () => {
+        if (totalPages <= 1) return null;
+
+        return (
+            <div className="flex justify-center items-center gap-2 mt-4">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                >
+                    Précédent
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                    >
+                        {page}
+                    </Button>
+                ))}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                >
+                    Suivant
+                </Button>
+            </div>
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Liste des documents" />
             <Toaster position="top-right" richColors />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <div className={"flex mx-5 gap-6 md:gap-0 flex-col md:flex-row justify-between"}>
-                    <Input
-                        placeholder="Recherche par lot, titre, nom, CIN..."
-                        className="max-w-md"
-                        value={search}
-                        onChange={handleSearch}
-                    />
-                    <div className="flex gap-2">
-                        <Button asChild variant="outline">
-                            <Link href={route("lier.document", dossier.id)}>
-                                <FolderPlus className="mr-2 h-4 w-4" />
-                                Lier un document
-                            </Link>
-                        </Button>
-                        <Button asChild>
-                            <Link href={route("documents.generate", dossier.id)}>
-                                <FileText className="mr-2 h-4 w-4" />
-                                Générer des documents
-                            </Link>
-                        </Button>
-                    </div>
-                </div>
-                <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <div className={'mt-5 mx-10 flex justify-center md:justify-end'}>
-                        <a href={route('export.list', dossier.id)}>
-                            <Button variant="outline">
-                                <FileOutput className="mr-2 h-4 w-4" />
-                                Exporter les données
-                            </Button>
-                        </a>
-                    </div>
-                    <div className={'m-10 border rounded-md'}>
-                        <Table>
-                            <TableCaption>Liste des Documents ({documents.data.length})</TableCaption>
-                            <TableCaption>
-                                <Pagination>
-                                    <PaginationContent>
-                                        {documents.links.map((link, index: number) => {
-                                            const isPrevious = link.label.includes('Previous') || link.label.includes('&laquo;');
-                                            const isNext = link.label.includes('Next') || link.label.includes('&raquo;');
-                                            const isEllipsis = link.label === '...';
+            
+            <div className="flex flex-col gap-6 p-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <CardTitle>Documents</CardTitle>
+                                <CardDescription>
+                                    Liste des documents du dossier ({documents.data.length})
+                                </CardDescription>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                                <Button asChild variant="outline" size="sm">
+                                    <a href={route('export.list', dossier.id)}>
+                                        <FileOutput className="mr-2 h-4 w-4" />
+                                        Exporter données
+                                    </a>
+                                </Button>
+                                <Button asChild size="sm">
+                                    <Link href={route("documents.generate", dossier.id)}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Générer documents
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="mb-4">
+                            <Input
+                                placeholder="Recherche par lot, titre, nom, CIN..."
+                                className="max-w-md"
+                                value={search}
+                                onChange={handleSearch}
+                            />
+                        </div>
 
-                                            if (isEllipsis) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <PaginationEllipsis />
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            if (!link.url) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <span className="px-3 py-1 text-muted-foreground cursor-not-allowed">
-                                                          {link.label.replace(/&laquo;|&raquo;/g, '')}
-                                                        </span>
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            if (isPrevious) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <PaginationPrevious href={link.url} />
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            if (isNext) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <PaginationNext href={link.url} />
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            return (
-                                                <PaginationItem key={index}>
-                                                    <PaginationLink
-                                                        href={link.url}
-                                                        isActive={link.active}
-                                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                                    />
-                                                </PaginationItem>
-                                            );
-                                        })}
-                                    </PaginationContent>
-                                </Pagination>
-                            </TableCaption>
-                            <TableHeader className={'w-[100px]'}>
-                                <TableRow>
-                                    <TableHead className={'text-center'}>Lot/Titre</TableHead>
-                                    <TableHead className={'text-center'}>Demandeur</TableHead>
-                                    <TableHead className={'text-center'}>Situation</TableHead>
-                                    <TableHead className={'text-center'}>Fokontany</TableHead>
-                                    <TableHead className={'text-center'}>Nom Propriétaire</TableHead>
-                                    <TableHead className={'text-center'}>Superficie</TableHead>
-                                    <TableHead className={'text-center'}>Nature</TableHead>
-                                    <TableHead className={'text-center'}>Vocation</TableHead>
-                                    <TableHead className={'text-center'}>Type opération</TableHead>
-                                    <TableHead className={'text-center'}>Consort</TableHead>
-                                    <TableHead className={'text-center'}>Prix Total</TableHead>
-                                    <TableHead></TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {documents.data.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                                            Aucun document trouvé
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    documents.data.map((document) => (
-                                        <TableRow 
-                                            key={document.id} 
-                                            className="cursor-pointer hover:bg-muted/50"
-                                            onClick={() => setSelectedDocument(document)}
-                                        >
-                                            <TableCell className={'text-center'}>
-                                                {document.propriete.lot}/ TNº{document.propriete.titre}
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                {document.demandeur.nom_demandeur} {document.demandeur.prenom_demandeur}
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                {document.propriete.situation}
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                {dossier.fokontany}
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                {document.propriete.proprietaire}
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                {document.propriete.contenance} m²
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950">
-                                                    {document.propriete.nature}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                <Badge variant="outline" className="bg-green-50 dark:bg-green-950">
-                                                    {document.propriete.vocation}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className={'text-center capitalize'}>
-                                                {document.propriete.type_operation}
-                                            </TableCell>
-                                            <TableCell className={'text-center'}>
-                                                {document.status_consort ? (
-                                                    <Badge variant="secondary">Avec</Badge>
-                                                ) : (
-                                                    <span className="text-gray-500">Sans</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className={'text-center font-semibold'}>
-                                                {document.total_prix.toLocaleString()} Ar
-                                            </TableCell>
-                                            <TableCell className={'text-center'} onClick={(e) => e.stopPropagation()}>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <Ellipsis className={'h-4 w-4'}/>
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => setSelectedDocument(document)}>
-                                                            <Eye className="mr-2 h-4 w-4" />
-                                                            Voir détails
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem asChild>
-                                                            <a href={route('download.CSF', document.id)} className={'flex items-center'}>
-                                                                <FileCheck className="mr-2 h-4 w-4" />
-                                                                Exporter CSF
-                                                            </a>
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem asChild>
-                                                            <a href={route('document.download', document.id)} className={'flex items-center'}>
-                                                                <FileOutput className="mr-2 h-4 w-4" />
-                                                                Exporter ADV
-                                                            </a>
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            className="text-red-500"
-                                                            onClick={() => {handleArchive(document.id);}}
-                                                        >
-                                                            <Archive className="mr-2 h-4 w-4" />
-                                                            Archiver
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </div>
+                        <div className="rounded-md border overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="border-b bg-muted/50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Lot/Titre</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Demandeur</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Situation</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Fokontany</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Propriétaire</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Superficie</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Nature</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Vocation</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Type opération</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Consort</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Prix Total</th>
+                                        <th className="px-4 py-3 w-[50px]"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {documents.data.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={12} className="text-center text-muted-foreground py-8">
+                                                Aucun document trouvé
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        paginateDocuments().map((document) => (
+                                            <tr 
+                                                key={document.id} 
+                                                className="border-b hover:bg-muted/50 cursor-pointer"
+                                                onClick={() => setSelectedDocument(document)}
+                                            >
+                                                <td className="px-4 py-3 text-sm font-medium">
+                                                    {document.propriete.lot}/ TNº{document.propriete.titre}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {document.demandeur.nom_demandeur} {document.demandeur.prenom_demandeur}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {document.propriete.situation}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {dossier.fokontany}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {document.propriete.proprietaire}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {document.propriete.contenance} m²
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {document.propriete.nature}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {document.propriete.vocation}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm capitalize">
+                                                    {document.propriete.type_operation}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <Badge variant={document.status_consort ? "default" : "secondary"} className="text-xs">
+                                                        {document.status_consort ? "Avec" : "Sans"}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm font-semibold">
+                                                    {document.total_prix.toLocaleString()} Ar
+                                                </td>
+                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <Ellipsis className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem onClick={() => setSelectedDocument(document)}>
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                Voir détails
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem asChild>
+                                                                <a href={route('download.CSF', document.id)} className="flex items-center">
+                                                                    <FileCheck className="mr-2 h-4 w-4" />
+                                                                    Exporter CSF
+                                                                </a>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem asChild>
+                                                                <a href={route('document.download', document.id)} className="flex items-center">
+                                                                    <FileOutput className="mr-2 h-4 w-4" />
+                                                                    Exporter ADV
+                                                                </a>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                className="text-red-500"
+                                                                onClick={() => handleArchive(document.id)}
+                                                            >
+                                                                <Archive className="mr-2 h-4 w-4" />
+                                                                Archiver
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <Pagination />
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Dialog détails du document */}
             <Dialog open={!!selectedDocument} onOpenChange={() => setSelectedDocument(null)}>
-                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>–
                         <DialogTitle className="text-2xl">Détails du document</DialogTitle>
                     </DialogHeader>
                     {selectedDocument && (
@@ -326,83 +316,82 @@ export default function Index() {
                             </div>
 
                             {/* Informations Propriété */}
-                            <div>
-                                <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <div className="border-t pt-4">
+                                <h4 className="font-semibold mb-3 flex items-center gap-2">
                                     <FileText className="h-5 w-5" />
                                     Informations de la propriété
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Propriétaire</p>
                                         <p className="font-medium">{selectedDocument.propriete.proprietaire}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Contenance</p>
                                         <p className="font-medium">{selectedDocument.propriete.contenance} m²</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Nature</p>
                                         <p className="font-medium">{selectedDocument.propriete.nature}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Vocation</p>
                                         <p className="font-medium">{selectedDocument.propriete.vocation}</p>
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="space-y-1 col-span-2">
                                         <p className="text-sm text-muted-foreground">Situation</p>
                                         <p className="font-medium">{selectedDocument.propriete.situation}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <Separator />
-
                             {/* Informations Demandeur */}
-                            <div>
-                                <h4 className="font-semibold text-lg mb-3">Informations du demandeur</h4>
+                            <div className="border-t pt-4">
+                                <h4 className="font-semibold mb-3">Informations du demandeur</h4>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">CIN</p>
                                         <p className="font-medium font-mono">{selectedDocument.demandeur.cin}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Sexe</p>
                                         <p className="font-medium">{selectedDocument.demandeur.sexe}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Occupation</p>
                                         <p className="font-medium">{selectedDocument.demandeur.occupation}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Domiciliation</p>
                                         <p className="font-medium">{selectedDocument.demandeur.domiciliation}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Téléphone</p>
                                         <p className="font-medium">{selectedDocument.demandeur.telephone || '-'}</p>
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Situation familiale</p>
                                         <p className="font-medium">{selectedDocument.demandeur.situation_familiale}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <Separator />
-
                             {/* Actions */}
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-2 pt-4 border-t">
                                 <Button asChild variant="outline">
                                     <a href={route('download.CSF', selectedDocument.id)}>
                                         <FileCheck className="mr-2 h-4 w-4" />
-                                        Télécharger CSF
+                                        CSF
                                     </a>
                                 </Button>
-                                <Button asChild>
+                                <Button asChild variant="outline">
                                     <a href={route('document.download', selectedDocument.id)}>
                                         <FileOutput className="mr-2 h-4 w-4" />
-                                        Télécharger ADV
+                                        ADV
                                     </a>
+                                </Button>
+                                <Button variant="outline" onClick={() => setSelectedDocument(null)}>
+                                    Fermer
                                 </Button>
                             </div>
                         </div>

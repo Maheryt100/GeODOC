@@ -1,8 +1,12 @@
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, AlertCircle, Eye, MapPin, Calendar, Building2, FileText, FileOutput } from 'lucide-react';
+import { 
+    LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, 
+    AlertCircle, Eye, MapPin, Calendar, Building2, FileText, 
+    FileOutput, Paperclip, FolderOpen 
+} from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -28,12 +32,12 @@ interface PageProps {
 export default function Show() {
     const { dossier } = usePage<PageProps>().props;
     const { flash } = usePage<SharedData>().props;
-    const { delete: destroy } = useForm();
     const [selectedDemandeur, setSelectedDemandeur] = useState<DemandeurWithProperty | null>(null);
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteType, setDeleteType] = useState<'dossier' | 'definitif'>('dossier');
     const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     
     // Pagination states
     const [currentDemandeurPage, setCurrentDemandeurPage] = useState(1);
@@ -44,7 +48,13 @@ export default function Show() {
         if (flash?.message) {
             toast.info(flash.message);
         }
-    }, [flash?.message]);
+        if (flash?.success) {
+            toast.success(flash.success);
+        }
+        if (flash?.error) {
+            toast.error(flash.error);
+        }
+    }, [flash?.message, flash?.success, flash?.error]);
 
     const handleDeleteDemandeur = (id: number) => {
         setItemToDelete({ type: 'demandeur', id });
@@ -53,38 +63,67 @@ export default function Show() {
     };
 
     const confirmDeleteDemandeur = () => {
-        if (!itemToDelete || itemToDelete.type !== 'demandeur') return;
+        if (!itemToDelete || itemToDelete.type !== 'demandeur' || isDeleting) return;
+
+        setIsDeleting(true);
 
         if (deleteType === 'dossier') {
-            destroy(route('demandeurs.destroy', { dossier: dossier.id, demandeur: itemToDelete.id }), {
-                preserveScroll: true,
-                onSuccess: () => {
-                    toast.success('Demandeur retiré du dossier');
-                    setDeleteDialogOpen(false);
-                },
-                onError: (errors) => {
-                    toast.error('Erreur', { description: Object.values(errors).join('\n') });
+            router.delete(
+                route('demandeurs.destroy', { 
+                    dossier: dossier.id, 
+                    demandeur: itemToDelete.id 
+                }), 
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        toast.success('Demandeur retiré du dossier avec succès');
+                        setDeleteDialogOpen(false);
+                        setItemToDelete(null);
+                        setIsDeleting(false);
+                    },
+                    onError: (errors) => {
+                        console.error('Erreurs:', errors);
+                        toast.error('Erreur lors de la suppression', { 
+                            description: Object.values(errors).join('\n') 
+                        });
+                        setIsDeleting(false);
+                    },
+                    onFinish: () => {
+                        setIsDeleting(false);
+                    }
                 }
-            });
+            );
         } else {
-            destroy(route('demandeurs.destroy.definitive', itemToDelete.id), {
-                preserveScroll: true,
-                onSuccess: () => {
-                    toast.success('Demandeur supprimé définitivement');
-                    setDeleteDialogOpen(false);
-                },
-                onError: (errors) => {
-                    toast.error('Erreur', { description: Object.values(errors).join('\n') });
+            router.delete(
+                route('demandeurs.destroy.definitive', itemToDelete.id), 
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        toast.success('Demandeur supprimé définitivement avec succès');
+                        setDeleteDialogOpen(false);
+                        setItemToDelete(null);
+                        setIsDeleting(false);
+                    },
+                    onError: (errors) => {
+                        console.error('Erreurs:', errors);
+                        toast.error('Erreur lors de la suppression', { 
+                            description: Object.values(errors).join('\n') 
+                        });
+                        setIsDeleting(false);
+                    },
+                    onFinish: () => {
+                        setIsDeleting(false);
+                    }
                 }
-            });
+            );
         }
     };
 
     const handleDeletePropriete = (id: number) => {
         if (confirm('Voulez-vous vraiment supprimer cette propriété ?')) {
-            destroy(route('proprietes.destroy', id), {
+            router.delete(route('proprietes.destroy', id), {
                 preserveScroll: true,
-                onSuccess: () => toast.success('Propriété supprimée'),
+                onSuccess: () => toast.success('Propriété supprimée avec succès'),
                 onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
             });
         }
@@ -217,19 +256,10 @@ export default function Show() {
                                 <Button asChild variant="default" size="sm">
                                     <Link href={route('nouveau-lot.create', dossier.id)}>
                                         <LandPlot className="mr-2 h-4 w-4" />
-                                        Nouveau Lot
+                                        Nouveau Lot + Demandeur(s)
                                     </Link>
                                 </Button>
                                 
-                                {/* NOUVEAU BOUTON */}
-                                <Button asChild variant="secondary" size="sm">
-                                    <Link href={route('dossiers.list', dossier.id)}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        Documents générés
-                                    </Link>
-                                </Button>
-                                
-                                {/* NOUVEAU BOUTON - Génération */}
                                 <Button asChild size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
                                     <Link href={route('documents.generate', dossier.id)}>
                                         <FileOutput className="mr-2 h-4 w-4" />
@@ -438,7 +468,7 @@ export default function Show() {
                     </CardContent>
                 </Card>
 
-                {/* Section Propriétés */}
+                {/* Section Propriétés - Identique, pas de changement nécessaire ici */}
                 <Card>
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -898,12 +928,13 @@ export default function Show() {
                         </div>
                     </div>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmDeleteDemandeur}
+                            disabled={isDeleting}
                             className={deleteType === 'definitif' ? 'bg-red-600 hover:bg-red-700' : ''}
                         >
-                            {deleteType === 'dossier' ? 'Retirer du dossier' : 'Supprimer définitivement'}
+                            {isDeleting ? 'Suppression...' : deleteType === 'dossier' ? 'Retirer du dossier' : 'Supprimer définitivement'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

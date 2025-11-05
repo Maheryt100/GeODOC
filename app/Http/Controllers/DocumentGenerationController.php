@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Demander;
-use App\Models\Demandeur;
-use App\Models\Dossier;
+use App\Models\PieceJointe;
 use App\Models\Propriete;
 use App\Models\UserCSF;
+use App\Models\Dossier;
+use App\Models\Demandeur;
+use App\Models\Demander;
 use App\Models\UserDemande;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use NumberFormatter;
@@ -135,11 +137,9 @@ class DocumentGenerationController extends Controller
             
             // Si pas de demande existante, créer une
             if (!$demande) {
-                // Utiliser la méthode centralisée pour le prix
                 $prix = $this->getPrixFromDistrict($propriete);
                 $prixTotal = $prix * $propriete->contenance;
                 
-                // Créer la demande
                 $demande = Demander::create([
                     'id_demandeur' => $demandeur->id,
                     'id_propriete' => $propriete->id,
@@ -149,7 +149,6 @@ class DocumentGenerationController extends Controller
                     'status_consort' => false,
                 ]);
                 
-                // Recharger les relations
                 $demande->load(['demandeur', 'propriete.dossier']);
             }
             
@@ -160,7 +159,11 @@ class DocumentGenerationController extends Controller
                 'id_demande' => $demande->id,
             ]);
 
-            return response()->download($filePath)->deleteFileAfterSend(true);
+            // ✅ ENREGISTRER LE DOCUMENT GÉNÉRÉ
+            $this->savePieceJointe($filePath, $propriete, 'acte_vente', 
+                "Acte de vente - Lot {$propriete->lot} - {$demandeur->nom_demandeur}");
+
+            return response()->download($filePath)->deleteFileAfterSend(false);
             
         } catch (\Exception $e) {
             Log::error('Erreur génération Acte de Vente', [
@@ -695,5 +698,44 @@ class DocumentGenerationController extends Controller
         $requisition_model->saveAs($filePath);
         
         return $filePath;
+    }
+    
+    /**
+     * Enregistrer le document généré comme pièce jointe
+     */
+    private function savePieceJointe(string $filePath, $attachable, string $typeDocument, string $description = null)
+    {
+        try {
+            // Copier le fichier dans le stockage public
+            $fileName = basename($filePath);
+            $newPath = 'pieces_jointes/documents_generes/' . $fileName;
+            
+            // Copier le fichier
+            Storage::disk('public')->put($newPath, file_get_contents($filePath));
+            
+            // Créer l'enregistrement
+            PieceJointe::create([
+                'nom_fichier' => $fileName,
+                'nom_original' => $fileName,
+                'chemin' => $newPath,
+                'type_mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'taille' => filesize($filePath),
+                'type_document' => $typeDocument,
+                'description' => $description,
+                'attachable_type' => get_class($attachable),
+                'attachable_id' => $attachable->id,
+                'id_user' => Auth::id(),
+            ]);
+            
+            Log::info('Document enregistré comme pièce jointe', [
+                'fichier' => $fileName,
+                'type' => $typeDocument,
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur sauvegarde pièce jointe', [
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }
