@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Dossier;
 use App\Models\Propriete;
+use App\Models\Demander;
 use App\Models\UserRequisition;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
@@ -108,6 +110,14 @@ class ProprieteController extends Controller
         $propriete = Propriete::findOrFail($id);
         $dossier = Dossier::findOrFail($propriete->id_dossier);
         
+        // Vérifier si la propriété est archivée
+        $isArchived = $this->isPropertyArchived($propriete);
+        
+        if ($isArchived) {
+            return Redirect::route('dossiers.show', $dossier->id)
+                ->with('error', 'Impossible de modifier une propriété archivée (acquise). Veuillez la désarchiver d\'abord.');
+        }
+        
         return Inertia::render('proprietes/update', [
             'propriete' => $propriete,
             'dossier' => $dossier,
@@ -120,6 +130,13 @@ class ProprieteController extends Controller
 
         if (!$existPropriete) {
             return back()->with('message', 'Propriété introuvable');
+        }
+        
+        // Vérifier si la propriété est archivée
+        $isArchived = $this->isPropertyArchived($existPropriete);
+        
+        if ($isArchived) {
+            return back()->withErrors(['error' => 'Impossible de modifier une propriété archivée (acquise). Veuillez la désarchiver d\'abord.']);
         }
         
         if (is_array($request->charge)) {
@@ -222,10 +239,134 @@ class ProprieteController extends Controller
             return back()->with('message', 'Propriété introuvable');
         }
         
+        // Vérifier si la propriété est archivée
+        $isArchived = $this->isPropertyArchived($propriete);
+        
+        if ($isArchived) {
+            return back()->withErrors(['error' => 'Impossible de supprimer une propriété archivée (acquise). Veuillez la désarchiver d\'abord.']);
+        }
+        
         $id_dossier = $propriete->id_dossier;
         $propriete->delete();
         
-        return Redirect::route('dossiers.proprietes', $id_dossier)
-            ->with('message', 'Propriété supprimée avec succès');
+        return Redirect::route('dossiers.show', $id_dossier)
+            ->with('success', 'Propriété supprimée avec succès');
+    }
+
+    /**
+     * Vérifier si une propriété est archivée
+     */
+    private function isPropertyArchived(Propriete $propriete): bool
+    {
+        $demandesActives = Demander::where('id_propriete', $propriete->id)
+            ->where('status', 'active')
+            ->count();
+            
+        $demandesArchivees = Demander::where('id_propriete', $propriete->id)
+            ->where('status', 'archive')
+            ->count();
+            
+        // Une propriété est archivée si elle a au moins une demande archivée ET aucune demande active
+        return $demandesArchivees > 0 && $demandesActives === 0;
+    }
+
+    /**
+     * NOUVELLE MÉTHODE : Archiver une propriété (propriété acquise)
+     */
+    public function archive(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|exists:proprietes,id',
+        ]);
+
+        DB::beginTransaction();
+        
+        try {
+            $propriete = Propriete::findOrFail($request->id);
+            
+            // Vérifier s'il y a des demandes actives
+            $demandesActives = Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'active')
+                ->count();
+            
+            if ($demandesActives === 0) {
+                return back()->withErrors(['error' => 'Impossible d\'archiver : cette propriété n\'a aucun demandeur actif.']);
+            }
+            
+            // Archiver toutes les demandes actives liées à cette propriété
+            Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'active')
+                ->update(['status' => 'archive']);
+            
+            DB::commit();
+            
+            Log::info('Propriété archivée', [
+                'propriete_id' => $propriete->id,
+                'lot' => $propriete->lot,
+                'demandes_archivees' => $demandesActives
+            ]);
+            
+            return back()->with('success', 'Propriété archivée avec succès (acquise)');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur archivage propriété', [
+                'propriete_id' => $request->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->withErrors(['error' => 'Erreur lors de l\'archivage : ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE : Désarchiver une propriété
+     */
+    public function unarchive(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|exists:proprietes,id',
+        ]);
+
+        DB::beginTransaction();
+        
+        try {
+            $propriete = Propriete::findOrFail($request->id);
+            
+            // Vérifier s'il y a des demandes archivées
+            $demandesArchivees = Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'archive')
+                ->count();
+            
+            if ($demandesArchivees === 0) {
+                return back()->withErrors(['error' => 'Cette propriété n\'a aucune demande archivée.']);
+            }
+            
+            // Réactiver toutes les demandes archivées liées à cette propriété
+            Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'archive')
+                ->update(['status' => 'active']);
+            
+            DB::commit();
+            
+            Log::info('Propriété désarchivée', [
+                'propriete_id' => $propriete->id,
+                'lot' => $propriete->lot,
+                'demandes_reactivees' => $demandesArchivees
+            ]);
+            
+            return back()->with('success', 'Propriété désarchivée avec succès');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur désarchivage propriété', [
+                'propriete_id' => $request->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->withErrors(['error' => 'Erreur lors de la désarchivation : ' . $e->getMessage()]);
+        }
     }
 }

@@ -168,9 +168,11 @@ class DossierController extends Controller
     {
         $dossier = Dossier::with([
             'demandeurs',
-            'proprietes' => function($query) {
-                $query->with('demandeurs')
-                    ->select('*'); // S'assurer que type_operation est inclus
+            'proprietes' => function ($query) {
+                $query->with(['demandeurs', 'demandes' => function ($q) {
+                    // Charger TOUTES les demandes (actives ET archivées)
+                    $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix');
+                }]);
             }
         ])->findOrFail($id);
 

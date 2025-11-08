@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Pen } from 'lucide-react';
+import { Key, Pen } from 'lucide-react';
 import { useForm, usePage } from '@inertiajs/react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -26,8 +26,9 @@ interface PrixFormData {
     agricole: string;
     forestiere: string;
     touristique: string;
-   
+    [key: string]: string | number | boolean | File | null;
 }
+
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

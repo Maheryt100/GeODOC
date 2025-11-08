@@ -1,13 +1,13 @@
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
     LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, 
-    AlertCircle, Eye, MapPin, Calendar, Building2, FileText, 
-    FileOutput, Paperclip, FolderOpen 
+    AlertCircle, Eye, MapPin, Calendar, Building2, FileOutput, 
+    Archive, ArchiveRestore, Unlink
 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
@@ -15,7 +15,6 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
-
 
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
@@ -39,21 +38,14 @@ export default function Show() {
     const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     
-    // Pagination states
     const [currentDemandeurPage, setCurrentDemandeurPage] = useState(1);
     const [currentProprietePage, setCurrentProprietePage] = useState(1);
     const itemsPerPage = 10;
 
     useEffect(() => {
-        if (flash?.message) {
-            toast.info(flash.message);
-        }
-        if (flash?.success) {
-            toast.success(flash.success);
-        }
-        if (flash?.error) {
-            toast.error(flash.error);
-        }
+        if (flash?.message) toast.info(flash.message);
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.error) toast.error(flash.error);
     }, [flash?.message, flash?.success, flash?.error]);
 
     const handleDeleteDemandeur = (id: number) => {
@@ -129,6 +121,39 @@ export default function Show() {
         }
     };
 
+    const handleDissociate = (demandeurId: number, proprieteId: number, demandeurNom: string) => {
+        if (confirm(`Êtes-vous sûr de vouloir dissocier ${demandeurNom} de cette propriété ?`)) {
+            router.post(route('demandeur-propriete.dissociate'), {
+                id_demandeur: demandeurId,
+                id_propriete: proprieteId,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Demandeur dissocié de la propriété'),
+                onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
+            });
+        }
+    };
+
+    const handleArchivePropriete = (id: number) => {
+        if (confirm('Archiver cette propriété ? (La propriété sera marquée comme acquise)')) {
+            router.post(route('proprietes.archive'), { id }, {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Propriété archivée (acquise)'),
+                onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
+            });
+        }
+    };
+
+    const handleUnarchivePropriete = (id: number) => {
+        if (confirm('Désarchiver cette propriété ?')) {
+            router.post(route('proprietes.unarchive'), { id }, {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Propriété désarchivée'),
+                onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
+            });
+        }
+    };
+
     const getAllDemandeurs = (): DemandeurWithProperty[] => {
         const demandeursMap = new Map<number, DemandeurWithProperty>();
         
@@ -163,6 +188,11 @@ export default function Show() {
     const allDemandeurs = getAllDemandeurs();
     const proprietes = dossier.proprietes || [];
 
+    // Vérifier si toutes les propriétés sont archivées
+    const allProprietesArchived = proprietes.length > 0 && proprietes.every(p => 
+        p.demandeurs && p.demandeurs.every((d: any) => d.status === 'archive')
+    );
+
     const isPropertyIncomplete = (prop: Propriete): boolean => {
         return !prop.titre || !prop.contenance || !prop.proprietaire || !prop.nature || !prop.vocation || !prop.situation;
     };
@@ -176,7 +206,10 @@ export default function Show() {
         return prop.demandeurs !== undefined && prop.demandeurs.length > 0;
     };
 
-    // Pagination logic
+    const isPropertyArchived = (prop: Propriete): boolean => {
+        return prop.demandeurs ? prop.demandeurs.every((d: any) => d.status === 'archive') : false;
+    };
+
     const paginateDemandeurs = () => {
         const startIndex = (currentDemandeurPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
@@ -239,12 +272,22 @@ export default function Show() {
 
             <div className="flex flex-col gap-6 p-6">
                 {/* Section Informations du Dossier */}
-                <Card className="border-2">
+                <Card className={`border-2 ${allProprietesArchived ? 'bg-gray-50 dark:bg-gray-900/50' : ''}`}>
                     <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
-                                <CardTitle className="text-3xl font-bold text-blue-900 dark:text-blue-100">{dossier.nom_dossier}</CardTitle>
-                                <CardDescription className="text-base mt-1">Dossier</CardDescription>
+                                <div className="flex items-center gap-3">
+                                    <CardTitle className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                                        {dossier.nom_dossier}
+                                    </CardTitle>
+                                    {allProprietesArchived && (
+                                        <Badge variant="secondary" className="bg-gray-200 text-gray-700">
+                                            <Archive className="mr-1 h-3 w-3" />
+                                            Dossier terminé
+                                        </Badge>
+                                    )}
+                                </div>
+                                
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 <Button asChild variant="outline" size="sm">
@@ -267,12 +310,12 @@ export default function Show() {
                                     </Link>
                                 </Button>
                             
-                                <Button asChild variant="outline" size="sm">
+                                {/* <Button asChild variant="outline" size="sm">
                                     <Link href={route('dossiers.list', dossier.id)}>
                                         <List className="mr-2 h-4 w-4" />
                                         Liste
                                     </Link>
-                                </Button>
+                                </Button> */}
                             </div>
                         </div>
                     </CardHeader>
@@ -316,6 +359,11 @@ export default function Show() {
                             <Badge variant="secondary" className="text-sm">
                                 {proprietes.length} Propriété{proprietes.length > 1 ? 's' : ''}
                             </Badge>
+                            {allProprietesArchived && (
+                                <Badge variant="outline" className="text-sm bg-green-50 text-green-700 border-green-300">
+                                    Toutes les propriétés sont acquises
+                                </Badge>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -443,6 +491,7 @@ export default function Show() {
                                                                         </Link>
                                                                     </DropdownMenuItem>
                                                                 )}
+                                                                <DropdownMenuSeparator />
                                                                 <DropdownMenuItem
                                                                     className="text-red-500"
                                                                     onClick={() => handleDeleteDemandeur(demandeur.id)}
@@ -468,7 +517,7 @@ export default function Show() {
                     </CardContent>
                 </Card>
 
-                {/* Section Propriétés - Identique, pas de changement nécessaire ici */}
+                {/* Section Propriétés */}
                 <Card>
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -481,6 +530,8 @@ export default function Show() {
                                         Sans demandeur
                                         <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded ml-3 mr-1"></span>
                                         Informations incomplètes
+                                        <span className="inline-block w-3 h-3 bg-gray-200 border border-gray-400 rounded ml-3 mr-1"></span>
+                                        Archivée
                                     </span>
                                 </CardDescription>
                             </div>
@@ -527,11 +578,15 @@ export default function Show() {
                                         paginateProprietes().map((propriete) => {
                                             const isIncomplete = isPropertyIncomplete(propriete);
                                             const hasDemandeurs = hasLinkedDemandeurs(propriete);
-                                            const rowClass = isIncomplete 
-                                                ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer'
-                                                : hasDemandeurs
-                                                    ? 'border-b hover:bg-muted/50 cursor-pointer'
-                                                    : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
+                                            const isArchived = isPropertyArchived(propriete);
+                                            
+                                            const rowClass = isArchived
+                                                ? 'border-b hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-50/80 dark:bg-gray-900/50 cursor-pointer'
+                                                : isIncomplete 
+                                                    ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer'
+                                                    : hasDemandeurs
+                                                        ? 'border-b hover:bg-muted/50 cursor-pointer'
+                                                        : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
                                             
                                             return (
                                                 <tr key={propriete.id} className={rowClass} onClick={() => setSelectedPropriete(propriete)}>
@@ -539,6 +594,7 @@ export default function Show() {
                                                         <div className="flex items-center gap-2">
                                                             {propriete.lot}
                                                             {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
+                                                            {isArchived && <Archive className="h-4 w-4 text-gray-500" />}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-sm">{propriete.titre ? `TNº${propriete.titre}` : '-'}</td>
@@ -546,9 +602,16 @@ export default function Show() {
                                                     <td className="px-4 py-3 text-sm">{propriete.proprietaire || '-'}</td>
                                                     <td className="px-4 py-3 text-sm capitalize">{propriete.nature || '-'}</td>
                                                     <td className="px-4 py-3 text-sm">
-                                                        <Badge variant={hasDemandeurs ? "default" : "secondary"} className="text-xs">
-                                                            {hasDemandeurs ? "Avec demandeur" : "Sans demandeur"}
-                                                        </Badge>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant={hasDemandeurs ? "default" : "secondary"} className="text-xs">
+                                                                {hasDemandeurs ? "Avec demandeur" : "Sans demandeur"}
+                                                            </Badge>
+                                                            {isArchived && (
+                                                                <Badge variant="outline" className="text-xs bg-gray-100 text-gray-700 border-gray-300">
+                                                                    Acquise
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                                         <DropdownMenu>
@@ -583,6 +646,24 @@ export default function Show() {
                                                                         Ajouter un demandeur
                                                                     </Link>
                                                                 </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                {isArchived ? (
+                                                                    <DropdownMenuItem
+                                                                        className="text-blue-600"
+                                                                        onClick={() => handleUnarchivePropriete(propriete.id)}
+                                                                    >
+                                                                        <ArchiveRestore className="mr-2 h-4 w-4" />
+                                                                        Désarchiver
+                                                                    </DropdownMenuItem>
+                                                                ) : (
+                                                                    <DropdownMenuItem
+                                                                        className="text-green-600"
+                                                                        onClick={() => handleArchivePropriete(propriete.id)}
+                                                                    >
+                                                                        <Archive className="mr-2 h-4 w-4" />
+                                                                        Archiver (acquise)
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                                 <DropdownMenuItem
                                                                     className="text-red-500"
                                                                     onClick={() => handleDeletePropriete(propriete.id)}
@@ -609,9 +690,9 @@ export default function Show() {
                 </Card>
             </div>
 
-            {/* Dialog Demandeur */}
+            {/* Dialog Demandeur - AMÉLIORÉ */}
             <Dialog open={!!selectedDemandeur} onOpenChange={() => setSelectedDemandeur(null)}>
-                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-2xl">
                             Détails du demandeur
@@ -623,9 +704,17 @@ export default function Show() {
                                 <h3 className="text-xl font-bold text-blue-900 dark:text-blue-100">
                                     {selectedDemandeur.titre_demandeur} {selectedDemandeur.nom_demandeur} {selectedDemandeur.prenom_demandeur}
                                 </h3>
-                                <Badge variant={selectedDemandeur.hasProperty ? "default" : "secondary"} className="mt-2">
-                                    {selectedDemandeur.hasProperty ? "Associé à une propriété" : "Non associé"}
-                                </Badge>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <Badge variant={selectedDemandeur.hasProperty ? "default" : "secondary"}>
+                                        {selectedDemandeur.hasProperty ? "Associé à une propriété" : "Non associé"}
+                                    </Badge>
+                                    {isDemandeurIncomplete(selectedDemandeur) && (
+                                        <Badge variant="destructive" className="text-xs">
+                                            <AlertCircle className="mr-1 h-3 w-3" />
+                                            Données incomplètes
+                                        </Badge>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -727,9 +816,9 @@ export default function Show() {
                 </DialogContent>
             </Dialog>
 
-            {/* Dialog Propriété */}
+            {/* Dialog Propriété - AMÉLIORÉ */}
             <Dialog open={!!selectedPropriete} onOpenChange={() => setSelectedPropriete(null)}>
-                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-2xl">
                             Détails de la propriété
@@ -738,15 +827,33 @@ export default function Show() {
                     {selectedPropriete && (
                         <div className="space-y-6">
                             <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 p-4 rounded-lg">
-                                <h3 className="text-xl font-bold text-green-900 dark:text-green-100">
-                                    Lot {selectedPropriete.lot}
-                                </h3>
-                                {selectedPropriete.titre && (
-                                    <p className="text-green-700 dark:text-green-300 mt-1">Titre Nº{selectedPropriete.titre}</p>
-                                )}
-                                <Badge variant="outline" className="mt-2">
-                                    {selectedPropriete.type_operation === 'morcellement' ? 'Morcellement' : 'Immatriculation'}
-                                </Badge>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-green-900 dark:text-green-100">
+                                            Lot {selectedPropriete.lot}
+                                        </h3>
+                                        {selectedPropriete.titre && (
+                                            <p className="text-green-700 dark:text-green-300 mt-1">Titre Nº{selectedPropriete.titre}</p>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <Badge variant="outline" className="capitalize">
+                                            {selectedPropriete.type_operation === 'morcellement' ? 'Morcellement' : 'Immatriculation'}
+                                        </Badge>
+                                        {isPropertyArchived(selectedPropriete) && (
+                                            <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
+                                                <Archive className="mr-1 h-3 w-3" />
+                                                Acquise
+                                            </Badge>
+                                        )}
+                                        {isPropertyIncomplete(selectedPropriete) && (
+                                            <Badge variant="destructive" className="text-xs">
+                                                <AlertCircle className="mr-1 h-3 w-3" />
+                                                Données incomplètes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -840,16 +947,26 @@ export default function Show() {
                                                     <p className="font-medium dark:text-gray-100">{dem.titre_demandeur} {dem.nom_demandeur} {dem.prenom_demandeur}</p>
                                                     <p className="text-sm text-muted-foreground">CIN: {dem.cin}</p>
                                                 </div>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setSelectedPropriete(null);
-                                                        setSelectedDemandeur({ ...dem, hasProperty: true });
-                                                    }}
-                                                >
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex gap-2">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedPropriete(null);
+                                                            setSelectedDemandeur({ ...dem, hasProperty: true });
+                                                        }}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-red-500 hover:text-red-700"
+                                                        onClick={() => handleDissociate(dem.id, selectedPropriete.id, `${dem.nom_demandeur} ${dem.prenom_demandeur}`)}
+                                                    >
+                                                        <Unlink className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -863,6 +980,31 @@ export default function Show() {
                                         Modifier
                                     </Link>
                                 </Button>
+                                {isPropertyArchived(selectedPropriete) ? (
+                                    <Button 
+                                        variant="outline" 
+                                        className="text-blue-600"
+                                        onClick={() => {
+                                            handleUnarchivePropriete(selectedPropriete.id);
+                                            setSelectedPropriete(null);
+                                        }}
+                                    >
+                                        <ArchiveRestore className="mr-2 h-4 w-4" />
+                                        Désarchiver
+                                    </Button>
+                                ) : (
+                                    <Button 
+                                        variant="outline" 
+                                        className="text-green-600"
+                                        onClick={() => {
+                                            handleArchivePropriete(selectedPropriete.id);
+                                            setSelectedPropriete(null);
+                                        }}
+                                    >
+                                        <Archive className="mr-2 h-4 w-4" />
+                                        Archiver
+                                    </Button>
+                                )}
                                 <Button variant="outline" onClick={() => setSelectedPropriete(null)}>
                                     Fermer
                                 </Button>

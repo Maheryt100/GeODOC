@@ -68,7 +68,7 @@ export default function Create() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation des champs obligatoires (NOT NULL dans la DB)
+        // Validation des champs obligatoires (titre, nom, prénom, date_naissance)
         if (!data.titre_demandeur) {
             toast.error('Le titre de civilité est obligatoire');
             return;
@@ -77,49 +77,12 @@ export default function Create() {
             toast.error('Le nom est obligatoire');
             return;
         }
+        if (!data.prenom_demandeur) {
+            toast.error('Le prénom est obligatoire');
+            return;
+        }
         if (!data.date_naissance) {
             toast.error('La date de naissance est obligatoire');
-            return;
-        }
-        if (!data.lieu_naissance) {
-            toast.error('Le lieu de naissance est obligatoire');
-            return;
-        }
-        if (!data.occupation) {
-            toast.error("L'occupation est obligatoire");
-            return;
-        }
-        if (!data.nom_mere) {
-            toast.error('Le nom de la mère est obligatoire');
-            return;
-        }
-        if (!data.cin) {
-            toast.error('Le CIN est obligatoire');
-            return;
-        }
-        const cinIsValid = /^\d{12}$/.test(data.cin);
-        if (!cinIsValid) {
-            toast.error('Le CIN doit contenir exactement 12 chiffres');
-            return;
-        }
-        if (!data.date_delivrance) {
-            toast.error('La date de délivrance du CIN est obligatoire');
-            return;
-        }
-        if (!data.lieu_delivrance) {
-            toast.error('Le lieu de délivrance du CIN est obligatoire');
-            return;
-        }
-        if (!data.domiciliation) {
-            toast.error('La domiciliation est obligatoire');
-            return;
-        }
-        if (!data.situation_familiale) {
-            toast.error('La situation familiale est obligatoire');
-            return;
-        }
-        if (!data.nationalite) {
-            toast.error('La nationalité est obligatoire');
             return;
         }
 
@@ -157,7 +120,7 @@ export default function Create() {
                     <CardHeader>
                         <CardTitle>Informations du Demandeur</CardTitle>
                         <CardDescription>
-                            Tous les champs marqués d'un astérisque (*) sont obligatoires
+                            Champs obligatoires: Titre de civilité, Nom, Prénom et Date de naissance
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -192,12 +155,13 @@ export default function Create() {
                                     />
                                 </div>
                                 <div>
-                                    <Label>Prénom</Label>
+                                    <Label className="text-red-500">Prénom *</Label>
                                     <Input
                                         type="text"
                                         value={data.prenom_demandeur}
                                         onChange={(e) => setData('prenom_demandeur', e.target.value)}
                                         placeholder="Jean"
+                                        required
                                     />
                                 </div>
                             </div>
@@ -214,13 +178,12 @@ export default function Create() {
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Lieu de naissance *</Label>
+                                    <Label>Lieu de naissance</Label>
                                     <Input
                                         type="text"
                                         value={data.lieu_naissance}
                                         onChange={(e) => setData('lieu_naissance', e.target.value)}
                                         placeholder="Antananarivo"
-                                        required
                                     />
                                 </div>
                                 <div>
@@ -232,25 +195,23 @@ export default function Create() {
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Nom complet Mère *</Label>
+                                    <Label>Nom complet Mère</Label>
                                     <Input
                                         type="text"
                                         value={data.nom_mere}
                                         onChange={(e) => setData('nom_mere', e.target.value)}
-                                        required
                                     />
                                 </div>
                             </div>
 
                             {/* CIN */}
                             <div className="w-1/2">
-                                <Label className="text-red-500">CIN *</Label>
+                                <Label>CIN</Label>
                                 <InputOTP
                                     maxLength={12}
                                     minLength={12}
                                     value={data.cin}
                                     onChange={(value) => setData('cin', value)}
-                                    required
                                 >
                                     <InputOTPGroup>
                                         <InputOTPSlot index={0} />
@@ -281,22 +242,20 @@ export default function Create() {
                             {/* Délivrance CIN */}
                             <div className="grid gap-4 md:grid-cols-4">
                                 <div>
-                                    <Label className="text-red-500">Date Délivrance *</Label>
+                                    <Label>Date Délivrance</Label>
                                     <Input
                                         type="date"
                                         value={data.date_delivrance}
                                         onChange={(e) => setData('date_delivrance', e.target.value)}
-                                        required
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Lieu Délivrance *</Label>
+                                    <Label>Lieu Délivrance</Label>
                                     <Input
                                         type="text"
                                         value={data.lieu_delivrance}
                                         onChange={(e) => setData('lieu_delivrance', e.target.value)}
                                         placeholder="Antananarivo"
-                                        required
                                     />
                                 </div>
                                 <div>
@@ -320,23 +279,21 @@ export default function Create() {
                             {/* Occupation, Domiciliation, Téléphone */}
                             <div className="grid gap-4 md:grid-cols-3">
                                 <div>
-                                    <Label className="text-red-500">Occupation *</Label>
+                                    <Label>Occupation</Label>
                                     <Input
                                         type="text"
                                         value={data.occupation}
                                         onChange={(e) => setData('occupation', e.target.value)}
                                         placeholder="Agriculteur"
-                                        required
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Domiciliation *</Label>
+                                    <Label>Domiciliation</Label>
                                     <Input
                                         type="text"
                                         value={data.domiciliation}
                                         onChange={(e) => setData('domiciliation', e.target.value)}
                                         placeholder="Lot II A 45 Ambohimanarina"
-                                        required
                                     />
                                 </div>
                                 <div>
@@ -354,23 +311,21 @@ export default function Create() {
                             {/* Situation familiale, Régime, Nationalité */}
                             <div className="grid gap-4 md:grid-cols-3">
                                 <div>
-                                    <Label className="text-red-500">Situation Familiale *</Label>
+                                    <Label>Situation Familiale</Label>
                                     <Select
                                         value={data.situation_familiale}
                                         onValueChange={(value) => setData('situation_familiale', value)}
-                                        required
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
-                                        <SelectItem value="Célibataire">Célibataire</SelectItem>
-                                        <SelectItem value="Marié(e)">Marié(e)</SelectItem>
-                                        <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
-                                        <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
-                                    </SelectContent>
-
+                                        <SelectContent>
+                                            <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
+                                            <SelectItem value="Célibataire">Célibataire</SelectItem>
+                                            <SelectItem value="Marié(e)">Marié(e)</SelectItem>
+                                            <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
+                                            <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
+                                        </SelectContent>
                                     </Select>
                                 </div>
                                 <div>
@@ -388,16 +343,14 @@ export default function Create() {
                                             <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
                                             <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
                                         </SelectContent>
-
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Nationalité *</Label>
+                                    <Label>Nationalité</Label>
                                     <Input
                                         type="text"
                                         value={data.nationalite}
                                         onChange={(e) => setData('nationalite', e.target.value)}
-                                        required
                                     />
                                 </div>
                             </div>

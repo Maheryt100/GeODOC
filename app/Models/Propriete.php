@@ -5,6 +5,7 @@ use App\Traits\HasPiecesJointes;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Propriete extends Model
 {
@@ -27,7 +28,7 @@ class Propriete extends Model
         'date_inscription',
         'dep_vol',
         'status',
-        'type_operation', // AJOUT IMPORTANT
+        'type_operation',
         'id_dossier',
         'id_user'
     ];
@@ -39,6 +40,8 @@ class Propriete extends Model
         'contenance' => 'integer',
     ];
 
+    protected $appends = ['is_archived'];
+
     public function dossier()
     {
         return $this->belongsTo(Dossier::class, 'id_dossier');
@@ -46,12 +49,28 @@ class Propriete extends Model
 
     public function demandes(): HasMany
     {
-        return $this->hasMany(Demander::class, 'id_propriete')->where('status', 'active');
+        // Charger TOUTES les demandes (actives ET archivées)
+        return $this->hasMany(Demander::class, 'id_propriete');
     }
 
     public function demandeurs()
     {
         return $this->belongsToMany(Demandeur::class, 'demander', 'id_propriete', 'id_demandeur')
             ->wherePivot('status', 'active');
+    }
+
+    /**
+     * Accesseur pour vérifier si la propriété est archivée
+     */
+    protected function isArchived(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $demandesActives = $this->demandes()->where('status', 'active')->count();
+                $demandesArchivees = $this->demandes()->where('status', 'archive')->count();
+                
+                return $demandesArchivees > 0 && $demandesActives === 0;
+            }
+        );
     }
 }

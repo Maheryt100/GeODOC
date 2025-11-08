@@ -8,10 +8,8 @@ use App\Http\Controllers\DemandeurProprieteController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DocumentGenerationController;
 use App\Http\Controllers\DossierController;
-use App\Http\Controllers\PieceJointeController;
 use App\Http\Controllers\ProprieteController;
 use App\Http\Controllers\StatController;
-use App\Http\Controllers\AssociationController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -23,7 +21,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [StatController::class, 'index'])->name('dashboard');
 
     Route::prefix('dossiers')->group(function () {
-        // Routes de base des dossiers
+        // ==========================================
+        // ROUTES DE BASE DES DOSSIERS
+        // ==========================================
         Route::get('/', [DossierController::class, 'index'])->name('dossiers');
         Route::get('/create', [DossierController::class, 'create'])->name('dossiers.create');
         Route::post('/store', [DossierController::class, 'store'])->name('dossiers.store');
@@ -37,21 +37,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{id}/list', [DemandeController::class, 'list'])->name('dossiers.list');
 
         // ==========================================
-        // GÉNÉRATION DE DOCUMENTS MODERNE
+        // GÉNÉRATION DE DOCUMENTS (NOUVEAU SYSTÈME - ROUTES GET)
         // ==========================================
         Route::get('/{id}/documents/generate', [DocumentGenerationController::class, 'index'])
             ->name('documents.generate');
-        Route::post('/documents/preview', [DocumentGenerationController::class, 'preview'])
-            ->name('documents.preview');
-        Route::post('/documents/generate/acte', [DocumentGenerationController::class, 'generateActeVente'])
+        
+        // ✅ CHANGEMENT IMPORTANT : GET au lieu de POST pour permettre le téléchargement direct
+        Route::get('/documents/generate/acte', [DocumentGenerationController::class, 'generateActeVente'])
             ->name('documents.generate.acte');
-        Route::post('/documents/generate/csf', [DocumentGenerationController::class, 'generateCsf'])
+        Route::get('/documents/generate/csf', [DocumentGenerationController::class, 'generateCsf'])
             ->name('documents.generate.csf');
-        Route::post('/documents/generate/requisition', [DocumentGenerationController::class, 'generateRequisition'])
+        Route::get('/documents/generate/requisition', [DocumentGenerationController::class, 'generateRequisition'])
             ->name('documents.generate.requisition');
 
         // ==========================================
-        // SECTION DEMANDEUR-PROPRIETE (3 WORKFLOWS)
+        // DEMANDEUR-PROPRIETE (3 WORKFLOWS)
         // ==========================================
         
         // 1. NOUVEAU LOT : Créer Propriété + Demandeurs ensemble
@@ -60,7 +60,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/nouveau-lot/store', [DemandeurProprieteController::class, 'store'])
             ->name('nouveau-lot.store');
 
-        // 2. AJOUTER DEMANDEUR : Ajouter un demandeur (nouveau ou existant) à une propriété existante
+        // 2. AJOUTER DEMANDEUR : Ajouter un demandeur à une propriété existante
         Route::get('/{id}/ajouter-demandeur/{id_propriete?}', [DemandeurProprieteController::class, 'addToProperty'])
             ->name('ajouter-demandeur.create');
         Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])
@@ -74,8 +74,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/lier-demandeur/store', [DemandeurProprieteController::class, 'storeLink'])
             ->name('lier-demandeur.store');
 
+        // 4. DISSOCIER : Dissocier un demandeur d'une propriété
+        Route::post('/dissocier', [DemandeurProprieteController::class, 'dissociate'])
+            ->name('demandeur-propriete.dissociate');
+
         // ==========================================
-        // SECTION DEMANDEURS
+        // DEMANDEURS
         // ==========================================
         Route::get('/{id}/demandeurs', [DossierController::class, 'demandeurs'])->name('dossiers.demandeurs');
         Route::get('/{id}/demandeur/create', [DemandeurController::class, 'create'])->name('demandeurs.create');
@@ -89,23 +93,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/demandeurs/{demandeur}/destroy-definitive', [DemandeurController::class, 'destroyDefinitive'])->name('demandeurs.destroy.definitive');
 
         // ==========================================
-        // SECTION PROPRIETES
+        // PROPRIETES
         // ==========================================
         Route::get('{id}/proprietes', [DossierController::class, 'proprietes'])->name('dossiers.proprietes');
         Route::get('{id}/proprietes/create', [ProprieteController::class, 'create'])->name('proprietes.create');
         Route::get('propriete/edit/{id}', [ProprieteController::class, 'edit'])->name('proprietes.edit');
         Route::delete('proprietes/{id}', [ProprieteController::class, 'destroy'])->name('proprietes.destroy');
         Route::get('proprietes/search/{dossier}', [ProprieteController::class, 'index'])->name('proprietes.search');
-        Route::get('{dossier}/proprietes/{id}/requisition', [ProprieteController::class, 'downloadRequisition'])
-            ->name('proprietes.requisition');
+        
+        // Archive/Désarchive propriété
+        Route::post('/proprietes/archive', [ProprieteController::class, 'archive'])
+            ->name('proprietes.archive');
+        Route::post('/proprietes/unarchive', [ProprieteController::class, 'unarchive'])
+            ->name('proprietes.unarchive');
 
         // ==========================================
-        // SECTION DOCUMENTS & LISTES (ANCIEN SYSTÈME)
+        // DOCUMENTS & LISTES (ANCIEN SYSTÈME)
         // ==========================================
         Route::get('/list/search/{dossier}', [DemandeController::class, 'index'])->name('documents.index');
         Route::get('{id}/lier/document', [DemandeController::class, 'create'])->name('lier.document');
         Route::post('document/archive', [DemandeController::class, 'archive'])->name('document.archive');
+        Route::post('document/unarchive', [DemandeController::class, 'unarchive'])->name('document.unarchive');
+        
+        // Téléchargements (ANCIEN - utilisé par l'ancien système)
         Route::get('download/{id}/document', [DemandeController::class, 'download'])->name('document.download');
+        Route::get('download/{id}/CSF', [DemandeController::class, 'downloadCSF'])->name('download.CSF');
+        
         Route::get('export/{id}/list', [DemandeController::class, 'exportList'])->name('export.list');
     });
 
@@ -119,12 +132,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('proprietes/{id}/show', [ProprieteController::class, 'show'])->name('proprietes.show');
 
     // ==========================================
-    // GENERATION DOCUMENTS WORD (ANCIEN - à supprimer après migration)
+    // ANCIEN SYSTÈME DE GÉNÉRATION (PEUT ÊTRE SUPPRIMÉ APRÈS MIGRATION COMPLÈTE)
     // ==========================================
     Route::get('documents/create', [DemandeController::class, 'create'])->name('documents.create');
     Route::post('documents/store', [DemandeController::class, 'store'])->name('documents.store');
-    Route::get('download/{id}/document', [DemandeController::class, 'download'])->name('download.doc');
-    Route::get('download/{id}/CSF', [DemandeController::class, 'downloadCSF'])->name('download.CSF');
 
     // ==========================================
     // CONSORTS
@@ -151,34 +162,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ==========================================
     Route::get('add/users', [RegisteredUserController::class, 'create'])->name('add.users');
     Route::post('add/users', [RegisteredUserController::class, 'store'])->name('users.store');
-    
-    // ==========================================
-    // PIÈCES JOINTES
-    // ==========================================
-    Route::prefix('pieces-jointes')->group(function () {
-        Route::get('/{id_dossier}', [PieceJointeController::class, 'index'])->name('pieces-jointes.index');
-        Route::post('/upload', [PieceJointeController::class, 'store'])->name('pieces-jointes.store');
-        Route::get('/{id}/download', [PieceJointeController::class, 'download'])->name('pieces-jointes.download');
-        Route::delete('/{id}', [PieceJointeController::class, 'destroy'])->name('pieces-jointes.destroy');
-        Route::get('/{id_dossier}/documents-generes', [PieceJointeController::class, 'documentsGeneres'])->name('pieces-jointes.documents-generes');
-    });
-
-    // ==========================================
-    // GESTION DES ASSOCIATIONS DEMANDEUR ↔ PROPRIÉTÉ
-    // ==========================================
-    Route::prefix('associations')->group(function () {
-        // Récupérer les propriétés d'un demandeur
-        Route::get('/demandeur/{id_demandeur}/proprietes', [AssociationController::class, 'getDemandeurProprietes'])
-            ->name('associations.demandeur.proprietes');
-        
-        // Récupérer les demandeurs d'une propriété
-        Route::get('/propriete/{id_propriete}/demandeurs', [AssociationController::class, 'getProprieteDemandeurs'])
-            ->name('associations.propriete.demandeurs');
-        
-        // Dissocier un demandeur d'une propriété
-        Route::delete('/dissociate', [AssociationController::class, 'dissociate'])
-            ->name('associations.dissociate');
-    });
 });
 
 require __DIR__ . '/settings.php';

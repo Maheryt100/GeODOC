@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PieceJointe;
 use App\Models\Propriete;
-use App\Models\UserCSF;
 use App\Models\Dossier;
 use App\Models\Demandeur;
 use App\Models\Demander;
 use App\Models\UserDemande;
+use App\Models\UserCSF;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use NumberFormatter;
@@ -56,66 +54,7 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Prévisualisation des données du document
-     */
-    public function preview(Request $request)
-    {
-        try {
-            $request->validate([
-                'type' => 'required|in:acte_vente,csf,requisition',
-                'id_propriete' => 'required_if:type,acte_vente,requisition|exists:proprietes,id',
-                'id_demandeur' => 'required_if:type,acte_vente,csf|exists:demandeurs,id',
-            ]);
-
-            $data = [];
-            
-            if ($request->type === 'acte_vente') {
-                $propriete = Propriete::with('dossier')->findOrFail($request->id_propriete);
-                $demandeur = Demandeur::findOrFail($request->id_demandeur);
-                
-                // Utiliser la nouvelle méthode getPrixFromDistrict
-                $prix = $this->getPrixFromDistrict($propriete);
-                $prixTotal = $prix * $propriete->contenance;
-                
-                // Chercher si une demande existe
-                $demande = Demander::where('id_propriete', $request->id_propriete)
-                    ->where('id_demandeur', $request->id_demandeur)
-                    ->where('status', 'active')
-                    ->first();
-                
-                $data = [
-                    'demandeur' => $demandeur,
-                    'propriete' => $propriete,
-                    'dossier' => $propriete->dossier,
-                    'prix' => $prix,
-                    'prix_total' => $prixTotal,
-                    'status_consort' => $demande ? $demande->status_consort : false,
-                ];
-                
-            } elseif ($request->type === 'csf') {
-                $demandeur = Demandeur::findOrFail($request->id_demandeur);
-                $data = $this->prepareCsfData($demandeur, $request->id_propriete);
-            } elseif ($request->type === 'requisition') {
-                $propriete = Propriete::with('dossier')->findOrFail($request->id_propriete);
-                $data = $this->prepareRequisitionData($propriete);
-            }
-
-            return response()->json($data);
-            
-        } catch (\Exception $e) {
-            Log::error('Erreur preview', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Générer Acte de Vente
+     * Générer Acte de Vente (GET - téléchargement direct)
      */
     public function generateActeVente(Request $request)
     {
@@ -126,44 +65,28 @@ class DocumentGenerationController extends Controller
 
         try {
             $propriete = Propriete::with('dossier')->findOrFail($request->id_propriete);
-            $demandeur = Demandeur::findOrFail($request->id_demandeur);
             
-            // Chercher ou créer la demande
-            $demande = Demander::with(['demandeur', 'propriete.dossier'])
+            // Récupérer TOUS les demandeurs liés à cette propriété
+            $tousLesDemandeurs = Demander::with('demandeur')
                 ->where('id_propriete', $request->id_propriete)
-                ->where('id_demandeur', $request->id_demandeur)
                 ->where('status', 'active')
-                ->first();
+                ->get();
             
-            // Si pas de demande existante, créer une
-            if (!$demande) {
-                $prix = $this->getPrixFromDistrict($propriete);
-                $prixTotal = $prix * $propriete->contenance;
-                
-                $demande = Demander::create([
-                    'id_demandeur' => $demandeur->id,
-                    'id_propriete' => $propriete->id,
-                    'total_prix' => $prixTotal,
+            $hasConsorts = $tousLesDemandeurs->count() > 1;
+            
+            // Générer le document
+            $filePath = $this->createActeVente($propriete, $tousLesDemandeurs, $hasConsorts);
+            
+            // Enregistrer dans user_demande pour traçabilité
+            foreach ($tousLesDemandeurs as $demande) {
+                UserDemande::firstOrCreate([
                     'id_user' => Auth::id(),
-                    'status' => 'active',
-                    'status_consort' => false,
+                    'id_demande' => $demande->id,
                 ]);
-                
-                $demande->load(['demandeur', 'propriete.dossier']);
             }
-            
-            $filePath = $this->createActeVente($demande);
-            
-            UserDemande::create([
-                'id_user' => Auth::id(),
-                'id_demande' => $demande->id,
-            ]);
 
-            // ✅ ENREGISTRER LE DOCUMENT GÉNÉRÉ
-            $this->savePieceJointe($filePath, $propriete, 'acte_vente', 
-                "Acte de vente - Lot {$propriete->lot} - {$demandeur->nom_demandeur}");
-
-            return response()->download($filePath)->deleteFileAfterSend(false);
+            // ✅ Télécharger et supprimer le fichier temporaire (comme l'ancienne version)
+            return response()->download($filePath)->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             Log::error('Erreur génération Acte de Vente', [
@@ -176,7 +99,7 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Générer CSF
+     * Générer CSF (GET - téléchargement direct)
      */
     public function generateCsf(Request $request)
     {
@@ -191,6 +114,7 @@ class DocumentGenerationController extends Controller
             
             $filePath = $this->createCsf($demandeur, $propriete);
             
+            // Enregistrer dans user_csf pour traçabilité
             $demande = Demander::where('id_demandeur', $demandeur->id)
                 ->where('id_propriete', $propriete->id)
                 ->first();
@@ -202,6 +126,7 @@ class DocumentGenerationController extends Controller
                 ]);
             }
 
+            // ✅ Télécharger et supprimer le fichier temporaire (comme l'ancienne version)
             return response()->download($filePath)->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
@@ -214,7 +139,7 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Générer Réquisition
+     * Générer Réquisition (GET - téléchargement direct)
      */
     public function generateRequisition(Request $request)
     {
@@ -227,6 +152,7 @@ class DocumentGenerationController extends Controller
             
             $filePath = $this->createRequisition($propriete);
             
+            // ✅ Télécharger et supprimer le fichier temporaire (comme l'ancienne version)
             return response()->download($filePath)->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
@@ -258,37 +184,19 @@ class DocumentGenerationController extends Controller
         $dossier = $propriete->dossier;
         $vocationColumn = $this->normalizeVocation($propriete->vocation);
         
-        Log::info('Récupération prix', [
-            'vocation' => $propriete->vocation,
-            'colonne' => $vocationColumn,
-            'dossier_id' => $dossier->id,
-        ]);
-
         $prixDistrict = DB::table('districts')
             ->join('dossiers', 'districts.id', '=', 'dossiers.id_district')
-            ->select("districts.$vocationColumn as prix", 'districts.nom_district', 'dossiers.nom_dossier')
+            ->select("districts.$vocationColumn as prix", 'districts.nom_district')
             ->where('dossiers.id', $dossier->id)
             ->first();
 
         if (!$prixDistrict) {
-            Log::error('District introuvable', [
-                'dossier_id' => $dossier->id,
-                'id_district' => $dossier->id_district,
-            ]);
             throw new \Exception("Configuration de prix introuvable pour ce dossier");
         }
 
-        // Gérer les NULL explicitement
         $prix = $prixDistrict->prix ?? 0;
         
         if ($prix <= 0) {
-            Log::warning('Prix = 0 ou NULL', [
-                'district' => $prixDistrict->nom_district,
-                'vocation' => $propriete->vocation,
-                'colonne' => $vocationColumn,
-                'prix_brut' => $prixDistrict->prix,
-            ]);
-            
             throw new \Exception(
                 "Le prix pour la vocation '{$propriete->vocation}' n'est pas configuré dans le district '{$prixDistrict->nom_district}'. " .
                 "Veuillez configurer les prix dans la section 'Prix des terrains'."
@@ -298,91 +206,21 @@ class DocumentGenerationController extends Controller
         return (int) $prix;
     }
 
-    private function prepareActeVenteData($demande)
+    /**
+     * Créer l'acte de vente (avec ou sans consorts)
+     */
+    private function createActeVente($propriete, $tousLesDemandeurs, $hasConsorts)
     {
         Carbon::setLocale('fr');
         $formatter = new NumberFormatter('fr', NumberFormatter::SPELLOUT);
 
-        $propriete = $demande->propriete;
         $dossier = $propriete->dossier;
-        $demandeur = $demande->demandeur;
+        $type_operation = $propriete->type_operation;
 
         // Calcul du prix
-        $vocationColumn = $this->normalizeVocation($propriete->vocation);
-        
-        $prixDistrict = DB::table('districts')
-            ->join('dossiers', 'districts.id', '=', 'dossiers.id_district')
-            ->select("districts.$vocationColumn as prix")
-            ->where('dossiers.id', $dossier->id)
-            ->first();
-
-        $prix = $prixDistrict->prix ?? 0;
-        $prixTotal = $prix * $propriete->contenance;
-
-        return [
-            'demandeur' => $demandeur,
-            'propriete' => $propriete,
-            'dossier' => $dossier,
-            'prix' => $prix,
-            'prix_total' => $prixTotal,
-            'prix_lettre' => Str::upper(ucfirst($formatter->format($prix))),
-            'total_lettre' => Str::upper(ucfirst($formatter->format($prixTotal))),
-            'status_consort' => $demande->status_consort,
-        ];
-    }
-
-    private function prepareCsfData($demandeur, $id_propriete)
-    {
-        $propriete = Propriete::with('dossier')->findOrFail($id_propriete);
-        $dossier = $propriete->dossier;
-
-        $place = DB::table('dossiers')
-            ->join('districts', 'districts.id', '=', 'dossiers.id_district')
-            ->where('dossiers.id', $dossier->id)
-            ->select('districts.nom_district')
-            ->first();
-
-        return [
-            'demandeur' => $demandeur,
-            'propriete' => $propriete,
-            'district' => $place->nom_district,
-        ];
-    }
-
-    private function prepareRequisitionData($propriete)
-    {
-        $dossier = $propriete->dossier;
-
-        $place = DB::table('dossiers')
-            ->join('districts', 'districts.id', '=', 'dossiers.id_district')
-            ->join('regions', 'regions.id', '=', 'districts.id_region')
-            ->join('provinces', 'provinces.id', '=', 'regions.id_province')
-            ->where('dossiers.id', $dossier->id)
-            ->select('provinces.nom_province', 'regions.nom_region', 'districts.nom_district')
-            ->first();
-
-        return [
-            'propriete' => $propriete,
-            'dossier' => $dossier,
-            'province' => $place->nom_province,
-            'region' => $place->nom_region,
-            'district' => $place->nom_district,
-        ];
-    }
-
-    private function createActeVente($demande)
-    {
-        Carbon::setLocale('fr');
-        $formatter = new NumberFormatter('fr', NumberFormatter::SPELLOUT);
-
-        $demandeur = $demande->demandeur;
-        $propriete = $demande->propriete;
-        $dossier = $propriete->dossier;
-
-        // Utiliser la méthode centralisée pour récupérer le prix
         $prix = $this->getPrixFromDistrict($propriete);
         $prixLettre = Str::upper(ucfirst($formatter->format($prix)));
-        $prixTotal = $demande->total_prix;
+        $prixTotal = $prix * $propriete->contenance;
         $superficie = $propriete->contenance;
 
         // Calcul contenance Ha A Ca
@@ -425,26 +263,27 @@ class DocumentGenerationController extends Controller
         $firstLetterDistrict = strtolower(mb_substr($place->nom_district, 0, 1));
         $firstLetterCommune = strtolower(mb_substr($dossier->commune, 0, 1));
 
-        $type_operation = $propriete->type_operation;
+        // Dates communes
+        $dateDescenteDebut = Carbon::parse($dossier->date_descente_debut)->translatedFormat('d');
+        $dateDescenteFin = Carbon::parse($dossier->date_descente_fin)->translatedFormat('d F Y');
+        $dateDescente = $dateDescenteDebut . ' au ' . $dateDescenteFin;
+        
+        $dateRequisition = $propriete->date_requisition ? Carbon::parse($propriete->date_requisition)->translatedFormat('d F Y') : '';
+        $dateInscription = $propriete->date_inscription ? Carbon::parse($propriete->date_inscription)->translatedFormat('d F Y') : '';
 
-        if ($demande->status_consort == false) {
-            // SANS CONSORT
+        if (!$hasConsorts) {
+            // ===== SANS CONSORT =====
+            $demandeur = $tousLesDemandeurs->first()->demandeur;
+            
             $templatePath = $type_operation == 'morcellement' 
                 ? 'app/public/modele_odoc/sans_consort/morcellement.docx'
                 : 'app/public/modele_odoc/sans_consort/immatriculation.docx';
                 
             $modele_odoc = new TemplateProcessor(storage_path($templatePath));
 
-            // Dates
             $dateNaissance = Carbon::parse($demandeur->date_naissance)->translatedFormat('d F Y');
             $dateMariage = $demandeur->date_mariage ? Carbon::parse($demandeur->date_mariage)->translatedFormat('d F Y') : '';
             $dateDelivrance = Carbon::parse($demandeur->date_delivrance)->translatedFormat('d F Y');
-            $dateDescenteDebut = Carbon::parse($dossier->date_descente_debut)->translatedFormat('d');
-            $dateDescenteFin = Carbon::parse($dossier->date_descente_fin)->translatedFormat('d F Y');
-            $dateDescente = $dateDescenteDebut . ' au ' . $dateDescenteFin;
-            
-            $dateRequisition = $propriete->date_requisition ? Carbon::parse($propriete->date_requisition)->translatedFormat('d F Y') : '';
-            $dateInscription = $propriete->date_inscription ? Carbon::parse($propriete->date_inscription)->translatedFormat('d F Y') : '';
 
             $modele_odoc->setValues([
                 'Titre_long' => $demandeur->titre_demandeur,
@@ -508,30 +347,30 @@ class DocumentGenerationController extends Controller
                 ]);
             }
 
-            $fileName = 'ACTE_DE_VENTE_' . $demandeur->nom_demandeur . '_' . ($demandeur->prenom_demandeur ?? '') . '.docx';
-            $filePath = storage_path('app/public/modele_odoc/sans_consort/documents/' . $fileName);
+            // ✅ Générer dans un fichier temporaire (comme l'ancienne version)
+            $fileName = 'ACTE_VENTE_' . uniqid() . '_' . $demandeur->nom_demandeur . '.docx';
+            $filePath = sys_get_temp_dir() . '/' . $fileName;
             
             $modele_odoc->saveAs($filePath);
             return $filePath;
             
         } else {
-            // AVEC CONSORT
+            // ===== AVEC CONSORTS =====
             $templatePath = $type_operation == 'morcellement' 
                 ? 'app/public/modele_odoc/avec_consort/morcellement.docx'
                 : 'app/public/modele_odoc/avec_consort/immatriculation.docx';
                 
             $modele_odoc = new TemplateProcessor(storage_path($templatePath));
 
-            // Consorts
-            $consorts = $demande->consorts()->pluck('consorts.id_consort')->toArray();
-            array_unshift($consorts, $demande->id_demandeur);
+            // Cloner les blocs pour tous les demandeurs
+            $nombreDemandeurs = $tousLesDemandeurs->count();
+            $modele_odoc->cloneBlock('consort_block_1', $nombreDemandeurs, true, true);
+            $modele_odoc->cloneBlock('consort_block_2', $nombreDemandeurs, true, true);
 
-            $modele_odoc->cloneBlock('consort_block_1', count($consorts), true, true);
-            $modele_odoc->cloneBlock('consort_block_2', count($consorts), true, true);
-
-            foreach ($consorts as $key => $consort_id) {
+            // Remplir les données pour chaque demandeur
+            foreach ($tousLesDemandeurs as $key => $demande) {
                 $n = $key + 1;
-                $dmdr = Demandeur::findOrFail($consort_id);
+                $dmdr = $demande->demandeur;
 
                 $dateNaissance = Carbon::parse($dmdr->date_naissance)->translatedFormat('d F Y');
                 $dateMariage = $dmdr->date_mariage ? Carbon::parse($dmdr->date_mariage)->translatedFormat('d F Y') : '';
@@ -573,13 +412,6 @@ class DocumentGenerationController extends Controller
             }
 
             // Valeurs communes
-            $dateDescenteDebut = Carbon::parse($dossier->date_descente_debut)->translatedFormat('d');
-            $dateDescenteFin = Carbon::parse($dossier->date_descente_fin)->translatedFormat('d F Y');
-            $dateDescente = $dateDescenteDebut . ' au ' . $dateDescenteFin;
-            
-            $dateRequisition = $propriete->date_requisition ? Carbon::parse($propriete->date_requisition)->translatedFormat('d F Y') : '';
-            $dateInscription = $propriete->date_inscription ? Carbon::parse($propriete->date_inscription)->translatedFormat('d F Y') : '';
-
             $modele_odoc->setValues([
                 'ContenanceFormatLettre' => $contenanceFormatLettre,
                 'ContenanceFormat' => $contenanceFormat,
@@ -611,8 +443,9 @@ class DocumentGenerationController extends Controller
                 'd_com' => in_array($firstLetterCommune, ['a', 'e', 'i', 'o', 'u', 'y']) ? 'd' : 'de',
             ]);
 
-            $fileName = 'ACTE_DE_VENTE_' . $demandeur->nom_demandeur . '_consort.docx';
-            $filePath = storage_path('app/public/modele_odoc/avec_consort/documents/' . $fileName);
+            $premierDemandeur = $tousLesDemandeurs->first()->demandeur;
+            $fileName = 'ACTE_VENTE_CONSORTS_' . uniqid() . '_' . $premierDemandeur->nom_demandeur . '.docx';
+            $filePath = sys_get_temp_dir() . '/' . $fileName;
             
             $modele_odoc->saveAs($filePath);
             return $filePath;
@@ -647,8 +480,8 @@ class DocumentGenerationController extends Controller
             'Province' => $place->nom_province,
         ]);
 
-        $fileName = 'CSF_' . $dossier->nom_dossier . '_TN' . ($propriete->titre ?? 'sans_titre') . '.docx';
-        $filePath = storage_path('app/public/modele_odoc/document_CSF/documents/' . $fileName);
+        $fileName = 'CSF_' . uniqid() . '_' . $demandeur->nom_demandeur . '.docx';
+        $filePath = sys_get_temp_dir() . '/' . $fileName;
         
         $modele_csf->saveAs($filePath);
         
@@ -692,50 +525,11 @@ class DocumentGenerationController extends Controller
             'Titre_mere' => $propriete->titre_mere ?? '',
         ]);
 
-        $fileName = 'Requisition_' . $propriete->titre . '_' . $propriete->lot . '_' . $propriete->type_operation . '.docx';
-        $filePath = storage_path('app/public/modele_odoc/document_requisition/' . $fileName);
+        $fileName = 'REQUISITION_' . uniqid() . '_' . $propriete->titre . '.docx';
+        $filePath = sys_get_temp_dir() . '/' . $fileName;
         
         $requisition_model->saveAs($filePath);
         
         return $filePath;
-    }
-    
-    /**
-     * Enregistrer le document généré comme pièce jointe
-     */
-    private function savePieceJointe(string $filePath, $attachable, string $typeDocument, string $description = null)
-    {
-        try {
-            // Copier le fichier dans le stockage public
-            $fileName = basename($filePath);
-            $newPath = 'pieces_jointes/documents_generes/' . $fileName;
-            
-            // Copier le fichier
-            Storage::disk('public')->put($newPath, file_get_contents($filePath));
-            
-            // Créer l'enregistrement
-            PieceJointe::create([
-                'nom_fichier' => $fileName,
-                'nom_original' => $fileName,
-                'chemin' => $newPath,
-                'type_mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'taille' => filesize($filePath),
-                'type_document' => $typeDocument,
-                'description' => $description,
-                'attachable_type' => get_class($attachable),
-                'attachable_id' => $attachable->id,
-                'id_user' => Auth::id(),
-            ]);
-            
-            Log::info('Document enregistré comme pièce jointe', [
-                'fichier' => $fileName,
-                'type' => $typeDocument,
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Erreur sauvegarde pièce jointe', [
-                'error' => $e->getMessage()
-            ]);
-        }
     }
 }

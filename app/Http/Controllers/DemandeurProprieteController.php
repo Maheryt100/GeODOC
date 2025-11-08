@@ -39,7 +39,7 @@ class DemandeurProprieteController extends Controller
             return back()->withErrors(['demandeurs' => 'Au moins un demandeur est requis']);
         }
         
-        // Validation de la propriété - CORRIGÉ: Edilitaire
+        // Validation de la propriété
         $request->validate([
             'lot' => 'required|string|max:15',
             'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
@@ -217,6 +217,11 @@ class DemandeurProprieteController extends Controller
             $id_user = Auth::id();
             $propriete = Propriete::findOrFail($request->id_propriete);
             
+            // NOUVELLE VÉRIFICATION: Propriété archivée ?
+            if ($this->isPropertyArchived($propriete)) {
+                return back()->withErrors(['error' => 'Impossible d\'ajouter un demandeur à une propriété archivée (acquise). Veuillez la désarchiver d\'abord.']);
+            }
+
             if ($request->mode === 'existant') {
                 // Rechercher le demandeur par CIN
                 $request->validate(['cin' => 'required|exists:demandeurs,cin']);
@@ -451,6 +456,11 @@ class DemandeurProprieteController extends Controller
                 ]);
                 
                 $propriete = Propriete::findOrFail($request->id_propriete);
+
+                 // NOUVELLE VÉRIFICATION: Propriété archivée ?
+                if ($this->isPropertyArchived($propriete)) {
+                    return back()->withErrors(['error' => 'Impossible d\'ajouter un demandeur à une propriété archivée (acquise). Veuillez la désarchiver d\'abord.']);
+                }
                 Contenir::create([
                     'id_demandeur' => $demandeur->id,
                     'id_dossier' => $request->id_dossier,
@@ -488,10 +498,77 @@ class DemandeurProprieteController extends Controller
             $propriete = Propriete::find($request->id_propriete);
             return Redirect::route('dossiers.show', $propriete->id_dossier)
                 ->with('message', 'Demandeur lié à la propriété avec succès');
+
                 
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }
+
+    /**
+     * NOUVELLE MÉTHODE : Dissocier un demandeur d'une propriété
+     */
+    public function dissociate(Request $request)
+    {
+        $request->validate([
+            'id_demandeur' => 'required|exists:demandeurs,id',
+            'id_propriete' => 'required|exists:proprietes,id',
+        ]);
+
+        DB::beginTransaction();
+        
+        try {
+            $propriete = Propriete::findOrFail($request->id_propriete);
+            
+            // NOUVELLE VÉRIFICATION: Propriété archivée ?
+            if ($this->isPropertyArchived($propriete)) {
+                return back()->withErrors(['error' => 'Impossible de dissocier un demandeur d\'une propriété archivée (acquise). Veuillez la désarchiver d\'abord.']);
+            }
+            
+            // Supprimer la liaison dans la table demander
+            $deleted = Demander::where('id_demandeur', $request->id_demandeur)
+                ->where('id_propriete', $request->id_propriete)
+                ->delete();
+
+            if (!$deleted) {
+                return back()->withErrors(['error' => 'Liaison introuvable']);
+            }
+
+            // Vérifier s'il reste des demandeurs pour cette propriété
+            $remainingDemandeurs = Demander::where('id_propriete', $request->id_propriete)
+                ->where('status', 'active')
+                ->count();
+
+            // Si plus aucun demandeur, mettre status à false
+            if ($remainingDemandeurs === 0) {
+                Propriete::where('id', $request->id_propriete)->update(['status' => false]);
+            }
+
+            DB::commit();
+            
+            return back()->with('success', 'Demandeur dissocié de la propriété avec succès');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Vérifier si une propriété est archivée
+     */
+    private function isPropertyArchived(Propriete $propriete): bool
+    {
+        $demandesActives = Demander::where('id_propriete', $propriete->id)
+            ->where('status', 'active')
+            ->count();
+            
+        $demandesArchivees = Demander::where('id_propriete', $propriete->id)
+            ->where('status', 'archive')
+            ->count();
+            
+        return $demandesArchivees > 0 && $demandesActives === 0;
+    }
+
 }

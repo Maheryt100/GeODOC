@@ -21,12 +21,9 @@ use NumberFormatter;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\TemplateProcessor;
-use function Termwind\render;
 
 class DemandeController extends Controller
 {
-
-
     public function index(Request $request, $dossierId)
     {
         $dossier = Dossier::findOrFail($dossierId);
@@ -69,35 +66,6 @@ class DemandeController extends Controller
             'dossier' => $dossier,
         ]);
     }
-
-    public function list($id)
-    {
-        $dossier = Dossier::find($id);
-        $demandes = Demander::with(['demandeur', 'propriete'])
-            ->whereHas('propriete', function ($q) use ($dossier) {
-                $q->where('id_dossier', $dossier->id);
-            })
-            ->where('status', 'active')
-            ->paginate(20);
-
-        return Inertia::render('documents/index',[
-            'dossier' => $dossier,
-            'documents'=> $demandes,
-        ]);
-    }
-
-    // public function archive(Request $request)
-    // {
-    //     $demande = Demander::find($request->id);
-
-    //     $propriete = Propriete::find($demande->id_propriete);
-    //     $propriete->status = false;
-    //     $propriete->save();
-    //     $demande->status = 'archive';
-    //     $demande->save();
-
-    //     return to_route('dossiers.list', $request->id_dossier)->with('message', 'Document archivé avec succès');
-    // }
 
     public function exportList($id)
     {
@@ -143,7 +111,6 @@ class DemandeController extends Controller
 
     /**
      * Normalise le nom de la vocation pour correspondre aux colonnes de districts
-     * CORRECTION: edilitaire au lieu de edilitaire
      */
     private function normalizeVocation(string $vocation): string
     {
@@ -409,11 +376,11 @@ class DemandeController extends Controller
                     ]);
                 }
 
-                $fileName = 'ACTE_DE_VENTE_' . $demandeur->nom_demandeur . '_' . ($demandeur->prenom_demandeur ?? '') . '.docx';
-                $filePath = storage_path('app/public/modele_odoc/sans_consort/documents/' . $fileName);
+                $fileName = 'ACTE_DE_VENTE_' . uniqid() . '_' . $demandeur->nom_demandeur . '.docx';
+                $filePath = sys_get_temp_dir() . '/' . $fileName;
                 
                 $modele_odoc->saveAs($filePath);
-                return response()->download($filePath);
+                return response()->download($filePath)->deleteFileAfterSend(true);
                 
             } else {
                 // AVEC CONSORT
@@ -512,11 +479,11 @@ class DemandeController extends Controller
                     'd_com' => in_array($firstLetterCommune, ['a', 'e', 'i', 'o', 'u', 'y']) ? 'd' : 'de',
                 ]);
 
-                $fileName = 'ACTE_DE_VENTE_' . $demandeur->nom_demandeur . '_consort.docx';
-                $filePath = storage_path('app/public/modele_odoc/avec_consort/documents/' . $fileName);
+                $fileName = 'ACTE_DE_VENTE_CONSORTS_' . uniqid() . '_' . $demandeur->nom_demandeur . '.docx';
+                $filePath = sys_get_temp_dir() . '/' . $fileName;
                 
                 $modele_odoc->saveAs($filePath);
-                return response()->download($filePath);
+                return response()->download($filePath)->deleteFileAfterSend(true);
             }
             
         } catch (\Exception $e) {
@@ -530,9 +497,6 @@ class DemandeController extends Controller
         }
     }
 
-
-
-    
     public function archive(Request $request)
     {
         $validated = $request->validate([
@@ -549,9 +513,9 @@ class DemandeController extends Controller
             $demande->status = 'archive';
             $demande->save();
 
-            // 🔒 BLOQUER LA PROPRIÉTÉ (propriété acquise)
+            // Bloquer la propriété
             $propriete = Propriete::findOrFail($demande->id_propriete);
-            $propriete->status = true; // true = propriété occupée/acquise
+            $propriete->status = true;
             $propriete->save();
 
             DB::commit();
@@ -577,6 +541,7 @@ class DemandeController extends Controller
             return back()->with('error', 'Erreur lors de l\'archivage : ' . $e->getMessage());
         }
     }
+
     public function downloadCSF($id)
     {
         $demande = Demander::with(['demandeur', 'propriete.dossier'])->findOrFail($id);
@@ -609,8 +574,8 @@ class DemandeController extends Controller
             'Province' => $place->nom_province,
         ]);
 
-        $fileName = 'CSF_' . $dossier->nom_dossier . '_TN' . ($propriete->titre ?? 'sans_titre') . '.docx';
-        $filePath = storage_path('app/public/modele_odoc/document_CSF/documents/' . $fileName);
+        $fileName = 'CSF_' . uniqid() . '_' . $demandeur->nom_demandeur . '.docx';
+        $filePath = sys_get_temp_dir() . '/' . $fileName;
         
         $modele_csf->saveAs($filePath);
         
@@ -619,9 +584,64 @@ class DemandeController extends Controller
             'id_demande' => $demande->id,
         ]);
 
-        return response()->download($filePath);
+        return response()->download($filePath)->deleteFileAfterSend(true);
     }
 
+    public function list($id)
+    {
+        $dossier = Dossier::find($id);
+        
+        // Charger TOUS les documents (actifs ET archivés)
+        $demandes = Demander::with(['demandeur', 'propriete'])
+            ->whereHas('propriete', function ($q) use ($dossier) {
+                $q->where('id_dossier', $dossier->id);
+            })
+            ->orderBy('status', 'asc')
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
 
-    
+        return Inertia::render('documents/index',[
+            'dossier' => $dossier,
+            'documents'=> $demandes,
+        ]);
+    }
+
+    public function unarchive(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'required|exists:demander,id',
+            'id_dossier' => 'required|exists:dossiers,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $demande = Demander::findOrFail($validated['id']);
+            
+            // Réactiver la demande
+            $demande->status = 'active';
+            $demande->save();
+
+            DB::commit();
+
+            Log::info('Document désarchivé', [
+                'demande_id' => $demande->id,
+                'propriete_id' => $demande->id_propriete
+            ]);
+
+            return redirect()
+                ->route('dossiers.list', $validated['id_dossier'])
+                ->with('success', 'Document désarchivé avec succès');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur désarchivage document', [
+                'demande_id' => $request->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return back()->with('error', 'Erreur lors de la désarchivation : ' . $e->getMessage());
+        }
+    }
 }

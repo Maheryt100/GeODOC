@@ -42,6 +42,7 @@ export default function Create() {
         date_inscription: '',
         dep_vol: '',
     });
+    
     const handleChargeChange = (charge: string, checked: boolean) => {
         let newCharges: string[];
         if (checked) {
@@ -63,29 +64,13 @@ export default function Create() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation des champs obligatoires
+        // Validation des champs obligatoires (SEULEMENT lot et type_operation)
         if (!data.lot) {
             toast.error('Le numéro de lot est obligatoire');
             return;
         }
         if (!data.type_operation) {
             toast.error('Le type d\'opération est obligatoire');
-            return;
-        }
-        if (!data.nature) {
-            toast.error('La nature est obligatoire');
-            return;
-        }
-        if (!data.vocation) {
-            toast.error('La vocation est obligatoire');
-            return;
-        }
-        if (!data.proprietaire) {
-            toast.error('Le nom de la propriété / propriétaire est obligatoire');
-            return;
-        }
-        if (!data.situation) {
-            toast.error('La situation est obligatoire');
             return;
         }
 
@@ -124,7 +109,7 @@ export default function Create() {
                     <CardHeader>
                         <CardTitle>Informations de la Propriété</CardTitle>
                         <CardDescription>
-                            Champs obligatoires: Lot, Nature et Type d'opération
+                            Champs obligatoires: Lot et Type d'opération
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -144,8 +129,6 @@ export default function Create() {
                                         <SelectItem value="immatriculation">Immatriculation</SelectItem>
                                     </SelectContent>
                                 </Select>
-
-                                
                             </div>
 
                             {/* Ligne 1: Lot, Nature, Vocation */}
@@ -161,8 +144,8 @@ export default function Create() {
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Nature *</Label>
-                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)} required>
+                                    <Label>Nature</Label>
+                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
