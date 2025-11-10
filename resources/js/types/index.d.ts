@@ -76,6 +76,13 @@ export interface Propriete {
     id_dossier: number;
     demandeurs?: Demandeur[];
     is_incomplete?: boolean;
+    is_archived?: boolean;
+    demandes?: Array<{
+        id: number;
+        id_demandeur: number;
+        status: 'active' | 'archive';
+    }>;
+    demandeurs?: Array<Demandeur & { status?: 'active' | 'archive' }>;
 }
 
 export interface Dossier {

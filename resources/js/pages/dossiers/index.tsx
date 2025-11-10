@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
-import { LandPlot, UserPlus, Link2, List, EllipsisVertical } from 'lucide-react';
+import { LandPlot, UserPlus, Link2, List, EllipsisVertical, Archive } from 'lucide-react';
+
+
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dossiers', href: '/dossiers' },
@@ -289,6 +291,7 @@ export default function Index() {
                             <>
                                 {currentDossiers.map((dossier) => {
                                     const isExpanded = expandedRows.has(dossier.id);
+                                    const hasArchivedProperties = dossier.proprietes?.some(p => p.is_archived === true);
                                     return (
                                         <Card
                                             key={dossier.id}
@@ -315,6 +318,14 @@ export default function Index() {
                                                             {dossier.nom_dossier}
                                                         </h3>
 
+                                                        {/* ✅ Indicateur propriétés archivées */}
+                                                        {dossier.proprietes?.some((p) => p.is_archived === true) && (
+                                                            <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                                                <Archive className="h-3 w-3" />
+                                                                Propriétés acquises
+                                                            </Badge>
+                                                        )}
+
                                                         <span className="text-muted-foreground">•</span>
                                                         <span className="text-muted-foreground truncate max-w-[180px] text-[15px]">
                                                             {dossier.commune}
@@ -325,6 +336,7 @@ export default function Index() {
                                                             {dossier.demandeurs_count} demandeur(s), {dossier.proprietes_count} propriété(s)
                                                         </span>
                                                     </div>
+
 
 
                                                     {/* Menu actions */}

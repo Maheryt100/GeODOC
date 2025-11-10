@@ -27,11 +27,11 @@ class DocumentGenerationController extends Controller
     {
         $dossier = Dossier::with(['proprietes', 'demandeurs'])->findOrFail($id_dossier);
         
-        // Récupérer les propriétés avec leurs demandeurs liés
+        // ✅ Récupérer les propriétés avec leurs demandeurs liés (ACTIFS)
         $proprietes = $dossier->proprietes->map(function ($propriete) {
             $propriete->demandeurs_lies = Demander::with('demandeur')
                 ->where('id_propriete', $propriete->id)
-                ->where('status', 'active')
+                ->where('status', 'active') // ✅ SEULEMENT LES ACTIFS
                 ->get()
                 ->map(function ($demande) {
                     return [

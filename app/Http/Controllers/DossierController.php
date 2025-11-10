@@ -155,50 +155,40 @@ class DossierController extends Controller
         ]);
     }
 
-    // public function show($id)
-    // {
-    //     $dossier = Dossier::with(['demandeurs', 'proprietes'])
-    //         ->findOrFail($id);
-        
-    //     return Inertia::render('dossiers/Show', [
-    //         'dossier' => $dossier,
-    //     ]);
-    // }
+ 
     public function show($id)
-    {
-        $dossier = Dossier::with([
-            'demandeurs',
-            'proprietes' => function ($query) {
-                $query->with(['demandes' => function ($q) {
-                    // ✅ CHARGER TOUTES LES DEMANDES (pas de where)
+{
+    $dossier = Dossier::with([
+        'demandeurs',
+        'proprietes' => function ($query) {
+            $query->with([
+                'demandeurs',
+                'demandes' => function ($q) {
                     $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix')
-                    ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
-                }]);
+                      ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
+                }
+            ]);
+        }
+    ])->findOrFail($id);
+
+    foreach ($dossier->proprietes as $propriete) {
+        $activeCount = $propriete->demandes->where('status', 'active')->count();
+        $archivedCount = $propriete->demandes->where('status', 'archive')->count();
+        
+        $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
+        
+        // Enrichir les demandeurs avec le statut
+        if ($propriete->demandeurs) {
+            foreach ($propriete->demandeurs as $demandeur) {
+                $demande = $propriete->demandes->firstWhere('id_demandeur', $demandeur->id);
+                if ($demande) {
+                    $demandeur->status = $demande->status;
+                    $demandeur->id_demande = $demande->id;
+                }
             }
-        ])->findOrFail($id);
-
-        foreach ($dossier->proprietes as $propriete) {
-            $activeCount = $propriete->demandes->where('status', 'active')->count();
-            $archivedCount = $propriete->demandes->where('status', 'archive')->count();
-            
-            // ✅ CORRECT : Archivée SI au moins 1 archivée ET 0 active
-            $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
         }
-
-        return Inertia::render('dossiers/Show', [
-            'dossier' => $dossier,
-        ]);
     }
 
-    public function destroy(string $id)
-    {
-        $dossier = Dossier::find($id);
-        
-        if (!$dossier) {
-            return back()->with('message', 'Dossier introuvable');
-        }
-        
-        $dossier->delete();
-        return redirect()->route('dossiers')->with('message', 'Dossier supprimé avec succès');
-    }
+    return Inertia::render('dossiers/Show', ['dossier' => $dossier]);
+}
 }

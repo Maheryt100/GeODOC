@@ -191,7 +191,9 @@ export default function Show() {
         const lots: string[] = [];
         
         proprietes.forEach(prop => {
-            if (isPropertyArchived(prop)) {
+            // ✅ Utiliser l'attribut calculé côté serveur
+            if (prop.is_archived === true) {
+                // Vérifier si le demandeur est lié
                 const isLinked = prop.demandeurs?.some((d: any) => d.id === demandeurId);
                 if (isLinked) {
                     lots.push(prop.lot);
@@ -224,17 +226,8 @@ export default function Show() {
     };
 
     const isPropertyArchived = (prop: Propriete): boolean => {
-        // ✅ FIX: Une propriété n'est archivée QUE SI elle a des demandes archivées ET aucune demande active
-        // Si pas de demandeurs du tout, elle n'est PAS archivée
-        if (!prop.demandeurs || prop.demandeurs.length === 0) {
-            return false; // ✅ Propriété sans demandeur = NON archivée
-        }
-        
-        const hasActiveDemandes = prop.demandeurs.some((d: any) => d.status === 'active');
-        const hasArchivedDemandes = prop.demandeurs.some((d: any) => d.status === 'archive');
-        
-        // Archivée = au moins une demande archivée ET aucune demande active
-        return hasArchivedDemandes && !hasActiveDemandes;
+        // ✅ Utiliser l'attribut is_archived calculé côté serveur
+        return prop.is_archived === true;
     };
     const paginateDemandeurs = () => {
         const startIndex = (currentDemandeurPage - 1) * itemsPerPage;
@@ -414,22 +407,14 @@ export default function Show() {
                                     </span>
                                 </CardDescription>
                             </div>
-                            <div className="flex gap-2">
-                                <Button asChild variant="outline" size="sm">
-                                    <Link href={route('demandeurs.create', dossier.id)}>
+                            {proprietes.length > 0 && (
+                                <Button asChild size="sm">
+                                    <Link href={route('ajouter-demandeur.create', dossier.id)}>
                                         <UserPlus className="mr-2 h-4 w-4" />
-                                        Nouveau
+                                        Ajouter un demandeur à un lot
                                     </Link>
                                 </Button>
-                                {proprietes.length > 0 && (
-                                    <Button asChild size="sm">
-                                        <Link href={route('ajouter-demandeur.create', dossier.id)}>
-                                            <UserPlus className="mr-2 h-4 w-4" />
-                                            Ajouter un demandeur à un lot
-                                        </Link>
-                                    </Button>
-                                )}
-                            </div>
+                            )}
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -571,22 +556,14 @@ export default function Show() {
                                     </span>
                                 </CardDescription>
                             </div>
-                            <div className="flex gap-2">
-                                <Button asChild variant="outline" size="sm">
-                                    <Link href={route('proprietes.create', dossier.id)}>
-                                        <LandPlot className="mr-2 h-4 w-4" />
-                                        Nouvelle
+                            {allDemandeurs.length > 0 && (
+                                <Button asChild size="sm">
+                                    <Link href={route('lier-demandeur.create', dossier.id)}>
+                                        <Link2 className="mr-2 h-4 w-4" />
+                                        Lier un demandeur à un lot
                                     </Link>
                                 </Button>
-                                {allDemandeurs.length > 0 && (
-                                    <Button asChild size="sm">
-                                        <Link href={route('lier-demandeur.create', dossier.id)}>
-                                            <Link2 className="mr-2 h-4 w-4" />
-                                            Lier un demandeur à un lot
-                                        </Link>
-                                    </Button>
-                                )}
-                            </div>
+                            )}
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -614,7 +591,7 @@ export default function Show() {
                                         paginateProprietes().map((propriete) => {
                                             const isIncomplete = isPropertyIncomplete(propriete);
                                             const hasDemandeurs = hasLinkedDemandeurs(propriete);
-                                            const isArchived = isPropertyArchived(propriete);
+                                            const isArchived = propriete.is_archived === true; // ✅ Utiliser l'attribut serveur
                                             
                                             const rowClass = isArchived
                                                 ? 'border-b hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-50/80 dark:bg-gray-900/50 cursor-pointer'

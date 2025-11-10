@@ -40,7 +40,7 @@ class Propriete extends Model
         'contenance' => 'integer',
     ];
 
-    protected $appends = ['is_archived'];
+   
 
     public function dossier()
     {
@@ -59,18 +59,5 @@ class Propriete extends Model
             ->wherePivot('status', 'active');
     }
 
-    /**
-     * Accesseur pour vérifier si la propriété est archivée
-     */
-    protected function isArchived(): Attribute
-    {
-        return Attribute::make(
-            get: function () {
-                $demandesActives = $this->demandes()->where('status', 'active')->count();
-                $demandesArchivees = $this->demandes()->where('status', 'archive')->count();
-                
-                return $demandesArchivees > 0 && $demandesActives === 0;
-            }
-        );
-    }
+   
 }
