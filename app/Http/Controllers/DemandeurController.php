@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Contenir;
 use App\Models\Demandeur;
+use App\Models\Demander;
 use App\Models\Dossier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -238,64 +239,79 @@ class DemandeurController extends Controller
     public function destroy($id_dossier, $id_demandeur)
     {
         try {
-            // Log pour debug
-            Log::info('Tentative de suppression du dossier', [
+            Log::info('Tentative de retirer du dossier', [
                 'id_dossier' => $id_dossier,
                 'id_demandeur' => $id_demandeur
             ]);
 
-            // Vérifier les types de données
-            Log::info('Types des paramètres', [
-                'type_dossier' => gettype($id_dossier),
-                'type_demandeur' => gettype($id_demandeur),
-                'dossier_value' => $id_dossier,
-                'demandeur_value' => $id_demandeur
-            ]);
+            DB::beginTransaction();
 
-            // Rechercher avec conversion explicite
+            // ✅ Vérifier si le demandeur a des propriétés DANS CE DOSSIER (actives OU archivées)
+            $proprietesDansDossier = Demander::where('id_demandeur', (int)$id_demandeur)
+                ->whereHas('propriete', function($q) use ($id_dossier) {
+                    $q->where('id_dossier', $id_dossier);
+                })
+                ->with('propriete')
+                ->get();
+
+            if ($proprietesDansDossier->count() > 0) {
+                $lots = $proprietesDansDossier->pluck('propriete.lot')->toArray();
+                $lotsStr = implode(', ', $lots);
+                
+                $actives = $proprietesDansDossier->where('status', 'active')->count();
+                $archivees = $proprietesDansDossier->where('status', 'archive')->count();
+                
+                $message = "❌ Impossible de retirer ce demandeur du dossier. Il est associé à {$proprietesDansDossier->count()} propriété(s) dans ce dossier : Lot(s) {$lotsStr}.";
+                
+                if ($actives > 0) {
+                    $message .= " ({$actives} active(s))";
+                }
+                if ($archivees > 0) {
+                    $message .= " ({$archivees} archivée(s))";
+                }
+                
+                $message .= ". Veuillez d'abord dissocier le demandeur de toutes ces propriétés.";
+                
+                Log::warning('Impossible de retirer du dossier - propriétés liées', [
+                    'demandeur_id' => $id_demandeur,
+                    'proprietes_count' => $proprietesDansDossier->count(),
+                    'actives' => $actives,
+                    'archivees' => $archivees,
+                    'lots' => $lots
+                ]);
+
+                DB::rollBack();
+                
+                return redirect()->route('dossiers.show', $id_dossier)
+                    ->with('error', $message);
+            }
+
+            // Si pas de propriétés, on peut supprimer
             $contenir = Contenir::where('id_dossier', (int)$id_dossier)
                 ->where('id_demandeur', (int)$id_demandeur)
                 ->first();
 
-            Log::info('Résultat de la recherche', [
-                'found' => $contenir !== null,
-                'contenir_data' => $contenir ? $contenir->toArray() : null
-            ]);
-
-            // Afficher toutes les relations pour ce demandeur
-            $all_relations = Contenir::where('id_demandeur', (int)$id_demandeur)->get();
-            Log::info('Toutes les relations du demandeur', [
-                'count' => $all_relations->count(),
-                'relations' => $all_relations->toArray()
-            ]);
-                
-            if(!$contenir){
+            if (!$contenir) {
                 Log::warning('Relation contenir introuvable');
+                DB::rollBack();
                 return redirect()->route('dossiers.show', $id_dossier)
                     ->with('error', 'Demandeur introuvable dans ce dossier.');
             }
             
-            // Tentative de suppression
             $deleted = $contenir->delete();
             
-            Log::info('Résultat de la suppression', [
+            Log::info('Demandeur retiré du dossier', [
                 'deleted' => $deleted,
                 'contenir_id' => $contenir->id
             ]);
 
-            // Vérifier si réellement supprimé
-            $still_exists = Contenir::where('id_dossier', (int)$id_dossier)
-                ->where('id_demandeur', (int)$id_demandeur)
-                ->exists();
-
-            Log::info('Vérification après suppression', [
-                'still_exists' => $still_exists
-            ]);
+            DB::commit();
             
             return redirect()->route('dossiers.show', $id_dossier)
                 ->with('success', 'Demandeur retiré du dossier avec succès.');
                 
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Erreur lors de la suppression', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -321,28 +337,56 @@ class DemandeurController extends Controller
             
             $demandeur = Demandeur::find((int)$id_demandeur);
             
-            Log::info('Demandeur trouvé', [
-                'found' => $demandeur !== null,
-                'data' => $demandeur ? $demandeur->toArray() : null
-            ]);
-            
-            if(!$demandeur){
+            if (!$demandeur) {
                 DB::rollBack();
                 Log::warning('Demandeur introuvable');
                 return back()->with('error', 'Demandeur introuvable.');
             }
             
-            // Vérifier s'il y a des propriétés liées
-            $proprietes = $demandeur->proprietes()->get();
-            Log::info('Propriétés liées', [
-                'count' => $proprietes->count(),
-                'proprietes' => $proprietes->pluck('id')->toArray()
-            ]);
+            // ✅ Vérifier TOUTES les propriétés liées DANS TOUS LES DOSSIERS (actives ET archivées)
+            $proprietesToutes = Demander::where('id_demandeur', (int)$id_demandeur)
+                ->with(['propriete', 'propriete.dossier'])
+                ->get();
             
-            if($proprietes->count() > 0){
+            if ($proprietesToutes->count() > 0) {
+                // Grouper par dossier
+                $parDossier = [];
+                foreach ($proprietesToutes as $demande) {
+                    $dossierNom = $demande->propriete->dossier->nom_dossier ?? 'Inconnu';
+                    if (!isset($parDossier[$dossierNom])) {
+                        $parDossier[$dossierNom] = ['actives' => [], 'archivees' => []];
+                    }
+                    
+                    if ($demande->status === 'active') {
+                        $parDossier[$dossierNom]['actives'][] = $demande->propriete->lot;
+                    } else {
+                        $parDossier[$dossierNom]['archivees'][] = $demande->propriete->lot;
+                    }
+                }
+                
+                $message = "❌ Impossible de supprimer définitivement ce demandeur. Il est associé à des propriétés dans " . count($parDossier) . " dossier(s) :\n\n";
+                
+                foreach ($parDossier as $dossier => $lots) {
+                    $message .= "📁 {$dossier} :\n";
+                    if (!empty($lots['actives'])) {
+                        $message .= "  • Propriétés actives : Lot(s) " . implode(', ', $lots['actives']) . "\n";
+                    }
+                    if (!empty($lots['archivees'])) {
+                        $message .= "  • Propriétés archivées : Lot(s) " . implode(', ', $lots['archivees']) . "\n";
+                    }
+                }
+                
+                $message .= "\nVeuillez d'abord dissocier le demandeur de TOUTES ces propriétés.";
+                
+                Log::warning('Suppression définitive impossible - propriétés liées', [
+                    'demandeur_id' => $id_demandeur,
+                    'proprietes_count' => $proprietesToutes->count(),
+                    'dossiers_count' => count($parDossier),
+                    'par_dossier' => $parDossier
+                ]);
+
                 DB::rollBack();
-                Log::warning('Demandeur a des propriétés liées');
-                return back()->with('error', 'Impossible de supprimer ce demandeur car il est lié à ' . $proprietes->count() . ' propriété(s). Veuillez d\'abord supprimer ces liaisons.');
+                return back()->with('error', $message);
             }
             
             // Compter les relations contenir
@@ -357,12 +401,6 @@ class DemandeurController extends Controller
             $deleted_demandeur = $demandeur->delete();
             Log::info('Demandeur supprimé', ['result' => $deleted_demandeur]);
             
-            // Vérifier si vraiment supprimé
-            $still_exists = Demandeur::find((int)$id_demandeur);
-            Log::info('Vérification après suppression', [
-                'still_exists' => $still_exists !== null
-            ]);
-            
             DB::commit();
             
             return back()->with('success', 'Demandeur supprimé définitivement avec succès.');
@@ -376,4 +414,5 @@ class DemandeurController extends Controller
             return back()->with('error', 'Erreur lors de la suppression : ' . $e->getMessage());
         }
     }
+
 }

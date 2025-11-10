@@ -169,33 +169,19 @@ class DossierController extends Controller
         $dossier = Dossier::with([
             'demandeurs',
             'proprietes' => function ($query) {
-                $query->with(['demandeurs', 'demandes' => function ($q) {
-                    // Charger TOUTES les demandes (actives ET archivées)
-                    $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix');
+                $query->with(['demandes' => function ($q) {
+                    // ✅ CHARGER TOUTES LES DEMANDES (pas de where)
+                    $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix')
+                    ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
                 }]);
             }
         ])->findOrFail($id);
 
-        // ✅ FIX: Ajouter une vérification pour éviter de considérer les propriétés sans demandeur comme archivées
-        // Calculer le statut d'archivage côté serveur pour être sûr
         foreach ($dossier->proprietes as $propriete) {
-            $activeCount = 0;
-            $archivedCount = 0;
+            $activeCount = $propriete->demandes->where('status', 'active')->count();
+            $archivedCount = $propriete->demandes->where('status', 'archive')->count();
             
-            if ($propriete->demandes) {
-                foreach ($propriete->demandes as $demande) {
-                    if ($demande->status === 'active') {
-                        $activeCount++;
-                    } elseif ($demande->status === 'archive') {
-                        $archivedCount++;
-                    }
-                }
-            }
-            
-            // ✅ Une propriété est archivée SI ET SEULEMENT SI:
-            // - Elle a au moins une demande archivée
-            // - ET elle n'a aucune demande active
-            // Donc si elle n'a AUCUNE demande, elle n'est PAS archivée
+            // ✅ CORRECT : Archivée SI au moins 1 archivée ET 0 active
             $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
         }
 

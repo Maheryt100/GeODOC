@@ -752,6 +752,74 @@ export default function Show() {
                                     )}
                                 </div>
                             </div>
+                            {/* ✅ NOUVEAU : Section Propriétés Associées */}
+                            {(() => {
+                                const proprietesAssociees = proprietes.filter(prop => 
+                                    prop.demandeurs?.some((d: any) => d.id === selectedDemandeur.id)
+                                );
+                                
+                                if (proprietesAssociees.length > 0) {
+                                    return (
+                                        <div className="border-t pt-4">
+                                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                                <LandPlot className="h-5 w-5 text-green-600" />
+                                                Propriétés associées ({proprietesAssociees.length})
+                                            </h4>
+                                            <div className="space-y-2">
+                                                {proprietesAssociees.map((prop) => {
+                                                    const isArchived = isPropertyArchived(prop);
+                                                    return (
+                                                        <div 
+                                                            key={prop.id} 
+                                                            className={`p-3 rounded-lg border cursor-pointer hover:border-primary transition ${
+                                                                isArchived 
+                                                                    ? 'bg-gray-100 dark:bg-gray-800 border-gray-300' 
+                                                                    : 'bg-white dark:bg-gray-900 border-gray-200'
+                                                            }`}
+                                                            onClick={() => {
+                                                                setSelectedDemandeur(null);
+                                                                setSelectedPropriete(prop);
+                                                            }}
+                                                        >
+                                                            <div className="flex items-start justify-between">
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <p className="font-semibold">Lot {prop.lot}</p>
+                                                                        {isArchived && (
+                                                                            <Badge variant="outline" className="text-xs bg-gray-200 text-gray-800 border-gray-400">
+                                                                                <Archive className="mr-1 h-3 w-3" />
+                                                                                ACQUISE
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-x-4 mt-2 text-sm text-muted-foreground">
+                                                                        <p><strong>Titre:</strong> {prop.titre ? `TNº${prop.titre}` : 'Non renseigné'}</p>
+                                                                        <p><strong>Contenance:</strong> {prop.contenance ? `${prop.contenance}m²` : '-'}</p>
+                                                                        <p><strong>Nature:</strong> {prop.nature || '-'}</p>
+                                                                        <p><strong>Vocation:</strong> {prop.vocation || '-'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedDemandeur(null);
+                                                                        setSelectedPropriete(prop);
+                                                                    }}
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">

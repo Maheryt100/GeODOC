@@ -54,6 +54,7 @@ export type Vocation = 'Edilitaire' | 'Agricole' | 'Forestière' | 'Touristique'
 export type TypeOperation = 'morcellement' | 'immatriculation';
 
 export interface Propriete {
+    [x: string]: any;
     id: number;
     lot: string;
     titre: string;

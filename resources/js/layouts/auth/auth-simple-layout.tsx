@@ -25,7 +25,7 @@ export default function AuthSimpleLayout({ children, title, description }: Props
                                 <AppLogoIcon className="w-20 h-20 text-[var(--foreground)] dark:text-white" />
 
                                 {/* Texte du logo */}
-                                <AppLogoTxtIcon className="w-40 h-auto text-[var(--foreground)] dark:text-white" />
+                                <AppLogoTxtIcon className="w-70 h-auto ml-[70px] text-[var(--foreground)] dark:text-white" />
                             </div>
 
                             <span className="sr-only">{title}</span>
