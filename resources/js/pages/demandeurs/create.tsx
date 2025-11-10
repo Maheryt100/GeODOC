@@ -68,7 +68,7 @@ export default function Create() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation des champs obligatoires (titre, nom, prénom, date_naissance)
+        // ✅ Validation UNIQUEMENT des 4 champs obligatoires
         if (!data.titre_demandeur) {
             toast.error('Le titre de civilité est obligatoire');
             return;
@@ -77,12 +77,13 @@ export default function Create() {
             toast.error('Le nom est obligatoire');
             return;
         }
-        if (!data.prenom_demandeur) {
-            toast.error('Le prénom est obligatoire');
-            return;
-        }
         if (!data.date_naissance) {
             toast.error('La date de naissance est obligatoire');
+            return;
+        }
+        // ✅ CIN obligatoire seulement s'il est fourni (pour vérifier l'unicité)
+        if (data.cin && data.cin.length > 0 && data.cin.length !== 12) {
+            toast.error('Le CIN doit contenir exactement 12 chiffres ou rester vide');
             return;
         }
 
@@ -120,7 +121,7 @@ export default function Create() {
                     <CardHeader>
                         <CardTitle>Informations du Demandeur</CardTitle>
                         <CardDescription>
-                            Champs obligatoires: Titre de civilité, Nom, Prénom et Date de naissance
+                            Champs obligatoires: Titre de civilité, Nom et Date de naissance
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -132,7 +133,6 @@ export default function Create() {
                                     <Select
                                         value={data.titre_demandeur}
                                         onValueChange={handleTitre}
-                                        required
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Sélectionner" />
@@ -151,17 +151,15 @@ export default function Create() {
                                         value={data.nom_demandeur}
                                         onChange={(e) => setData('nom_demandeur', e.target.value)}
                                         placeholder="RAKOTO"
-                                        required
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-red-500">Prénom *</Label>
+                                    <Label>Prénom</Label>
                                     <Input
                                         type="text"
                                         value={data.prenom_demandeur}
                                         onChange={(e) => setData('prenom_demandeur', e.target.value)}
                                         placeholder="Jean"
-                                        required
                                     />
                                 </div>
                             </div>
@@ -174,7 +172,6 @@ export default function Create() {
                                         type="date"
                                         value={data.date_naissance}
                                         onChange={(e) => setData('date_naissance', e.target.value)}
-                                        required
                                     />
                                 </div>
                                 <div>
@@ -206,10 +203,9 @@ export default function Create() {
 
                             {/* CIN */}
                             <div className="w-1/2">
-                                <Label>CIN</Label>
+                                <Label>CIN (optionnel)</Label>
                                 <InputOTP
                                     maxLength={12}
-                                    minLength={12}
                                     value={data.cin}
                                     onChange={(value) => setData('cin', value)}
                                 >
@@ -237,6 +233,9 @@ export default function Create() {
                                         <InputOTPSlot index={11} />
                                     </InputOTPGroup>
                                 </InputOTP>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Laissez vide si non disponible
+                                </p>
                             </div>
 
                             {/* Délivrance CIN */}

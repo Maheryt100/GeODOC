@@ -8,14 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Table provinces
         Schema::create('provinces', function (Blueprint $table) {
             $table->id();
             $table->string('nom_province');
             $table->timestamps();
         });
 
-        // Table regions
         Schema::create('regions', function (Blueprint $table) {
             $table->id();
             $table->string('nom_region');
@@ -23,7 +21,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table districts
         Schema::create('districts', function (Blueprint $table) {
             $table->id();
             $table->string('nom_district');

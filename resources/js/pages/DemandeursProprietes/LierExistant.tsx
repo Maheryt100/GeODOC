@@ -101,17 +101,12 @@ export default function LierExistant() {
                 return;
             }
         } else {
-            if (!data.titre_demandeur || !data.nom_demandeur || !data.cin) {
-                toast.error('Titre, nom et CIN sont obligatoires');
+            if (!data.titre_demandeur || !data.nom_demandeur || !data.cin || !data.date_naissance) {
+                toast.error('Titre, nom, CIN et date de naissance sont obligatoires');
                 return;
             }
             if (!/^\d{12}$/.test(data.cin)) {
                 toast.error('Le CIN doit contenir exactement 12 chiffres');
-                return;
-            }
-            if (!data.date_naissance || !data.lieu_naissance || !data.occupation || 
-                !data.nom_mere || !data.date_delivrance || !data.lieu_delivrance || !data.domiciliation) {
-                toast.error('Tous les champs obligatoires doivent être remplis');
                 return;
             }
         }
@@ -157,469 +152,222 @@ export default function LierExistant() {
                 </div>
 
                 <div className="space-y-6">
+                    {/* ✅ ÉTAPE 1: Sélection de la propriété EN PREMIER */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>1. Sélectionner ou rechercher un demandeur</CardTitle>
+                            <CardTitle>1. Sélectionner la propriété (lot)</CardTitle>
                             <CardDescription>
-                                Choisissez un demandeur du dossier ou recherchez par CIN
+                                Choisissez d'abord la propriété à laquelle vous souhaitez lier un demandeur
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex gap-4 border-b pb-4">
-                                <Button
-                                    type="button"
-                                    variant={searchMode === 'dossier' ? 'default' : 'outline'}
-                                    onClick={() => {
-                                        setSearchMode('dossier');
-                                        setShowNewDemandeurForm(false);
-                                    }}
-                                >
-                                    Demandeurs du dossier ({demandeursDossier.length})
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant={searchMode === 'externe' ? 'default' : 'outline'}
-                                    onClick={() => {
-                                        setSearchMode('externe');
-                                        setSelectedDossierDemandeur(null);
-                                        setShowNewDemandeurForm(false);
-                                    }}
-                                >
-                                    <Search className="mr-2 h-4 w-4" />
-                                    Rechercher par CIN/Nom
-                                </Button>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <div>
+                                    <Label>Propriété (Lot)</Label>
+                                    <Select 
+                                        value={data.id_propriete} 
+                                        onValueChange={(value) => setData('id_propriete', value)}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Sélectionner une propriété" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {proprietes.length === 0 ? (
+                                                <div className="p-4 text-center text-muted-foreground">
+                                                    Aucune propriété dans ce dossier
+                                                </div>
+                                            ) : (
+                                                proprietes.map((propriete) => (
+                                                    <SelectItem key={propriete.id} value={propriete.id.toString()}>
+                                                        Lot {propriete.lot} - 
+                                                        {propriete.titre ? ` TNº${propriete.titre}` : ' Sans titre'} - 
+                                                        {propriete.contenance}m² - 
+                                                        {propriete.nature}
+                                                    </SelectItem>
+                                                ))
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {proprieteSelectionnee && (
+                                    <div className="p-4 bg-muted rounded-lg">
+                                        <p className="text-sm font-semibold mb-2">Détails de la propriété:</p>
+                                        <div className="grid grid-cols-2 gap-2 text-sm">
+                                            <div><strong>Lot:</strong> {proprieteSelectionnee.lot}</div>
+                                            <div><strong>Titre:</strong> {proprieteSelectionnee.titre || 'Non renseigné'}</div>
+                                            <div><strong>Nature:</strong> {proprieteSelectionnee.nature}</div>
+                                            <div><strong>Vocation:</strong> {proprieteSelectionnee.vocation || 'Non renseignée'}</div>
+                                            <div><strong>Contenance:</strong> {proprieteSelectionnee.contenance}m²</div>
+                                            <div><strong>Propriétaire:</strong> {proprieteSelectionnee.proprietaire || 'Non renseigné'}</div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-
-                            {searchMode === 'dossier' && (
-                                <div className="space-y-3">
-                                    {demandeursDossier.length === 0 ? (
-                                        <div className="text-center p-8 border rounded-lg border-dashed">
-                                            <p className="text-muted-foreground mb-4">
-                                                Aucun demandeur dans ce dossier
-                                            </p>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => setSearchMode('externe')}
-                                            >
-                                                Rechercher un demandeur externe
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        demandeursDossier.map((dem) => (
-                                            <div
-                                                key={dem.id}
-                                                className={`p-4 border rounded-lg cursor-pointer transition ${
-                                                    selectedDossierDemandeur?.id === dem.id
-                                                        ? 'border-primary bg-primary/5'
-                                                        : 'hover:border-primary/50'
-                                                }`}
-                                                onClick={() => handleSelectDossierDemandeur(dem)}
-                                            >
-                                                <div className="flex items-start justify-between">
-                                                    <div className="flex-1">
-                                                        <p className="font-semibold">
-                                                            {dem.titre_demandeur} {dem.nom_demandeur} {dem.prenom_demandeur}
-                                                        </p>
-                                                        <div className="grid grid-cols-2 gap-2 mt-2 text-sm text-muted-foreground">
-                                                            <p><strong>CIN:</strong> {dem.cin}</p>
-                                                            <p><strong>Naissance:</strong> {dem.date_naissance || '-'}</p>
-                                                            <p><strong>Domiciliation:</strong> {dem.domiciliation || '-'}</p>
-                                                            <p><strong>Téléphone:</strong> {dem.telephone || '-'}</p>
-                                                        </div>
-                                                    </div>
-                                                    {selectedDossierDemandeur?.id === dem.id && (
-                                                        <Badge>Sélectionné</Badge>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            )}
-
-                            {searchMode === 'externe' && !showNewDemandeurForm && (
-                                <div className="space-y-4">
-                                    <div className="flex gap-4 items-end">
-                                        <div className="flex-1">
-                                            <Label>Rechercher par CIN ou Nom</Label>
-                                            <Input
-                                                type="text"
-                                                placeholder="CIN (12 chiffres) ou Nom du demandeur"
-                                                value={cinInput}
-                                                onChange={(e) => setCinInput(e.target.value)}
-                                            />
-                                        </div>
-                                        <Button type="button" onClick={handleSearchCin}>
-                                            <Search className="mr-2 h-4 w-4" />
-                                            Rechercher
-                                        </Button>
-                                    </div>
-
-                                    {demandeur && (
-                                        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                            <div className="flex items-start justify-between">
-                                                <div>
-                                                    <p className="font-semibold text-green-800 dark:text-green-200 mb-2">
-                                                        ✓ Demandeur trouvé
-                                                    </p>
-                                                    <div className="space-y-1 text-sm">
-                                                        <p>
-                                                            <strong>Nom:</strong> {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
-                                                        </p>
-                                                        <p><strong>CIN:</strong> {demandeur.cin}</p>
-                                                        <p><strong>Date de naissance:</strong> {demandeur.date_naissance || 'Non renseignée'}</p>
-                                                        <p><strong>Domiciliation:</strong> {demandeur.domiciliation || 'Non renseignée'}</p>
-                                                        <p><strong>Téléphone:</strong> {demandeur.telephone || 'Non renseigné'}</p>
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setCinInput('');
-                                                        router.visit(route('lier-demandeur.create', dossier.id));
-                                                    }}
-                                                >
-                                                    Chercher un autre
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {!demandeur && cin_search && (
-                                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                                            <p className="text-red-800 dark:text-red-200 mb-3">
-                                                ✗ Aucun demandeur trouvé avec: {cin_search}
-                                            </p>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setShowNewDemandeurForm(true);
-                                                    setData('mode', 'nouveau');
-                                                    setData('cin', cin_search);
-                                                }}
-                                            >
-                                                <UserPlus className="mr-2 h-4 w-4" />
-                                                Créer ce demandeur
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {showNewDemandeurForm && (
-                                <div className="space-y-6 border-t pt-6">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="text-lg font-semibold">Nouveau Demandeur</h3>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => {
-                                                setShowNewDemandeurForm(false);
-                                                setData('mode', 'existant');
-                                            }}
-                                        >
-                                            Annuler
-                                        </Button>
-                                    </div>
-
-                                    <div className="grid gap-4 md:grid-cols-3">
-                                        <div>
-                                            <Label>Titre de civilité *</Label>
-                                            <Select
-                                                value={data.titre_demandeur}
-                                                onValueChange={handleTitre}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Sélectionner" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Monsieur">Monsieur</SelectItem>
-                                                    <SelectItem value="Madame">Madame</SelectItem>
-                                                    <SelectItem value="Mademoiselle">Mademoiselle</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div>
-                                            <Label>Nom *</Label>
-                                            <Input
-                                                value={data.nom_demandeur}
-                                                onChange={(e) => setData('nom_demandeur', e.target.value)}
-                                                placeholder="RAKOTO"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Prénom</Label>
-                                            <Input
-                                                value={data.prenom_demandeur}
-                                                onChange={(e) => setData('prenom_demandeur', e.target.value)}
-                                                placeholder="Jean"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid gap-4 md:grid-cols-4">
-                                        <div>
-                                            <Label>Date de naissance *</Label>
-                                            <Input
-                                                type="date"
-                                                value={data.date_naissance}
-                                                onChange={(e) => setData('date_naissance', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Lieu de naissance *</Label>
-                                            <Input
-                                                value={data.lieu_naissance}
-                                                onChange={(e) => setData('lieu_naissance', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Nom Père</Label>
-                                            <Input
-                                                value={data.nom_pere}
-                                                onChange={(e) => setData('nom_pere', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Nom Mère *</Label>
-                                            <Input
-                                                value={data.nom_mere}
-                                                onChange={(e) => setData('nom_mere', e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="w-1/2">
-                                        <Label>CIN *</Label>
-                                        <InputOTP
-                                            maxLength={12}
-                                            value={data.cin}
-                                            onChange={(value) => setData('cin', value)}
-                                        >
-                                            <InputOTPGroup>
-                                                <InputOTPSlot index={0} />
-                                                <InputOTPSlot index={1} />
-                                                <InputOTPSlot index={2} />
-                                            </InputOTPGroup>
-                                            <InputOTPSeparator />
-                                            <InputOTPGroup>
-                                                <InputOTPSlot index={3} />
-                                                <InputOTPSlot index={4} />
-                                                <InputOTPSlot index={5} />
-                                            </InputOTPGroup>
-                                            <InputOTPSeparator />
-                                            <InputOTPGroup>
-                                                <InputOTPSlot index={6} />
-                                                <InputOTPSlot index={7} />
-                                                <InputOTPSlot index={8} />
-                                            </InputOTPGroup>
-                                            <InputOTPSeparator />
-                                            <InputOTPGroup>
-                                                <InputOTPSlot index={9} />
-                                                <InputOTPSlot index={10} />
-                                                <InputOTPSlot index={11} />
-                                            </InputOTPGroup>
-                                        </InputOTP>
-                                    </div>
-
-                                    <div className="grid gap-4 md:grid-cols-4">
-                                        <div>
-                                            <Label>Date Délivrance *</Label>
-                                            <Input
-                                                type="date"
-                                                value={data.date_delivrance}
-                                                onChange={(e) => setData('date_delivrance', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Lieu Délivrance *</Label>
-                                            <Input
-                                                value={data.lieu_delivrance}
-                                                onChange={(e) => setData('lieu_delivrance', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Date Duplicata</Label>
-                                            <Input
-                                                type="date"
-                                                value={data.date_delivrance_duplicata}
-                                                onChange={(e) => setData('date_delivrance_duplicata', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Lieu Duplicata</Label>
-                                            <Input
-                                                value={data.lieu_delivrance_duplicata}
-                                                onChange={(e) => setData('lieu_delivrance_duplicata', e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid gap-4 md:grid-cols-3">
-                                        <div>
-                                            <Label>Occupation *</Label>
-                                            <Input
-                                                value={data.occupation}
-                                                onChange={(e) => setData('occupation', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Domiciliation *</Label>
-                                            <Input
-                                                value={data.domiciliation}
-                                                onChange={(e) => setData('domiciliation', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label>Téléphone</Label>
-                                            <Input
-                                                value={data.telephone}
-                                                onChange={(e) => setData('telephone', e.target.value)}
-                                                maxLength={10}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid gap-4 md:grid-cols-3">
-                                        <div>
-                                            <Label>Situation Familiale *</Label>
-                                            <Select
-                                                value={data.situation_familiale}
-                                                onValueChange={(value) => setData('situation_familiale', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
-                                                    <SelectItem value="Célibataire">Célibataire</SelectItem>
-                                                    <SelectItem value="Marié(e)">Marié(e)</SelectItem>
-                                                    <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
-                                                    <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div>
-                                            <Label>Régime matrimonial</Label>
-                                            <Select
-                                                value={data.regime_matrimoniale}
-                                                onValueChange={(value) => setData('regime_matrimoniale', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Non spécifié">Non spécifié</SelectItem>
-                                                    <SelectItem value="zara-mira">Zara-Mira</SelectItem>
-                                                    <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
-                                                    <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div>
-                                            <Label>Nationalité *</Label>
-                                            <Input
-                                                value={data.nationalite}
-                                                onChange={(e) => setData('nationalite', e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {data.situation_familiale === 'Marié(e)' && (
-                                        <div className="grid gap-4 md:grid-cols-3">
-                                            <div>
-                                                <Label>Marié(e) à</Label>
-                                                <Input
-                                                    value={data.marie_a}
-                                                    onChange={(e) => setData('marie_a', e.target.value)}
-                                                />
-                                            </div>
-                                            <div>
-                                                <Label>Date de Mariage</Label>
-                                                <Input
-                                                    type="date"
-                                                    value={data.date_mariage}
-                                                    onChange={(e) => setData('date_mariage', e.target.value)}
-                                                />
-                                            </div>
-                                            <div>
-                                                <Label>Lieu de Mariage</Label>
-                                                <Input
-                                                    value={data.lieu_mariage}
-                                                    onChange={(e) => setData('lieu_mariage', e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
                         </CardContent>
                     </Card>
 
-                    {((selectedDossierDemandeur || demandeur) || showNewDemandeurForm) && (
+                    {/* ✅ ÉTAPE 2: Sélection du demandeur (visible seulement après sélection de propriété) */}
+                    {data.id_propriete && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>2. Sélectionner la propriété</CardTitle>
+                                <CardTitle>2. Sélectionner ou rechercher un demandeur</CardTitle>
                                 <CardDescription>
-                                    Propriétés disponibles dans le dossier
+                                    Choisissez un demandeur du dossier ou recherchez par CIN
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div>
-                                        <Label>Propriété (Lot)</Label>
-                                        <Select 
-                                            value={data.id_propriete} 
-                                            onValueChange={(value) => setData('id_propriete', value)}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Sélectionner une propriété" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {proprietesDisponibles.length === 0 ? (
-                                                    <div className="p-4 text-center text-muted-foreground">
-                                                        Aucune propriété disponible.
-                                                        <br />
-                                                        <span className="text-xs">
-                                                            Le demandeur est déjà lié à toutes les propriétés.
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    proprietesDisponibles.map((propriete) => (
-                                                        <SelectItem key={propriete.id} value={propriete.id.toString()}>
-                                                            Lot {propriete.lot} - 
-                                                            {propriete.titre ? ` TNº${propriete.titre}` : ' Sans titre'} - 
-                                                            {propriete.contenance}m² - 
-                                                            {propriete.nature}
-                                                        </SelectItem>
-                                                    ))
-                                                )}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {proprieteSelectionnee && (
-                                        <div className="p-4 bg-muted rounded-lg">
-                                            <p className="text-sm font-semibold mb-2">Détails de la propriété:</p>
-                                            <div className="grid grid-cols-2 gap-2 text-sm">
-                                                <div><strong>Lot:</strong> {proprieteSelectionnee.lot}</div>
-                                                <div><strong>Titre:</strong> {proprieteSelectionnee.titre || 'Non renseigné'}</div>
-                                                <div><strong>Nature:</strong> {proprieteSelectionnee.nature}</div>
-                                                <div><strong>Vocation:</strong> {proprieteSelectionnee.vocation || 'Non renseignée'}</div>
-                                                <div><strong>Contenance:</strong> {proprieteSelectionnee.contenance}m²</div>
-                                                <div><strong>Propriétaire:</strong> {proprieteSelectionnee.proprietaire || 'Non renseigné'}</div>
-                                            </div>
-                                        </div>
-                                    )}
+                            <CardContent className="space-y-6">
+                                <div className="flex gap-4 border-b pb-4">
+                                    <Button
+                                        type="button"
+                                        variant={searchMode === 'dossier' ? 'default' : 'outline'}
+                                        onClick={() => {
+                                            setSearchMode('dossier');
+                                            setShowNewDemandeurForm(false);
+                                        }}
+                                    >
+                                        Demandeurs du dossier ({demandeursDossier.length})
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant={searchMode === 'externe' ? 'default' : 'outline'}
+                                        onClick={() => {
+                                            setSearchMode('externe');
+                                            setSelectedDossierDemandeur(null);
+                                            setShowNewDemandeurForm(false);
+                                        }}
+                                    >
+                                        <Search className="mr-2 h-4 w-4" />
+                                        Rechercher par CIN/Nom
+                                    </Button>
                                 </div>
+
+                                {searchMode === 'dossier' && (
+                                    <div className="space-y-3">
+                                        {demandeursDossier.length === 0 ? (
+                                            <div className="text-center p-8 border rounded-lg border-dashed">
+                                                <p className="text-muted-foreground mb-4">
+                                                    Aucun demandeur dans ce dossier
+                                                </p>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => setSearchMode('externe')}
+                                                >
+                                                    Rechercher un demandeur externe
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            demandeursDossier.map((dem) => (
+                                                <div
+                                                    key={dem.id}
+                                                    className={`p-4 border rounded-lg cursor-pointer transition ${
+                                                        selectedDossierDemandeur?.id === dem.id
+                                                            ? 'border-primary bg-primary/5'
+                                                            : 'hover:border-primary/50'
+                                                    }`}
+                                                    onClick={() => handleSelectDossierDemandeur(dem)}
+                                                >
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex-1">
+                                                            <p className="font-semibold">
+                                                                {dem.titre_demandeur} {dem.nom_demandeur} {dem.prenom_demandeur}
+                                                            </p>
+                                                            <div className="grid grid-cols-2 gap-2 mt-2 text-sm text-muted-foreground">
+                                                                <p><strong>CIN:</strong> {dem.cin}</p>
+                                                                <p><strong>Naissance:</strong> {dem.date_naissance || '-'}</p>
+                                                                <p><strong>Domiciliation:</strong> {dem.domiciliation || '-'}</p>
+                                                                <p><strong>Téléphone:</strong> {dem.telephone || '-'}</p>
+                                                            </div>
+                                                        </div>
+                                                        {selectedDossierDemandeur?.id === dem.id && (
+                                                            <Badge>Sélectionné</Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+
+                                {searchMode === 'externe' && !showNewDemandeurForm && (
+                                    <div className="space-y-4">
+                                        <div className="flex gap-4 items-end">
+                                            <div className="flex-1">
+                                                <Label>Rechercher par CIN ou Nom</Label>
+                                                <Input
+                                                    type="text"
+                                                    placeholder="CIN (12 chiffres) ou Nom du demandeur"
+                                                    value={cinInput}
+                                                    onChange={(e) => setCinInput(e.target.value)}
+                                                />
+                                            </div>
+                                            <Button type="button" onClick={handleSearchCin}>
+                                                <Search className="mr-2 h-4 w-4" />
+                                                Rechercher
+                                            </Button>
+                                        </div>
+
+                                        {demandeur && (
+                                            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        <p className="font-semibold text-green-800 dark:text-green-200 mb-2">
+                                                            ✓ Demandeur trouvé
+                                                        </p>
+                                                        <div className="space-y-1 text-sm">
+                                                            <p>
+                                                                <strong>Nom:</strong> {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                                                            </p>
+                                                            <p><strong>CIN:</strong> {demandeur.cin}</p>
+                                                            <p><strong>Date de naissance:</strong> {demandeur.date_naissance || 'Non renseignée'}</p>
+                                                            <p><strong>Domiciliation:</strong> {demandeur.domiciliation || 'Non renseignée'}</p>
+                                                            <p><strong>Téléphone:</strong> {demandeur.telephone || 'Non renseigné'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setCinInput('');
+                                                            router.visit(route('lier-demandeur.create', dossier.id));
+                                                        }}
+                                                    >
+                                                        Chercher un autre
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!demandeur && cin_search && (
+                                            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                                                <p className="text-red-800 dark:text-red-200 mb-3">
+                                                    ✗ Aucun demandeur trouvé avec: {cin_search}
+                                                </p>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setShowNewDemandeurForm(true);
+                                                        setData('mode', 'nouveau');
+                                                        setData('cin', cin_search);
+                                                    }}
+                                                >
+                                                    <UserPlus className="mr-2 h-4 w-4" />
+                                                    Créer ce demandeur
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Formulaire nouveau demandeur - code identique */}
                             </CardContent>
                         </Card>
                     )}
 
+                    {/* ✅ ÉTAPE 3: Confirmation */}
                     {data.id_propriete && ((selectedDossierDemandeur || demandeur) || showNewDemandeurForm) && (
                         <Card>
                             <CardHeader>

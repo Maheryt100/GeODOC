@@ -8,36 +8,37 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Table demandeurs
         Schema::create('demandeurs', function (Blueprint $table) {
-            $table->id();
-            $table->string('titre_demandeur', 20);
-            $table->string('nom_demandeur', 100);
-            $table->string('prenom_demandeur')->nullable();
-            $table->date('date_naissance');
-            $table->string('lieu_naissance', 100);
-            $table->string('sexe', 10);
-            $table->string('occupation', 50);
-            $table->string('nom_pere')->nullable();
-            $table->string('nom_mere', 100);
-            $table->string('cin', 15)->unique();
-            $table->date('date_delivrance');
-            $table->string('lieu_delivrance', 50);
-            $table->date('date_delivrance_duplicata')->nullable();
-            $table->string('lieu_delivrance_duplicata', 50)->nullable();
-            $table->string('domiciliation', 100);
-            $table->string('situation_familiale', 40);
-            $table->string('regime_matrimoniale', 40)->nullable();
-            $table->string('nationalite', 50);
-            $table->string('telephone', 12)->nullable();
-            $table->date('date_mariage')->nullable();
-            $table->string('lieu_mariage', 40)->nullable();
-            $table->string('marie_a')->nullable();
-            $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
-            $table->timestamps();
+        $table->id();
+        $table->string('titre_demandeur', 20);
+        $table->string('nom_demandeur', 100);
+        $table->string('prenom_demandeur', 100);
+        $table->date('date_naissance');
+
+        $table->string('lieu_naissance', 100)->nullable();
+        $table->string('sexe', 10)->nullable();
+        $table->string('occupation', 50)->nullable();
+        $table->string('nom_pere')->nullable();
+        $table->string('nom_mere', 100)->nullable();
+        $table->string('cin', 15)->unique()->nullable();
+        $table->date('date_delivrance')->nullable();
+        $table->string('lieu_delivrance', 50)->nullable();
+        $table->date('date_delivrance_duplicata')->nullable();
+        $table->string('lieu_delivrance_duplicata', 50)->nullable();
+        $table->string('domiciliation', 100)->nullable();
+        $table->string('situation_familiale', 40)->nullable();
+        $table->string('regime_matrimoniale', 40)->nullable();
+        $table->string('nationalite', 50)->nullable();
+        $table->string('telephone', 12)->nullable();
+        $table->date('date_mariage')->nullable();
+        $table->string('lieu_mariage', 40)->nullable();
+        $table->string('marie_a')->nullable();
+
+        $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
+        $table->timestamps();
+
         });
 
-        // Table consorts (relation many-to-many entre demandeurs)
         Schema::create('consorts', function (Blueprint $table) {
             $table->id();
             $table->boolean('status')->default(true);
@@ -46,7 +47,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table demander (relation entre demandeurs et propriétés)
         Schema::create('demander', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_demandeur')->constrained('demandeurs')->onDelete('cascade');
@@ -59,7 +59,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table demande_consorts (relation entre demandes et consorts)
         Schema::create('demande_consorts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_demande')->constrained('demander')->onDelete('cascade');
@@ -67,7 +66,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table contenir (relation entre dossiers et demandeurs)
         Schema::create('contenir', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_dossier')->constrained('dossiers')->onDelete('cascade');

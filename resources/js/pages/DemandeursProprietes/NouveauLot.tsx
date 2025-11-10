@@ -156,54 +156,21 @@ export default function NouveauLot() {
             toast.error('La vocation est obligatoire');
             return;
         }
-        if (!data.proprietaire) {
-            toast.error('Le nom de la propriété est obligatoire');
-            return;
-        }
-        if (!data.situation) {
-            toast.error('La situation est obligatoire');
-            return;
-        }
+        
 
         // Validation demandeurs
         for (let i = 0; i < demandeurs.length; i++) {
             const d = demandeurs[i];
-            if (!d.titre_demandeur || !d.nom_demandeur || !d.cin) {
+            if (!d.titre_demandeur || !d.nom_demandeur) {
                 toast.error(`Demandeur ${i + 1}: Titre, nom et CIN sont obligatoires`);
                 return;
             }
-            if (!/^\d{12}$/.test(d.cin)) {
-                toast.error(`Demandeur ${i + 1}: Le CIN doit contenir exactement 12 chiffres`);
-                return;
-            }
+            
             if (!d.date_naissance) {
                 toast.error(`Demandeur ${i + 1}: La date de naissance est obligatoire`);
                 return;
             }
-            if (!d.lieu_naissance) {
-                toast.error(`Demandeur ${i + 1}: Le lieu de naissance est obligatoire`);
-                return;
-            }
-            if (!d.occupation) {
-                toast.error(`Demandeur ${i + 1}: L'occupation est obligatoire`);
-                return;
-            }
-            if (!d.nom_mere) {
-                toast.error(`Demandeur ${i + 1}: Le nom de la mère est obligatoire`);
-                return;
-            }
-            if (!d.date_delivrance) {
-                toast.error(`Demandeur ${i + 1}: La date de délivrance du CIN est obligatoire`);
-                return;
-            }
-            if (!d.lieu_delivrance) {
-                toast.error(`Demandeur ${i + 1}: Le lieu de délivrance du CIN est obligatoire`);
-                return;
-            }
-            if (!d.domiciliation) {
-                toast.error(`Demandeur ${i + 1}: La domiciliation est obligatoire`);
-                return;
-            }
+           
         }
 
         // ✅ Mettre à jour demandeurs_json AVANT la soumission

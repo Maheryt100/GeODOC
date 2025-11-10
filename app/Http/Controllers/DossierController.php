@@ -176,6 +176,29 @@ class DossierController extends Controller
             }
         ])->findOrFail($id);
 
+        // ✅ FIX: Ajouter une vérification pour éviter de considérer les propriétés sans demandeur comme archivées
+        // Calculer le statut d'archivage côté serveur pour être sûr
+        foreach ($dossier->proprietes as $propriete) {
+            $activeCount = 0;
+            $archivedCount = 0;
+            
+            if ($propriete->demandes) {
+                foreach ($propriete->demandes as $demande) {
+                    if ($demande->status === 'active') {
+                        $activeCount++;
+                    } elseif ($demande->status === 'archive') {
+                        $archivedCount++;
+                    }
+                }
+            }
+            
+            // ✅ Une propriété est archivée SI ET SEULEMENT SI:
+            // - Elle a au moins une demande archivée
+            // - ET elle n'a aucune demande active
+            // Donc si elle n'a AUCUNE demande, elle n'est PAS archivée
+            $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
+        }
+
         return Inertia::render('dossiers/Show', [
             'dossier' => $dossier,
         ]);

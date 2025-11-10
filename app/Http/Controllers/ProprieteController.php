@@ -61,8 +61,8 @@ class ProprieteController extends Controller
             'type_operation' => 'required|in:morcellement,immatriculation',
             'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
             'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
-            'proprietaire' => 'required|string|max:50',
-            'situation' => 'required|string',
+            'proprietaire' => 'nullable|string|max:50',
+            'situation' => 'nullable|string',
             'propriete_mere' => 'nullable|string|max:20',
             'titre_mere' => 'nullable|string|max:20',
             'titre' => 'nullable|string|max:20',
@@ -81,8 +81,8 @@ class ProprieteController extends Controller
             'nature.in' => 'La nature doit être: Urbaine, Suburbaine ou Rurale',
             'vocation.required' => 'La vocation est obligatoire',
             'vocation.in' => 'La vocation doit être: Edilitaire, Agricole, Forestière ou Touristique',
-            'proprietaire.required' => 'Le nom de la propriété est obligatoire',
-            'situation.required' => 'La situation est obligatoire',
+            'proprietaire.nullable' => 'Le nom de la propriété est obligatoire',
+            'situation.nullable' => 'La situation est obligatoire',
             'id_dossier.exists' => 'Le dossier n\'existe pas',
             'contenance.min' => 'La contenance est invalide'
         ]);

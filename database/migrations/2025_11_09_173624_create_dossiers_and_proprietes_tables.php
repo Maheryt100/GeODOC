@@ -3,12 +3,25 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        Schema::create('dossiers', function (Blueprint $table) {
+            $table->id();
+            $table->string('nom_dossier', 40);
+            $table->date('date_descente_debut');
+            $table->date('date_descente_fin');
+            $table->string('type_commune', 20);
+            $table->string('commune', 100);
+            $table->string('fokontany', 100);
+            $table->string('circonscription', 50);
+            $table->foreignId('id_district')->constrained('districts')->onDelete('cascade');
+            $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
+            $table->timestamps();
+        });
+
         Schema::create('proprietes', function (Blueprint $table) {
             $table->id();
             $table->string('lot', 10);
@@ -20,7 +33,7 @@ return new class extends Migration
             $table->string('charge', 255)->nullable();
             $table->string('situation')->nullable();
             $table->string('nature', 40);
-            $table->string('type_operation', 30)->default('immatriculation');
+            $table->string('type_operation', 30)->nullable();
             $table->string('vocation', 30)->nullable();
             $table->string('numero_FN', 10)->nullable();
             $table->string('numero_requisition', 30)->nullable();
@@ -32,14 +45,11 @@ return new class extends Migration
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
             $table->timestamps();
         });
-
-    
     }
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE proprietes DROP CONSTRAINT IF EXISTS type_operation_check');
-        DB::statement('ALTER TABLE proprietes DROP CONSTRAINT IF EXISTS vocation_check');
         Schema::dropIfExists('proprietes');
+        Schema::dropIfExists('dossiers');
     }
 };

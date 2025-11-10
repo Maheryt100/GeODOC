@@ -8,6 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Tables d'authentification et sessions
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -34,10 +35,25 @@ return new class extends Migration
             $table->longText('payload');
             $table->integer('last_activity')->index();
         });
+
+        // Tables de cache
+        Schema::create('cache', function (Blueprint $table) {
+            $table->string('key')->primary();
+            $table->mediumText('value');
+            $table->integer('expiration');
+        });
+
+        Schema::create('cache_locks', function (Blueprint $table) {
+            $table->string('key')->primary();
+            $table->string('owner');
+            $table->integer('expiration');
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('cache_locks');
+        Schema::dropIfExists('cache');
         Schema::dropIfExists('sessions');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('users');

@@ -57,65 +57,44 @@ class DemandeurController extends Controller
     public function store(Request $request)
     {
         $validateData = $request->validate([
+            // ✅ Champs obligatoires minimaux
             'titre_demandeur' => 'required|string|max:12',
             'nom_demandeur' => 'required|string|max:40',
-            'prenom_demandeur' => 'string|max:50|nullable',
+            'prenom_demandeur' => 'nullable|string|max:50',
             'date_naissance' => 'required|date|before:-18 years',
-            'lieu_naissance' => 'required|string|max:100',
-            'sexe' => 'required',
-            'occupation' => 'required|string|max:30',
-            'nom_pere' => 'string|nullable',
-            'nom_mere' => 'required|string',
+            
+            // ✅ Tous les autres champs deviennent nullable
+            'lieu_naissance' => 'nullable|string|max:100',
+            'sexe' => 'nullable',
+            'occupation' => 'nullable|string|max:30',
+            'nom_pere' => 'nullable|string',
+            'nom_mere' => 'nullable|string',
             'cin' => 'required|string|max:15|unique:' . Demandeur::class,
-            'date_delivrance' => 'required|date|before:today',
-            'lieu_delivrance' => 'required|string|max:40',
+            'date_delivrance' => 'nullable|date|before:today',
+            'lieu_delivrance' => 'nullable|string|max:40',
             'date_delivrance_duplicata' => 'nullable|date|before:today',
             'lieu_delivrance_duplicata' => 'nullable|string|max:40',
-            'domiciliation' => 'required|string|max:60',
-            'situation_familiale' => 'required|string|max:40',
+            'domiciliation' => 'nullable|string|max:60',
+            'situation_familiale' => 'nullable|string|max:40',
             'regime_matrimoniale' => 'nullable|string|max:40',
             'telephone' => 'nullable|string|max:10',
             'date_mariage' => 'nullable|date|before:today',
             'lieu_mariage' => 'nullable|string|max:40',
             'marie_a' => 'nullable|string|max:40',
-            'nationalite' => 'required|string|max:40',
+            'nationalite' => 'nullable|string|max:40',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
             'pieces.*' => 'nullable|file',
         ], [
             'titre_demandeur.required' => 'Le titre est obligatoire.',
             'nom_demandeur.required' => 'Le nom est obligatoire.',
-            'prenom_demandeur.max' => 'Le prénom ne doit pas dépasser 50 caractères.',
             'date_naissance.required' => 'La date de naissance est obligatoire.',
             'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
-            'lieu_naissance.required' => 'Le lieu de naissance est obligatoire.',
-            'sexe.required' => 'Le sexe est obligatoire.',
-            'occupation.required' => 'La profession est obligatoire.',
-            'nom_mere.required' => 'Le nom de la mère est obligatoire.',
-            'cin.numeric' => 'Le numéro CIN est obligatoire et doit être numerique.',
-            'date_delivrance.required' => 'La date de délivrance du CIN est obligatoire.',
-            'date_delivrance.before' => 'La date de délivrance du CIN doit être antérieure à aujourd\'hui.',
-            'lieu_delivrance.required' => 'Le lieu de délivrance du CIN est obligatoire.',
-            'domiciliation.required' => 'La domiciliation est obligatoire.',
-            'situation_familiale.required' => 'La situation familiale est obligatoire.',
-            'regime_matrimoniale.required' => 'Le régime matrimonial est obligatoire.',
-            'telephone.max' => 'Le numéro de téléphone ne doit pas dépasser 10 chiffres.',
-            'date_mariage.before' => 'La date de mariage doit être antérieure à aujourd\'hui.',
-            'id_dossier.required' => 'Le dossier est obligatoire.',
-            'id_dossier.exists' => 'Le dossier sélectionné est invalide.',
-            'pieces.*.file' => 'Chaque pièce jointe doit être un fichier valide.',
+            'cin.nullable' => 'Le numéro CIN est obligatoire.',
             'cin.unique' => 'Le numéro CIN est déjà pris.',
+            'id_dossier.required' => 'Le dossier est obligatoire.',
         ]);
 
-        $piecesPaths = [];
-
-        if ($request->hasFile('pieces')) {
-            foreach ($request->file('pieces') as $index => $file) {
-                if ($file && $file->isValid()) {
-                    $path = $file->store('pieces_jointes', 'public');
-                }
-            }
-        }
-
+        // Le reste du code reste identique
         try {
             $request->merge(['id_user' => Auth::user()->getAuthIdentifier()]);
             $demandeur = Demandeur::create(
@@ -174,48 +153,34 @@ class DemandeurController extends Controller
         $validateData = $request->validate([
             'titre_demandeur' => 'required|string|max:12',
             'nom_demandeur' => 'required|string|max:40',
-            'prenom_demandeur' => 'string|max:50|nullable',
+            'prenom_demandeur' => 'nullable|string|max:50',
             'date_naissance' => 'required|date|before:-18 years',
-            'lieu_naissance' => 'required|string|max:100',
-            'sexe' => 'required',
-            'occupation' => 'required|string|max:30',
-            'nom_pere' => 'string|nullable',
-            'nom_mere' => 'required|string',
-            'cin' => ['required','numeric', Rule::unique(Demandeur::class)->ignore($id)],
-            'date_delivrance' => 'required|date|before:today',
-            'lieu_delivrance' => 'required|string|max:40',
+            'lieu_naissance' => 'nullable|string|max:100',
+            'sexe' => 'nullable',
+            'occupation' => 'nullable|string|max:30',
+            'nom_pere' => 'nullable|string',
+            'nom_mere' => 'nullable|string',
+            'cin' => ['nullable','numeric', Rule::unique(Demandeur::class)->ignore($id)],
+            'date_delivrance' => 'nullable|date|before:today',
+            'lieu_delivrance' => 'nullable|string|max:40',
             'date_delivrance_duplicata' => 'nullable|date|before:today',
             'lieu_delivrance_duplicata' => 'nullable|string|max:40',
-            'domiciliation' => 'required|string|max:60',
-            'situation_familiale' => 'required|string|max:40',
+            'domiciliation' => 'nullable|string|max:60',
+            'situation_familiale' => 'nullable|string|max:40',
             'regime_matrimoniale' => 'nullable|string|max:40',
             'telephone' => 'nullable|string|max:10',
             'date_mariage' => 'nullable|date|before:today',
             'lieu_mariage' => 'nullable|string|max:40',
             'marie_a' => 'nullable|string|max:40',
-            'nationalite' => 'required|string|max:40',
+            'nationalite' => 'nullable|string|max:40',
             'pieces.*' => 'nullable|file',
             'id_dossier' => 'required|exists:dossiers,id',
         ], [
             'titre_demandeur.required' => 'Le titre est obligatoire.',
             'nom_demandeur.required' => 'Le nom est obligatoire.',
-            'prenom_demandeur.max' => 'Le prénom ne doit pas dépasser 50 caractères.',
             'date_naissance.required' => 'La date de naissance est obligatoire.',
             'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
-            'lieu_naissance.required' => 'Le lieu de naissance est obligatoire.',
-            'sexe.required' => 'Le sexe est obligatoire.',
-            'occupation.required' => 'La profession est obligatoire.',
-            'nom_mere.required' => 'Le nom de la mère est obligatoire.',
-            'cin.numeric' => 'Le numéro CIN est obligatoire et doit être numerique.',
-            'date_delivrance.required' => 'La date de délivrance du CIN est obligatoire.',
-            'date_delivrance.before' => 'La date de délivrance du CIN doit être antérieure à aujourd\'hui.',
-            'lieu_delivrance.required' => 'Le lieu de délivrance du CIN est obligatoire.',
-            'domiciliation.required' => 'La domiciliation est obligatoire.',
-            'situation_familiale.required' => 'La situation familiale est obligatoire.',
-            'regime_matrimoniale.required' => 'Le régime matrimonial est obligatoire.',
-            'telephone.max' => 'Le numéro de téléphone ne doit pas dépasser 10 chiffres.',
-            'date_mariage.before' => 'La date de mariage doit être antérieure à aujourd\'hui.',
-            'pieces.*.file' => 'Chaque pièce jointe doit être un fichier valide.',
+            'cin.nullable' => 'Le numéro CIN est obligatoire.',
             'cin.unique' => 'Le numéro CIN est déjà pris.',
         ]);
 

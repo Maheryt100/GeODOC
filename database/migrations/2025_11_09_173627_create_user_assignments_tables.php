@@ -8,7 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Table user_districts (assignation d'utilisateurs aux districts)
         Schema::create('user_districts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
@@ -18,7 +17,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table user_requisitions (assignation d'utilisateurs aux propriétés)
         Schema::create('user_requisitions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
@@ -26,7 +24,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table user_demandes (assignation d'utilisateurs aux demandes)
         Schema::create('user_demandes', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
@@ -34,7 +31,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Table user_csf (assignation CSF aux demandes)
         Schema::create('user_csf', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');

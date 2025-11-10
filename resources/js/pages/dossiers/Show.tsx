@@ -185,6 +185,23 @@ export default function Show() {
         return Array.from(demandeursMap.values());
     };
 
+
+    // Récupérer les lots acquis pour un demandeur
+    const getAcquiredLotsForDemandeur = (demandeurId: number): string[] => {
+        const lots: string[] = [];
+        
+        proprietes.forEach(prop => {
+            if (isPropertyArchived(prop)) {
+                const isLinked = prop.demandeurs?.some((d: any) => d.id === demandeurId);
+                if (isLinked) {
+                    lots.push(prop.lot);
+                }
+            }
+        });
+        
+        return lots;
+    };
+
     const allDemandeurs = getAllDemandeurs();
     const proprietes = dossier.proprietes || [];
 
@@ -207,9 +224,18 @@ export default function Show() {
     };
 
     const isPropertyArchived = (prop: Propriete): boolean => {
-        return prop.demandeurs ? prop.demandeurs.every((d: any) => d.status === 'archive') : false;
+        // ✅ FIX: Une propriété n'est archivée QUE SI elle a des demandes archivées ET aucune demande active
+        // Si pas de demandeurs du tout, elle n'est PAS archivée
+        if (!prop.demandeurs || prop.demandeurs.length === 0) {
+            return false; // ✅ Propriété sans demandeur = NON archivée
+        }
+        
+        const hasActiveDemandes = prop.demandeurs.some((d: any) => d.status === 'active');
+        const hasArchivedDemandes = prop.demandeurs.some((d: any) => d.status === 'archive');
+        
+        // Archivée = au moins une demande archivée ET aucune demande active
+        return hasArchivedDemandes && !hasActiveDemandes;
     };
-
     const paginateDemandeurs = () => {
         const startIndex = (currentDemandeurPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
@@ -399,7 +425,7 @@ export default function Show() {
                                     <Button asChild size="sm">
                                         <Link href={route('ajouter-demandeur.create', dossier.id)}>
                                             <UserPlus className="mr-2 h-4 w-4" />
-                                            Ajouter à un lot
+                                            Ajouter un demandeur à un lot
                                         </Link>
                                     </Button>
                                 )}
@@ -430,6 +456,9 @@ export default function Show() {
                                     ) : (
                                         paginateDemandeurs().map((demandeur) => {
                                             const isIncomplete = isDemandeurIncomplete(demandeur);
+                                            const acquiredLots = getAcquiredLotsForDemandeur(demandeur.id);
+                                            const hasAcquiredProperty = acquiredLots.length > 0;
+                                            
                                             const rowClass = isIncomplete 
                                                 ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer' 
                                                 : demandeur.hasProperty
@@ -442,6 +471,13 @@ export default function Show() {
                                                         <div className="flex items-center gap-2">
                                                             {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
                                                             {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
+                                                            {/* ✅ Badge pour propriétés acquises */}
+                                                            {hasAcquiredProperty && (
+                                                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                                                                    <Archive className="mr-1 h-3 w-3" />
+                                                                    Lot(s) acquis: {acquiredLots.join(', ')}
+                                                                </Badge>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-sm font-mono">{demandeur.cin}</td>
@@ -546,7 +582,7 @@ export default function Show() {
                                     <Button asChild size="sm">
                                         <Link href={route('lier-demandeur.create', dossier.id)}>
                                             <Link2 className="mr-2 h-4 w-4" />
-                                            Lier Demandeur
+                                            Lier un demandeur à un lot
                                         </Link>
                                     </Button>
                                 )}
