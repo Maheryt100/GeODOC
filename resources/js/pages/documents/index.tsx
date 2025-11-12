@@ -1,10 +1,10 @@
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, Demander, Dossier, Paginated } from '@/types';
+import { type BreadcrumbItem, Dossier, Paginated } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Archive, ChevronDown, Ellipsis, FileCheck, FileOutput, FileText, Eye, ArchiveRestore } from 'lucide-react';
+import { Archive, ChevronDown, Ellipsis, FileText, Eye, ArchiveRestore, Users, AlertCircle, FileOutput } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -17,21 +17,40 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+interface GroupedDocument {
+    id: number;
+    id_propriete: number;
+    propriete: any;
+    demandeurs: Array<{
+        id: number;
+        id_demandeur: number;
+        demandeur: any;
+        total_prix: number;
+        status_consort: boolean;
+        status: string;
+    }>;
+    demandeur: any;
+    total_prix: number;
+    status_consort: boolean;
+    status: string;
+    nombre_demandeurs: number;
+}
 
 export default function Index() {
-    const { documents } = usePage<{documents: Paginated<Demander>}>().props;
+    const { documents } = usePage<{documents: Paginated<GroupedDocument>}>().props;
     const { dossier } = usePage<{ dossier: Dossier }>().props;
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'tous' | 'actifs' | 'archives'>('actifs');
-    const [selectedDocument, setSelectedDocument] = useState<Demander | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [statusFilter, setStatusFilter] = useState<'tous' | 'actifs' | 'archives'>('tous');
+    const [selectedDocument, setSelectedDocument] = useState<GroupedDocument | null>(null);
 
     const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearch(e.target.value);
-        setCurrentPage(1);
 
-        router.get(route('documents.index', dossier.id), {
+        router.get(route('dossiers.list', dossier.id), {
             search: e.target.value
         }, {
             preserveState: true,
@@ -39,10 +58,57 @@ export default function Index() {
         });
     };
 
-    const handleArchive = (id: number) => {
+    const handleArchive = (document: GroupedDocument) => {
+        // ✅ Vérifier si les données sont complètes
+        const isProprieteIncomplete = !document.propriete.titre || 
+                                      !document.propriete.contenance || 
+                                      !document.propriete.proprietaire || 
+                                      !document.propriete.nature || 
+                                      !document.propriete.vocation || 
+                                      !document.propriete.situation;
+        
+        const hasIncompleteDemandeur = document.demandeurs.some(dem => 
+            !dem.demandeur.date_naissance || 
+            !dem.demandeur.lieu_naissance || 
+            !dem.demandeur.date_delivrance || 
+            !dem.demandeur.lieu_delivrance || 
+            !dem.demandeur.domiciliation || 
+            !dem.demandeur.occupation || 
+            !dem.demandeur.nom_mere
+        );
+
+        if (isProprieteIncomplete || hasIncompleteDemandeur) {
+            let errorMessage = "❌ Impossible d'archiver : données incomplètes détectées.\n\n";
+            
+            if (isProprieteIncomplete) {
+                errorMessage += "📋 Propriété : Veuillez renseigner tous les champs obligatoires (titre, contenance, propriétaire, nature, vocation, situation).\n\n";
+            }
+            
+            if (hasIncompleteDemandeur) {
+                const incompleteDemandeurs = document.demandeurs
+                    .filter(dem => 
+                        !dem.demandeur.date_naissance || 
+                        !dem.demandeur.lieu_naissance || 
+                        !dem.demandeur.date_delivrance || 
+                        !dem.demandeur.lieu_delivrance || 
+                        !dem.demandeur.domiciliation || 
+                        !dem.demandeur.occupation || 
+                        !dem.demandeur.nom_mere
+                    )
+                    .map(dem => `${dem.demandeur.nom_demandeur} ${dem.demandeur.prenom_demandeur}`)
+                    .join(', ');
+                
+                errorMessage += `👤 Demandeur(s) : ${incompleteDemandeurs}\n`;
+                errorMessage += "Champs manquants possibles : date de naissance, lieu de naissance, date/lieu de délivrance CIN, domiciliation, occupation, nom de la mère.";
+            }
+            
+            toast.error(errorMessage, { duration: 8000 });
+            return;
+        }
+
         if (confirm("Êtes-vous sûr de vouloir archiver ce document ? (La propriété sera marquée comme acquise)")){
             router.post(route("document.archive"),{
-                id: id,
+                id: document.id,
                 id_dossier: dossier.id,
             }, {
                 onSuccess: () => toast.success('Document archivé avec succès'),
@@ -66,12 +132,12 @@ export default function Index() {
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: dossier.nom_dossier,
-            href: '#',
+            href: route('dossiers.show', dossier.id),
         },
         {
             title: (
                 <DropdownMenu>
-                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5">
+                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1">
                         Documents
                         <ChevronDown />
                     </DropdownMenuTrigger>
@@ -88,60 +154,46 @@ export default function Index() {
                     </DropdownMenuContent>
                 </DropdownMenu>
             ),
-            href: route('dossiers.proprietes', dossier.id),
+            href: route('dossiers.list', dossier.id),
         },
     ];
 
-    // Filtrer les documents selon le statut
+    // ✅ Fonctions de vérification
+    const isProprieteIncomplete = (propriete: any) => {
+        return !propriete.titre || 
+               !propriete.contenance || 
+               !propriete.proprietaire || 
+               !propriete.nature || 
+               !propriete.vocation || 
+               !propriete.situation;
+    };
+
+    const isDemandeurIncomplete = (demandeur: any) => {
+        return !demandeur.date_naissance || 
+               !demandeur.lieu_naissance || 
+               !demandeur.date_delivrance || 
+               !demandeur.lieu_delivrance || 
+               !demandeur.domiciliation || 
+               !demandeur.occupation || 
+               !demandeur.nom_mere;
+    };
+
+    const hasIncompleteData = (document: GroupedDocument) => {
+        const propIncomplete = isProprieteIncomplete(document.propriete);
+        const demIncomplete = document.demandeurs.some(dem => isDemandeurIncomplete(dem.demandeur));
+        return propIncomplete || demIncomplete;
+    };
+
+    // ✅ Filtrage côté client
     const filteredDocuments = documents.data.filter(doc => {
         if (statusFilter === 'actifs') return doc.status === 'active';
         if (statusFilter === 'archives') return doc.status === 'archive';
-        return true; // 'tous'
+        return true;
     });
 
-    // Pagination
-    const paginateDocuments = () => {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        return filteredDocuments.slice(startIndex, endIndex);
-    };
-
-    const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage);
-
-    const Pagination = () => {
-        if (totalPages <= 1) return null;
-
-        return (
-            <div className="flex justify-center items-center gap-2 mt-4">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                >
-                    Précédent
-                </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                        key={page}
-                        variant={currentPage === page ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setCurrentPage(page)}
-                    >
-                        {page}
-                    </Button>
-                ))}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                >
-                    Suivant
-                </Button>
-            </div>
-        );
-    };
+    // ✅ Compteurs pour les filtres
+    const totalActifs = documents.data.filter(d => d.status === 'active').length;
+    const totalArchives = documents.data.filter(d => d.status === 'archive').length;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -156,6 +208,10 @@ export default function Index() {
                                 <CardTitle>Documents</CardTitle>
                                 <CardDescription>
                                     Liste des documents du dossier ({filteredDocuments.length}/{documents.data.length})
+                                    <span className="ml-4 text-xs">
+                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded mr-1"></span>
+                                        Données incomplètes
+                                    </span>
                                 </CardDescription>
                             </div>
                             <div className="flex gap-2 flex-wrap">
@@ -184,7 +240,6 @@ export default function Index() {
                             />
                             <Select value={statusFilter} onValueChange={(value: 'tous' | 'actifs' | 'archives') => {
                                 setStatusFilter(value);
-                                setCurrentPage(1);
                             }}>
                                 <SelectTrigger className="w-[180px]">
                                     <SelectValue placeholder="Filtrer par statut" />
@@ -192,10 +247,10 @@ export default function Index() {
                                 <SelectContent>
                                     <SelectItem value="tous">Tous ({documents.data.length})</SelectItem>
                                     <SelectItem value="actifs">
-                                        Actifs ({documents.data.filter(d => d.status === 'active').length})
+                                        Actifs ({totalActifs})
                                     </SelectItem>
                                     <SelectItem value="archives">
-                                        Archivés ({documents.data.filter(d => d.status === 'archive').length})
+                                        Archivés ({totalArchives})
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
@@ -206,7 +261,7 @@ export default function Index() {
                                 <thead className="border-b bg-muted/50">
                                     <tr>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Lot/Titre</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Demandeur</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Demandeur(s)</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Situation</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Fokontany</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Propriétaire</th>
@@ -214,7 +269,6 @@ export default function Index() {
                                         <th className="px-4 py-3 text-left text-sm font-medium">Nature</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Vocation</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Type opération</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Consort</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Prix Total</th>
                                         <th className="px-4 py-3 text-left text-sm font-medium">Statut</th>
                                         <th className="px-4 py-3 w-[50px]"></th>
@@ -223,16 +277,21 @@ export default function Index() {
                                 <tbody>
                                     {filteredDocuments.length === 0 ? (
                                         <tr>
-                                            <td colSpan={13} className="text-center text-muted-foreground py-8">
+                                            <td colSpan={12} className="text-center text-muted-foreground py-8">
                                                 Aucun document trouvé
                                             </td>
                                         </tr>
                                     ) : (
-                                        paginateDocuments().map((document) => {
+                                        filteredDocuments.map((document) => {
                                             const isArchived = document.status === 'archive';
+                                            const hasMultipleDemandeurs = document.nombre_demandeurs > 1;
+                                            const isIncomplete = hasIncompleteData(document);
+                                            
                                             const rowClass = isArchived
                                                 ? 'border-b hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-50/80 dark:bg-gray-900/50 cursor-pointer'
-                                                : 'border-b hover:bg-muted/50 cursor-pointer';
+                                                : isIncomplete
+                                                    ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer'
+                                                    : 'border-b hover:bg-muted/50 cursor-pointer';
 
                                             return (
                                                 <tr 
@@ -244,10 +303,21 @@ export default function Index() {
                                                         <div className="flex items-center gap-2">
                                                             {document.propriete.lot}/ TNº{document.propriete.titre}
                                                             {isArchived && <Archive className="h-4 w-4 text-gray-500" />}
+                                                            {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" title="Données incomplètes" />}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-sm">
-                                                        {document.demandeur.nom_demandeur} {document.demandeur.prenom_demandeur}
+                                                        <div className="flex items-center gap-2">
+                                                            <span>
+                                                                {document.demandeur.nom_demandeur} {document.demandeur.prenom_demandeur}
+                                                            </span>
+                                                            {hasMultipleDemandeurs && (
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    <Users className="h-3 w-3 mr-1" />
+                                                                    +{document.nombre_demandeurs - 1}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-sm">
                                                         {document.propriete.situation}
@@ -273,11 +343,6 @@ export default function Index() {
                                                     </td>
                                                     <td className="px-4 py-3 text-sm capitalize">
                                                         {document.propriete.type_operation}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-sm">
-                                                        <Badge variant={document.status_consort ? "default" : "secondary"} className="text-xs">
-                                                            {document.status_consort ? "Avec" : "Sans"}
-                                                        </Badge>
                                                     </td>
                                                     <td className="px-4 py-3 text-sm font-semibold">
                                                         {document.total_prix.toLocaleString()} Ar
@@ -306,18 +371,6 @@ export default function Index() {
                                                                     <Eye className="mr-2 h-4 w-4" />
                                                                     Voir détails
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem asChild>
-                                                                    <a href={route('download.CSF', document.id)} className="flex items-center">
-                                                                        <FileCheck className="mr-2 h-4 w-4" />
-                                                                        Exporter CSF
-                                                                    </a>
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem asChild>
-                                                                    <a href={route('document.download', document.id)} className="flex items-center">
-                                                                        <FileOutput className="mr-2 h-4 w-4" />
-                                                                        Exporter ADV
-                                                                    </a>
-                                                                </DropdownMenuItem>
                                                                 {isArchived ? (
                                                                     <DropdownMenuItem
                                                                         className="text-blue-600"
@@ -328,11 +381,15 @@ export default function Index() {
                                                                     </DropdownMenuItem>
                                                                 ) : (
                                                                     <DropdownMenuItem
-                                                                        className="text-green-600"
-                                                                        onClick={() => handleArchive(document.id)}
+                                                                        className={hasIncompleteData(document) ? "text-gray-400" : "text-green-600"}
+                                                                        onClick={() => handleArchive(document)}
+                                                                        disabled={hasIncompleteData(document)}
                                                                     >
                                                                         <Archive className="mr-2 h-4 w-4" />
                                                                         Archiver
+                                                                        {hasIncompleteData(document) && (
+                                                                            <AlertCircle className="ml-2 h-3 w-3" />
+                                                                        )}
                                                                     </DropdownMenuItem>
                                                                 )}
                                                             </DropdownMenuContent>
@@ -345,172 +402,272 @@ export default function Index() {
                                 </tbody>
                             </table>
                         </div>
-                        <Pagination />
+                        
+                        {/* ✅ Pagination server-side */}
+                        {documents.last_page > 1 && (
+                            <div className="flex justify-center items-center gap-2 mt-4">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => router.get(route('dossiers.list', dossier.id), { page: documents.current_page - 1 })}
+                                    disabled={documents.current_page === 1}
+                                >
+                                    Précédent
+                                </Button>
+                                {Array.from({ length: documents.last_page }, (_, i) => i + 1).map((page) => (
+                                    <Button
+                                        key={page}
+                                        variant={documents.current_page === page ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => router.get(route('dossiers.list', dossier.id), { page })}
+                                    >
+                                        {page}
+                                    </Button>
+                                ))}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => router.get(route('dossiers.list', dossier.id), { page: documents.current_page + 1 })}
+                                    disabled={documents.current_page === documents.last_page}
+                                >
+                                    Suivant
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Dialog détails du document - AMÉLIORÉ */}
+            {/* Dialog détails */}
             <Dialog open={!!selectedDocument} onOpenChange={() => setSelectedDocument(null)}>
-                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+                <DialogContent className="max-w-5xl max-h-[85vh]">
                     <DialogHeader>
                         <DialogTitle className="text-2xl">Détails du document</DialogTitle>
                     </DialogHeader>
                     {selectedDocument && (
-                        <div className="space-y-6">
-                            {/* En-tête */}
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4 rounded-lg">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-blue-900 dark:text-blue-100">
-                                            Lot {selectedDocument.propriete.lot} - TN°{selectedDocument.propriete.titre}
-                                        </h3>
-                                        <p className="text-blue-700 dark:text-blue-300 mt-1">
-                                            {selectedDocument.demandeur.nom_demandeur} {selectedDocument.demandeur.prenom_demandeur}
-                                        </p>
+                        <ScrollArea className="h-[calc(85vh-120px)] pr-4">
+                            <div className="space-y-6">
+                                {/* ✅ Avertissement si données incomplètes */}
+                                {hasIncompleteData(selectedDocument) && selectedDocument.status !== 'archive' && (
+                                    <div className="bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 p-4 rounded-lg">
+                                        <div className="flex items-start gap-3">
+                                            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                                            <div>
+                                                <h4 className="font-semibold text-red-900 dark:text-red-100 mb-1">
+                                                    ⚠️ Données incomplètes - Archivage impossible
+                                                </h4>
+                                                <p className="text-sm text-red-700 dark:text-red-300">
+                                                    Ce document ne peut pas être archivé car certaines informations sont manquantes.
+                                                    Veuillez compléter toutes les données obligatoires avant d'archiver.
+                                                </p>
+                                                <ul className="mt-2 text-sm text-red-700 dark:text-red-300 space-y-1">
+                                                    {isProprieteIncomplete(selectedDocument.propriete) && (
+                                                        <li>• <strong>Propriété :</strong> Informations incomplètes (titre, contenance, propriétaire, nature, vocation, situation)</li>
+                                                    )}
+                                                    {selectedDocument.demandeurs.some(dem => isDemandeurIncomplete(dem.demandeur)) && (
+                                                        <li>
+                                                            • <strong>Demandeur(s) :</strong> {
+                                                                selectedDocument.demandeurs
+                                                                    .filter(dem => isDemandeurIncomplete(dem.demandeur))
+                                                                    .map(dem => `${dem.demandeur.nom_demandeur} ${dem.demandeur.prenom_demandeur}`)
+                                                                    .join(', ')
+                                                            } (date/lieu naissance, CIN, domiciliation, occupation, nom de la mère)
+                                                        </li>
+                                                    )}
+                                                </ul>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col gap-2">
-                                        <Badge variant={selectedDocument.status_consort ? "default" : "secondary"}>
-                                            {selectedDocument.status_consort ? "Avec consort" : "Sans consort"}
-                                        </Badge>
-                                        <Badge variant="outline" className="capitalize">
-                                            {selectedDocument.propriete.type_operation}
-                                        </Badge>
-                                        {selectedDocument.status === 'archive' && (
-                                            <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
-                                                <Archive className="mr-1 h-3 w-3" />
-                                                Archivé
+                                )}
+
+                                {/* En-tête */}
+                                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-blue-900 dark:text-blue-100">
+                                                Lot {selectedDocument.propriete.lot} - TN°{selectedDocument.propriete.titre}
+                                            </h3>
+                                            <p className="text-blue-700 dark:text-blue-300 mt-1">
+                                                {selectedDocument.nombre_demandeurs} demandeur(s)
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            {selectedDocument.nombre_demandeurs > 1 && (
+                                                <Badge variant="default">
+                                                    <Users className="mr-1 h-3 w-3" />
+                                                    Avec consorts
+                                                </Badge>
+                                            )}
+                                            <Badge variant="outline" className="capitalize">
+                                                {selectedDocument.propriete.type_operation}
+                                            </Badge>
+                                            {selectedDocument.status === 'archive' && (
+                                                <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
+                                                    <Archive className="mr-1 h-3 w-3" />
+                                                    Archivé
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Prix */}
+                                <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg">
+                                    <p className="text-sm text-muted-foreground">Prix total</p>
+                                    <p className="text-3xl font-bold text-green-700 dark:text-green-400">
+                                        {selectedDocument.total_prix.toLocaleString()} Ar
+                                    </p>
+                                </div>
+
+                                {/* Informations Propriété */}
+                                <div className="border-t pt-4">
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                        <FileText className="h-5 w-5" />
+                                        Informations de la propriété
+                                        {isProprieteIncomplete(selectedDocument.propriete) && (
+                                            <Badge variant="destructive" className="text-xs">
+                                                <AlertCircle className="mr-1 h-3 w-3" />
+                                                Données incomplètes
                                             </Badge>
                                         )}
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <p className="text-sm text-muted-foreground">Propriétaire</p>
+                                            <p className="font-medium">{selectedDocument.propriete.proprietaire}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm text-muted-foreground">Contenance</p>
+                                            <p className="font-medium">{selectedDocument.propriete.contenance} m²</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm text-muted-foreground">Nature</p>
+                                            <p className="font-medium">{selectedDocument.propriete.nature}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm text-muted-foreground">Vocation</p>
+                                            <p className="font-medium">{selectedDocument.propriete.vocation}</p>
+                                        </div>
+                                        <div className="space-y-1 col-span-2">
+                                            <p className="text-sm text-muted-foreground">Situation</p>
+                                            <p className="font-medium">{selectedDocument.propriete.situation}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Prix */}
-                            <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg">
-                                <p className="text-sm text-muted-foreground">Prix total</p>
-                                <p className="text-3xl font-bold text-green-700 dark:text-green-400">
-                                    {selectedDocument.total_prix.toLocaleString()} Ar
-                                </p>
-                            </div>
-
-                            {/* Informations Propriété */}
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                    <FileText className="h-5 w-5" />
-                                    Informations de la propriété
-                                </h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Propriétaire</p>
-                                        <p className="font-medium">{selectedDocument.propriete.proprietaire}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Contenance</p>
-                                        <p className="font-medium">{selectedDocument.propriete.contenance} m²</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Nature</p>
-                                        <p className="font-medium">{selectedDocument.propriete.nature}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Vocation</p>
-                                        <p className="font-medium">{selectedDocument.propriete.vocation}</p>
-                                    </div>
-                                    <div className="space-y-1 col-span-2">
-                                        <p className="text-sm text-muted-foreground">Situation</p>
-                                        <p className="font-medium">{selectedDocument.propriete.situation}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Informations Demandeur */}
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Informations du demandeur</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">CIN</p>
-                                        <p className="font-medium font-mono">{selectedDocument.demandeur.cin}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Sexe</p>
-                                        <p className="font-medium">{selectedDocument.demandeur.sexe}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Occupation</p>
-                                        <p className="font-medium">{selectedDocument.demandeur.occupation}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Domiciliation</p>
-                                        <p className="font-medium">{selectedDocument.demandeur.domiciliation}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Téléphone</p>
-                                        <p className="font-medium">{selectedDocument.demandeur.telephone || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Situation familiale</p>
-                                        <p className="font-medium">{selectedDocument.demandeur.situation_familiale}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Statut du document */}
-                            {selectedDocument.status === 'archive' && (
+                                {/* LISTE DE TOUS LES DEMANDEURS */}
                                 <div className="border-t pt-4">
-                                    <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-                                        <p className="text-sm text-muted-foreground mb-1">Statut du document</p>
-                                        <p className="font-medium text-gray-700 dark:text-gray-300">
-                                            ✓ Document archivé - Propriété acquise par le demandeur
-                                        </p>
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                        <Users className="h-5 w-5" />
+                                        Demandeur{selectedDocument.nombre_demandeurs > 1 ? 's' : ''} 
+                                        ({selectedDocument.nombre_demandeurs})
+                                    </h4>
+                                    <div className="space-y-4">
+                                        {selectedDocument.demandeurs.map((dem, index) => (
+                                            <div key={dem.id} className="border rounded-lg p-4 bg-muted/30">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h5 className="font-semibold text-lg flex items-center gap-2">
+                                                        Demandeur {index + 1}
+                                                        {isDemandeurIncomplete(dem.demandeur) && (
+                                                            <Badge variant="destructive" className="text-xs">
+                                                                <AlertCircle className="mr-1 h-3 w-3" />
+                                                                Incomplet
+                                                            </Badge>
+                                                        )}
+                                                    </h5>
+                                                    {index > 0 && (
+                                                        <Badge variant="secondary">Consort</Badge>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Nom complet</p>
+                                                        <p className="font-medium">
+                                                            {dem.demandeur.nom_demandeur} {dem.demandeur.prenom_demandeur}
+                                                        </p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">CIN</p>
+                                                        <p className="font-medium font-mono">{dem.demandeur.cin}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Sexe</p>
+                                                        <p className="font-medium">{dem.demandeur.sexe}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Occupation</p>
+                                                        <p className="font-medium">{dem.demandeur.occupation}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Domiciliation</p>
+                                                        <p className="font-medium">{dem.demandeur.domiciliation}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Téléphone</p>
+                                                        <p className="font-medium">{dem.demandeur.telephone || '-'}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Situation familiale</p>
+                                                        <p className="font-medium">{dem.demandeur.situation_familiale}</p>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Actions */}
-                            <div className="flex justify-end gap-2 pt-4 border-t">
-                                <Button asChild variant="outline">
-                                    <a href={route('download.CSF', selectedDocument.id)}>
-                                        <FileCheck className="mr-2 h-4 w-4" />
-                                        CSF
-                                    </a>
-                                </Button>
-                                <Button asChild variant="outline">
-                                    <a href={route('document.download', selectedDocument.id)}>
-                                        <FileOutput className="mr-2 h-4 w-4" />
-                                        ADV
-                                    </a>
-                                </Button>
-                                {selectedDocument.status === 'archive' ? (
-                                    <Button 
-                                        variant="outline" 
-                                        className="text-blue-600"
-                                        onClick={() => {
-                                            handleUnarchive(selectedDocument.id);
-                                            setSelectedDocument(null);
-                                        }}
-                                    >
-                                        <ArchiveRestore className="mr-2 h-4 w-4" />
-                                        Désarchiver
-                                    </Button>
-                                ) : (
-                                    <Button 
-                                        variant="outline" 
-                                        className="text-green-600"
-                                        onClick={() => {
-                                            handleArchive(selectedDocument.id);
-                                            setSelectedDocument(null);
-                                        }}
-                                    >
-                                        <Archive className="mr-2 h-4 w-4" />
-                                        Archiver
-                                    </Button>
+                                {/* Statut archivé */}
+                                {selectedDocument.status === 'archive' && (
+                                    <div className="border-t pt-4">
+                                        <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                                            <p className="text-sm text-muted-foreground mb-1">Statut du document</p>
+                                            <p className="font-medium text-gray-700 dark:text-gray-300">
+                                                ✓ Document archivé - Propriété acquise
+                                            </p>
+                                        </div>
+                                    </div>
                                 )}
-                                <Button variant="outline" onClick={() => setSelectedDocument(null)}>
-                                    Fermer
-                                </Button>
+
+                                {/* Actions */}
+                                <div className="flex justify-end gap-2 pt-4 border-t sticky bottom-0 bg-background pb-2">
+                                    {selectedDocument.status === 'archive' ? (
+                                        <Button 
+                                            variant="outline" 
+                                            className="text-blue-600"
+                                            onClick={() => {
+                                                handleUnarchive(selectedDocument.id);
+                                                setSelectedDocument(null);
+                                            }}
+                                        >
+                                            <ArchiveRestore className="mr-2 h-4 w-4" />
+                                            Désarchiver
+                                        </Button>
+                                    ) : (
+                                        <Button 
+                                            variant="outline" 
+                                            className={hasIncompleteData(selectedDocument) ? "text-gray-400" : "text-green-600"}
+                                            onClick={() => {
+                                                handleArchive(selectedDocument);
+                                                if (!hasIncompleteData(selectedDocument)) {
+                                                    setSelectedDocument(null);
+                                                }
+                                            }}
+                                            disabled={hasIncompleteData(selectedDocument)}
+                                        >
+                                            <Archive className="mr-2 h-4 w-4" />
+                                            Archiver
+                                            {hasIncompleteData(selectedDocument) && (
+                                                <AlertCircle className="ml-2 h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    )}
+                                    <Button variant="outline" onClick={() => setSelectedDocument(null)}>
+                                        Fermer
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
+                        </ScrollArea>
                     )}
                 </DialogContent>
             </Dialog>

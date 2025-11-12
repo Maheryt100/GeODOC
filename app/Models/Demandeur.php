@@ -44,8 +44,5 @@ class Demandeur extends Model
     {
         return $this->belongsToMany(Propriete::class,'demander', 'id_demandeur', 'id_propriete');
     }
-    public function consortLinks()
-    {
-        return $this->hasMany(Consort::class, 'id_consort');
-    }
+ 
 }

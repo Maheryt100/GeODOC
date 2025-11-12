@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use NumberFormatter;
@@ -75,7 +76,10 @@ class DocumentGenerationController extends Controller
             $hasConsorts = $tousLesDemandeurs->count() > 1;
             
             // Générer le document
-            $filePath = $this->createActeVente($propriete, $tousLesDemandeurs, $hasConsorts);
+            $tempFilePath = $this->createActeVente($propriete, $tousLesDemandeurs, $hasConsorts);
+            
+            // ✅ Sauvegarder une copie dans le storage
+            $savedPath = $this->saveDocumentCopy($tempFilePath, 'ADV', $propriete, $tousLesDemandeurs->first()->demandeur);
             
             // Enregistrer dans user_demande pour traçabilité
             foreach ($tousLesDemandeurs as $demande) {
@@ -85,8 +89,8 @@ class DocumentGenerationController extends Controller
                 ]);
             }
 
-            // ✅ Télécharger et supprimer le fichier temporaire (comme l'ancienne version)
-            return response()->download($filePath)->deleteFileAfterSend(true);
+            // ✅ Télécharger et supprimer le fichier temporaire
+            return response()->download($tempFilePath)->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             Log::error('Erreur génération Acte de Vente', [
@@ -112,7 +116,10 @@ class DocumentGenerationController extends Controller
             $demandeur = Demandeur::findOrFail($request->id_demandeur);
             $propriete = Propriete::with('dossier')->findOrFail($request->id_propriete);
             
-            $filePath = $this->createCsf($demandeur, $propriete);
+            $tempFilePath = $this->createCsf($demandeur, $propriete);
+            
+            // ✅ Sauvegarder une copie dans le storage
+            $savedPath = $this->saveDocumentCopy($tempFilePath, 'CSF', $propriete, $demandeur);
             
             // Enregistrer dans user_csf pour traçabilité
             $demande = Demander::where('id_demandeur', $demandeur->id)
@@ -126,8 +133,8 @@ class DocumentGenerationController extends Controller
                 ]);
             }
 
-            // ✅ Télécharger et supprimer le fichier temporaire (comme l'ancienne version)
-            return response()->download($filePath)->deleteFileAfterSend(true);
+            // ✅ Télécharger et supprimer le fichier temporaire
+            return response()->download($tempFilePath)->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             Log::error('Erreur génération CSF', [
@@ -150,10 +157,13 @@ class DocumentGenerationController extends Controller
         try {
             $propriete = Propriete::with('dossier')->findOrFail($request->id_propriete);
             
-            $filePath = $this->createRequisition($propriete);
+            $tempFilePath = $this->createRequisition($propriete);
             
-            // ✅ Télécharger et supprimer le fichier temporaire (comme l'ancienne version)
-            return response()->download($filePath)->deleteFileAfterSend(true);
+            // ✅ Sauvegarder une copie dans le storage
+            $savedPath = $this->saveDocumentCopy($tempFilePath, 'REQ', $propriete);
+            
+            // ✅ Télécharger et supprimer le fichier temporaire
+            return response()->download($tempFilePath)->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             Log::error('Erreur génération Réquisition', [
@@ -165,6 +175,57 @@ class DocumentGenerationController extends Controller
     }
 
     // ==================== MÉTHODES PRIVÉES ====================
+
+    /**
+     * ✅ NOUVELLE MÉTHODE : Sauvegarder une copie du document dans le storage
+     */
+    private function saveDocumentCopy(string $tempFilePath, string $type, Propriete $propriete, ?Demandeur $demandeur = null): string
+    {
+        // Créer le nom du fichier avec la date au début
+        $date = Carbon::now()->format('Y-m-d_His');
+        $baseName = '';
+        
+        switch ($type) {
+            case 'ADV':
+                $nomDemandeur = $demandeur ? $demandeur->nom_demandeur : 'CONSORTS';
+                $baseName = "{$date}_ACTE_VENTE_{$nomDemandeur}_LOT{$propriete->lot}.docx";
+                $directory = 'pieces_jointes/documents/ADV';
+                break;
+                
+            case 'CSF':
+                $nomDemandeur = $demandeur ? $demandeur->nom_demandeur : 'DEMANDEUR';
+                $baseName = "{$date}_CSF_{$nomDemandeur}_LOT{$propriete->lot}.docx";
+                $directory = 'pieces_jointes/documents/CSF';
+                break;
+                
+            case 'REQ':
+                $baseName = "{$date}_REQUISITION_LOT{$propriete->lot}_TN{$propriete->titre}.docx";
+                $directory = 'pieces_jointes/documents/REQ';
+                break;
+                
+            default:
+                throw new \Exception("Type de document inconnu: {$type}");
+        }
+        
+        // Créer le chemin complet dans le storage public
+        $storagePath = $directory . '/' . $baseName;
+        
+        // Créer le répertoire s'il n'existe pas
+        Storage::disk('public')->makeDirectory($directory);
+        
+        // Copier le fichier temporaire vers le storage
+        $fileContent = file_get_contents($tempFilePath);
+        Storage::disk('public')->put($storagePath, $fileContent);
+        
+        Log::info("Document sauvegardé", [
+            'type' => $type,
+            'path' => $storagePath,
+            'propriete_id' => $propriete->id,
+            'demandeur_id' => $demandeur?->id
+        ]);
+        
+        return $storagePath;
+    }
 
     private function normalizeVocation(string $vocation): string
     {
@@ -347,7 +408,7 @@ class DocumentGenerationController extends Controller
                 ]);
             }
 
-            // ✅ Générer dans un fichier temporaire (comme l'ancienne version)
+            // ✅ Générer dans un fichier temporaire
             $fileName = 'ACTE_VENTE_' . uniqid() . '_' . $demandeur->nom_demandeur . '.docx';
             $filePath = sys_get_temp_dir() . '/' . $fileName;
             

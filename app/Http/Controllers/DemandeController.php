@@ -28,31 +28,76 @@ class DemandeController extends Controller
     {
         $dossier = Dossier::findOrFail($dossierId);
 
+        // Récupérer toutes les demandes actives du dossier
         $query = Demander::with(['demandeur', 'propriete'])
             ->where('status', 'active')
             ->whereHas('propriete', fn($q) => $q->where('id_dossier', $dossier->id));
 
         if ($request->filled('search')) {
             $search = $request->search;
-
             $query->where(function ($q) use ($search) {
                 $q->whereHas('propriete', fn($sub) =>
-                $sub->where('lot', 'ilike', "%{$search}%")
-                    ->orWhere('titre', 'ilike', "%{$search}%")
+                    $sub->where('lot', 'ilike', "%{$search}%")
+                        ->orWhere('titre', 'ilike', "%{$search}%")
                 )
-                    ->orWhereHas('demandeur', fn($sub) =>
+                ->orWhereHas('demandeur', fn($sub) =>
                     $sub->where('nom_demandeur', 'ilike', "%{$search}%")
                         ->orWhere('prenom_demandeur', 'ilike', "%{$search}%")
                         ->orWhere('cin', 'like', "%{$search}%")
-                    );
+                );
             });
         }
 
-        $demandes = $query->paginate(20);
+        $demandes = $query->get();
+
+        // Grouper par propriété
+        $documentsGroupes = $demandes->groupBy('id_propriete')->map(function ($groupe) {
+            $premiere = $groupe->first();
+            
+            return [
+                'id' => $premiere->id, // ID de la première demande pour compatibilité
+                'id_propriete' => $premiere->id_propriete,
+                'propriete' => $premiere->propriete,
+                'demandeurs' => $groupe->map(function ($demande) {
+                    return [
+                        'id' => $demande->id,
+                        'id_demandeur' => $demande->id_demandeur,
+                        'demandeur' => $demande->demandeur,
+                        'total_prix' => $demande->total_prix,
+                        'status_consort' => $demande->status_consort,
+                        'status' => $demande->status,
+                    ];
+                })->values(),
+                'demandeur' => $premiere->demandeur, // Premier demandeur pour l'affichage
+                'total_prix' => $premiere->total_prix,
+                'status_consort' => $groupe->count() > 1,
+                'status' => $premiere->status,
+                'nombre_demandeurs' => $groupe->count(),
+            ];
+        })->values();
+
+        // Pagination manuelle
+        $page = $request->get('page', 1);
+        $perPage = 20;
+        $total = $documentsGroupes->count();
+        $lastPage = ceil($total / $perPage);
+        
+        $paginatedData = $documentsGroupes->slice(($page - 1) * $perPage, $perPage)->values();
+
+        $documents = [
+            'data' => $paginatedData,
+            'current_page' => $page,
+            'last_page' => $lastPage,
+            'per_page' => $perPage,
+            'total' => $total,
+            'from' => ($page - 1) * $perPage + 1,
+            'to' => min($page * $perPage, $total),
+        ];
+        
 
         return Inertia::render('documents/index', [
             'dossier' => $dossier,
-            'documents' => $demandes,
+            'documents' => $documents,
         ]);
     }
 
@@ -587,25 +632,84 @@ class DemandeController extends Controller
         return response()->download($filePath)->deleteFileAfterSend(true);
     }
 
-    public function list($id)
+    /**
+     * Liste groupée des documents (utilisée par la route dossiers.list)
+     */
+    public function list(Request $request, $dossierId)
     {
-        $dossier = Dossier::find($id);
-        
-        // Charger TOUS les documents (actifs ET archivés)
-        $demandes = Demander::with(['demandeur', 'propriete'])
-            ->whereHas('propriete', function ($q) use ($dossier) {
-                $q->where('id_dossier', $dossier->id);
-            })
-            ->orderBy('status', 'asc')
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+        $dossier = Dossier::findOrFail($dossierId);
 
-        return Inertia::render('documents/index',[
+        // ✅ Récupérer TOUTES les demandes (actives ET archivées)
+        $query = Demander::with(['demandeur', 'propriete'])
+            ->whereHas('propriete', fn($q) => $q->where('id_dossier', $dossier->id));
+
+        // ✅ Recherche
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('propriete', fn($sub) =>
+                    $sub->where('lot', 'ilike', "%{$search}%")
+                        ->orWhere('titre', 'ilike', "%{$search}%")
+                )
+                ->orWhereHas('demandeur', fn($sub) =>
+                    $sub->where('nom_demandeur', 'ilike', "%{$search}%")
+                        ->orWhere('prenom_demandeur', 'ilike', "%{$search}%")
+                        ->orWhere('cin', 'like', "%{$search}%")
+                );
+            });
+        }
+
+        $demandes = $query->get();
+
+        // ✅ Grouper par propriété
+        $documentsGroupes = $demandes->groupBy('id_propriete')->map(function ($groupe) {
+            $premiere = $groupe->first();
+            
+            return [
+                'id' => $premiere->id,
+                'id_propriete' => $premiere->id_propriete,
+                'propriete' => $premiere->propriete,
+                'demandeurs' => $groupe->map(function ($demande) {
+                    return [
+                        'id' => $demande->id,
+                        'id_demandeur' => $demande->id_demandeur,
+                        'demandeur' => $demande->demandeur,
+                        'total_prix' => $demande->total_prix,
+                        'status_consort' => $demande->status_consort,
+                        'status' => $demande->status,
+                    ];
+                })->values(),
+                'demandeur' => $premiere->demandeur,
+                'total_prix' => $premiere->total_prix,
+                'status_consort' => $groupe->count() > 1,
+                'status' => $premiere->status,
+                'nombre_demandeurs' => $groupe->count(),
+            ];
+        })->values();
+
+        // ✅ Pagination server-side
+        $page = $request->get('page', 1);
+        $perPage = 20;
+        $total = $documentsGroupes->count();
+        $lastPage = ceil($total / $perPage);
+        
+        $paginatedData = $documentsGroupes->slice(($page - 1) * $perPage, $perPage)->values();
+
+        $documents = [
+            'data' => $paginatedData,
+            'current_page' => (int) $page,
+            'last_page' => (int) $lastPage,
+            'per_page' => $perPage,
+            'total' => $total,
+            'from' => ($page - 1) * $perPage + 1,
+            'to' => min($page * $perPage, $total),
+        ];
+
+        return Inertia::render('documents/index', [
             'dossier' => $dossier,
-            'documents'=> $demandes,
+            'documents' => $documents,
         ]);
     }
-
     public function unarchive(Request $request)
     {
         $validated = $request->validate([

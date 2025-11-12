@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
+use App\Services\PrixCalculatorService;
 
 class ProprieteController extends Controller
 {
@@ -130,7 +131,7 @@ class ProprieteController extends Controller
             return back()->with('message', 'Propriété introuvable');
         }
         
-        // ✅ Bloquer si archivée
+        // Bloquer si archivée
         if ($this->isPropertyArchived($existPropriete)) {
             return back()->with('error', $this->getBlockedActionMessage($existPropriete, 'modification'));
         }
@@ -146,7 +147,6 @@ class ProprieteController extends Controller
             'type_operation' => 'required|in:morcellement,immatriculation',
             'nature' => 'required|string|max:40',
             'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
-            
             'proprietaire' => 'nullable|string|max:50',
             'situation' => 'nullable|string',
             'propriete_mere' => 'nullable|string|max:20',
@@ -168,11 +168,74 @@ class ProprieteController extends Controller
             'vocation.in' => 'La vocation doit être: Edilitaire, Agricole, Forestière ou Touristique',
         ]);
         
+        DB::beginTransaction();
+        
         try {
+            // Vérifier si la contenance ou la vocation a changé
+            $contenanceChanged = $existPropriete->contenance != $validate['contenance'];
+            $vocationChanged = $existPropriete->vocation != $validate['vocation'];
+            
+            // Mettre à jour la propriété
             $existPropriete->update($validate);
+            
+            // Recalculer les prix si nécessaire
+            if ($contenanceChanged || $vocationChanged) {
+                $demandes = Demander::where('id_propriete', $existPropriete->id)
+                    ->where('status', 'active')
+                    ->get();
+                
+                if ($demandes->count() > 0) {
+                    try {
+                        $nouveauPrix = PrixCalculatorService::calculerPrixTotal($existPropriete);
+                        
+                        foreach ($demandes as $demande) {
+                            $ancienPrix = $demande->total_prix;
+                            $demande->update(['total_prix' => $nouveauPrix]);
+                            
+                            Log::info('Prix recalculé après modification propriété', [
+                                'propriete_id' => $existPropriete->id,
+                                'lot' => $existPropriete->lot,
+                                'demande_id' => $demande->id,
+                                'ancien_prix' => $ancienPrix,
+                                'nouveau_prix' => $nouveauPrix,
+                                'contenance_changee' => $contenanceChanged,
+                                'vocation_changee' => $vocationChanged
+                            ]);
+                        }
+                        
+                        DB::commit();
+                        
+                        return Redirect::route('dossiers.show', $request->id_dossier)
+                            ->with('success', "Propriété modifiée et {$demandes->count()} prix recalculé(s) avec succès");
+                            
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        
+                        Log::error('Erreur recalcul prix après modification', [
+                            'propriete_id' => $existPropriete->id,
+                            'error' => $e->getMessage()
+                        ]);
+                        
+                        return back()->withErrors([
+                            'error' => "Propriété modifiée mais erreur lors du recalcul des prix: {$e->getMessage()}"
+                        ]);
+                    }
+                }
+            }
+            
+            DB::commit();
+            
             return Redirect::route('dossiers.show', $request->id_dossier)
                 ->with('message', 'Propriété modifiée avec succès');
+                
         } catch (\Exception $exception) {
+            DB::rollBack();
+            
+            Log::error('Erreur modification propriété', [
+                'propriete_id' => $id,
+                'error' => $exception->getMessage()
+            ]);
+            
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }

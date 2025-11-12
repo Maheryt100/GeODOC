@@ -58,13 +58,13 @@ class DemandeurController extends Controller
     public function store(Request $request)
     {
         $validateData = $request->validate([
-            // ✅ Champs obligatoires minimaux
+       
             'titre_demandeur' => 'required|string|max:12',
             'nom_demandeur' => 'required|string|max:40',
             'prenom_demandeur' => 'nullable|string|max:50',
             'date_naissance' => 'required|date|before:-18 years',
             
-            // ✅ Tous les autres champs deviennent nullable
+            // Champs nullable
             'lieu_naissance' => 'nullable|string|max:100',
             'sexe' => 'nullable',
             'occupation' => 'nullable|string|max:30',

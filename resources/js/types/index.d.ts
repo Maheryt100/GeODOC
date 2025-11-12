@@ -161,6 +161,8 @@ export interface PageProps {
 }
 
 export interface Paginated<T> {
+    last_page: number;
+    current_page: number;
     data: T[];
     links: Link[];
 }
