@@ -1,3 +1,4 @@
+// this is demandeurs/uptdate.tsx
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import React, { useEffect } from 'react';
@@ -169,8 +170,8 @@ export default function Update({ demandeur }: { demandeur: Demandeur }) {
                         <DropdownMenuItem asChild>
                             <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.list', dossier.id)}>Liste document</Link>
+                       <DropdownMenuItem asChild>
+                            <Link href={route('demandes.index', dossier.id)}>Liste document</Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

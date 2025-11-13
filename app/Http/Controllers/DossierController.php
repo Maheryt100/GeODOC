@@ -4,34 +4,107 @@ namespace App\Http\Controllers;
 
 use App\Models\Dossier;
 use App\Models\District;
+use App\Traits\ManagesDistrictAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
+use App\Models\User;
+
 
 class DossierController extends Controller
 {
+    use ManagesDistrictAccess;
+
+    /**
+     * Constructeur - Appliquer les middlewares
+     */
+    public function __construct()
+    {
+        // Tous les utilisateurs doivent être authentifiés et avoir accès à leur district
+        $this->middleware(['auth', 'district.access']);
+        
+        // Actions spécifiques
+        $this->middleware('district.access:create')->only(['create', 'store']);
+        $this->middleware('district.access:update')->only(['edit', 'update']);
+        $this->middleware('district.access:delete')->only(['destroy']);
+    }
+
+    /**
+     * Liste des dossiers - FILTRÉE automatiquement par district
+     */
     public function index()
     {
+        /** @var User $user */
+        $user = Auth::user();
+
+        // Grâce au trait HasDistrictScope dans Dossier,
+        // cette requête sera automatiquement filtrée par district
+        // SAUF pour les super admins
         $dossiers = Dossier::withCount(['demandeurs', 'proprietes'])
             ->orderBy('date_descente_debut', 'desc')
             ->get();
         
+        // Informations additionnelles pour l'interface
+        $districtInfo = null;
+        if (!$user->isSuperAdmin()) {
+            $districtInfo = [
+                'nom' => $user->district->nom_district,
+                'region' => $user->district->region->nom_region,
+                'can_see_all' => false,
+            ];
+        } else {
+            $districtInfo = [
+                'nom' => 'Tous les districts',
+                'can_see_all' => true,
+            ];
+        }
+
         return Inertia::render('dossiers/index', [
             'dossiers' => $dossiers,
+            'districtInfo' => $districtInfo,
+            'userRole' => $user->role_name,
+            'stats' => $this->getDistrictStats(),
         ]);
     }
     
+    /**
+     * Formulaire de création
+     */
     public function create()
     {
-        $districts = District::all();
+        $this->authorizeDistrictAccess('create');
+        
+        /** @var User $user */
+        $user = Auth::user();
+        
+        // Super admin peut choisir le district
+        // Autres utilisateurs voient seulement leur district
+        if ($user->isSuperAdmin()) {
+            $districts = District::with('region')->get();
+        } else {
+            $districts = District::where('id', $user->id_district)
+                ->with('region')
+                ->get();
+        }
+
         return Inertia::render('dossiers/create', [
             'districts' => $districts,
+            'defaultDistrict' => $user->id_district,
+            'canSelectDistrict' => $user->isSuperAdmin(),
         ]);
     }
 
+    /**
+     * Enregistrement d'un nouveau dossier
+     */
     public function store(Request $request)
     {
+        $this->authorizeDistrictAccess('create');
+        
+        /** @var User $user */
+        $user = Auth::user();
+
         $validated = $request->validate([
             'nom_dossier' => 'required|string|max:100',
             'type_commune' => 'required|string',
@@ -41,40 +114,44 @@ class DossierController extends Controller
             'date_descente_debut' => 'required|date',
             'date_descente_fin' => 'required|date|after_or_equal:date_descente_debut',
             'id_district' => 'required|numeric|exists:districts,id',
-        ], [
-            'nom_dossier.required' => 'Le nom du dossier est obligatoire',
-            'type_commune.required' => 'Le type de commune est obligatoire',
-            'commune.required' => 'La commune est obligatoire',
-            'fokontany.required' => 'Le fokontany est obligatoire',
-            'type.required' => 'Le type de dossier est obligatoire',
-            'date_descente_fin.after_or_equal' => 'La date de fin doit être après ou égale à la date de début',
         ]);
         
         try {
-            $validated['id_user'] = Auth::id();
+            // ✅ SÉCURITÉ : Vérifier que l'utilisateur peut créer dans ce district
+            if (!$user->isSuperAdmin() && $validated['id_district'] != $user->id_district) {
+                return back()->withErrors([
+                    'error' => 'Vous ne pouvez créer des dossiers que dans votre district.'
+                ]);
+            }
+
+            $validated['id_user'] = $user->id;
             
-            Dossier::create($validated);
+            $dossier = Dossier::create($validated);
+
+            // Log de l'action
+            $user->logAccess('create', 'dossier', $dossier->id);
             
             return Redirect::route('dossiers')
                 ->with('message', 'Dossier créé avec succès');
+                
         } catch (\Exception $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
     }
 
     /**
-     * Recherche améliorée - accepte n'importe quelle longueur
-     * Si vide, retourne tous les dossiers
+     * Recherche - automatiquement filtrée par district
      */
     public function search(Request $request)
     {
-        // Pas de validation de longueur minimale
         $search = $request->input('search', '');
+        /** @var User $user */
+        $user = Auth::user();
 
         try {
+            // Le scope district s'applique automatiquement
             $query = Dossier::withCount('demandeurs', 'proprietes');
 
-            // Si recherche vide, retourner tous les dossiers
             if (!empty($search)) {
                 $query->where(function ($q) use ($search) {
                     $q->where('nom_dossier', 'ilike', "%{$search}%")
@@ -94,6 +171,10 @@ class DossierController extends Controller
             
             return Inertia::render('dossiers/index', [
                 'dossiers' => $dossiers,
+                'districtInfo' => [
+                    'nom' => $user->isSuperAdmin() ? 'Tous les districts' : $user->district->nom_district,
+                    'can_see_all' => $user->isSuperAdmin(),
+                ],
             ])->with('message', $message);
             
         } catch (\Exception $exception) {
@@ -101,19 +182,107 @@ class DossierController extends Controller
         }
     }
 
+    /**
+     * Affichage d'un dossier - avec vérification d'accès
+     */
+    public function show($id)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        
+        // Récupérer le dossier (le scope district s'applique automatiquement)
+        $dossier = Dossier::with([
+            'demandeurs',
+            'proprietes' => function ($query) {
+                $query->with([
+                    'demandeurs',
+                    'demandes' => function ($q) {
+                        $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix')
+                          ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
+                    }
+                ]);
+            }
+        ])->findOrFail($id);
+
+        // Double vérification de sécurité (normalement déjà fait par le scope)
+        if (!$user->canAccessDossier($dossier)) {
+            abort(403, 'Accès refusé à ce dossier');
+        }
+
+        // Enrichir les données
+        foreach ($dossier->proprietes as $propriete) {
+            $activeCount = $propriete->demandes->where('status', 'active')->count();
+            $archivedCount = $propriete->demandes->where('status', 'archive')->count();
+            
+            $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
+            
+            if ($propriete->demandeurs) {
+                foreach ($propriete->demandeurs as $demandeur) {
+                    $demande = $propriete->demandes->firstWhere('id_demandeur', $demandeur->id);
+                    if ($demande) {
+                        $demandeur->status = $demande->status;
+                        $demandeur->id_demande = $demande->id;
+                    }
+                }
+            }
+        }
+
+        // Log de l'accès
+        $user->logAccess('view', 'dossier', $id);
+
+        return Inertia::render('dossiers/Show', [
+            'dossier' => $dossier,
+            'permissions' => [
+                'canEdit' => $user->canUpdate('dossier'),
+                'canDelete' => $user->canDelete('dossier'),
+                'canArchive' => $user->canArchive(),
+                'canExport' => $user->canExportData(),
+            ],
+        ]);
+    }
+
+    /**
+     * Édition - avec vérification d'accès
+     */
     public function edit($id)
     {
+        $this->authorizeDistrictAccess('update');
+        
+        /** @var User $user */
+        $user = Auth::user();
         $dossier = Dossier::findOrFail($id);
-        $districts = District::all();
+        
+        // Vérifier l'accès
+        $this->authorizeDistrictAccess('update', $dossier);
+        
+        // Districts disponibles
+        if ($user->isSuperAdmin()) {
+            $districts = District::all();
+        } else {
+            $districts = District::where('id', $user->id_district)->get();
+        }
         
         return Inertia::render('dossiers/update', [
             'dossier' => $dossier,
             'districts' => $districts,
+            'canChangeDistrict' => $user->isSuperAdmin(),
         ]);
     }
 
+    /**
+     * Mise à jour
+     */
     public function update(Request $request, $id)
     {
+        $this->authorizeDistrictAccess('update');
+        
+        /** @var User $user */
+        $user = Auth::user();
+        $dossier = Dossier::findOrFail($id);
+        
+        // Vérifier l'accès
+        $this->authorizeDistrictAccess('update', $dossier);
+
         $validated = $request->validate([
             'nom_dossier' => 'required|string|max:255',
             'type_commune' => 'required|string',
@@ -125,70 +294,48 @@ class DossierController extends Controller
             'id_district' => 'required|exists:districts,id',
         ]);
 
-        $dossier = Dossier::findOrFail($id);
+        // ✅ SÉCURITÉ : Empêcher le changement de district sauf pour super admin
+        if (!$user->isSuperAdmin() && $validated['id_district'] != $dossier->id_district) {
+            return back()->withErrors([
+                'error' => 'Vous ne pouvez pas changer le district du dossier.'
+            ]);
+        }
+
         $dossier->update($validated);
+
+        // Log de l'action
+        $user->logAccess('update', 'dossier', $id);
 
         return redirect()
             ->route('dossiers.show', $id)
             ->with('message', 'Dossier modifié avec succès');
     }
 
-    public function demandeurs($id)
+    /**
+     * Suppression
+     */
+    public function destroy($id)
     {
-        $dossier = Dossier::findOrFail($id);
-        $demandeurs = $dossier->demandeurs()->paginate(20);
-
-        return Inertia::render('demandeurs/index', [
-           'demandeurs' => $demandeurs,
-            'dossier' => $dossier,
-        ]);
-    }
-    
-    public function proprietes($id)
-    {
-        $dossier = Dossier::findOrFail($id);
-        $proprietes = $dossier->proprietes()->paginate(20);
-
-        return Inertia::render('proprietes/index', [
-            'proprietes' => $proprietes,
-            'dossier' => $dossier,
-        ]);
-    }
-
- 
-    public function show($id)
-{
-    $dossier = Dossier::with([
-        'demandeurs',
-        'proprietes' => function ($query) {
-            $query->with([
-                'demandeurs',
-                'demandes' => function ($q) {
-                    $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix')
-                      ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
-                }
-            ]);
-        }
-    ])->findOrFail($id);
-
-    foreach ($dossier->proprietes as $propriete) {
-        $activeCount = $propriete->demandes->where('status', 'active')->count();
-        $archivedCount = $propriete->demandes->where('status', 'archive')->count();
+        $this->authorizeDistrictAccess('delete');
         
-        $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
+        /** @var User $user */
+        $user = Auth::user();
+        $dossier = Dossier::findOrFail($id);
         
-        // Enrichir les demandeurs avec le statut
-        if ($propriete->demandeurs) {
-            foreach ($propriete->demandeurs as $demandeur) {
-                $demande = $propriete->demandes->firstWhere('id_demandeur', $demandeur->id);
-                if ($demande) {
-                    $demandeur->status = $demande->status;
-                    $demandeur->id_demande = $demande->id;
-                }
-            }
+        // Vérifier l'accès
+        $this->authorizeDistrictAccess('delete', $dossier);
+
+        try {
+            // Log avant suppression
+            $user->logAccess('delete', 'dossier', $id);
+            
+            $dossier->delete();
+            
+            return Redirect::route('dossiers')
+                ->with('success', 'Dossier supprimé avec succès');
+                
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
-
-    return Inertia::render('dossiers/Show', ['dossier' => $dossier]);
-}
 }

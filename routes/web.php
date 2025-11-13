@@ -1,168 +1,238 @@
 <?php
 
-use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\ConsortController;
-use App\Http\Controllers\DemandeController;
-use App\Http\Controllers\DemandeurController;
-use App\Http\Controllers\DemandeurProprieteController;
-use App\Http\Controllers\DistrictController;
-use App\Http\Controllers\DocumentGenerationController;
+// routes/web.php
+
 use App\Http\Controllers\DossierController;
 use App\Http\Controllers\ProprieteController;
+use App\Http\Controllers\DemandeurController;
+use App\Http\Controllers\DemandeurProprieteController;
+use App\Http\Controllers\DemandeController;
+use App\Http\Controllers\DistrictController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\DocumentGenerationController;
+use App\Http\Controllers\AssociationController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StatController;
-
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
+// ============ ROUTES PUBLIQUES ============
 Route::get('/', function () {
-    return to_route('login');
+    return Inertia::render('Home');
 })->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', [StatController::class, 'index'])->name('dashboard');
+Route::middleware('guest')->group(function () {
+    Route::get('login', [AuthController::class, 'showLoginForm'])->name('login');
+    Route::post('login', [AuthController::class, 'login']);
+});
 
-    Route::prefix('dossiers')->group(function () {
-        // ==========================================
-        // ROUTES DE BASE DES DOSSIERS
-        // ==========================================
-        Route::get('/', [DossierController::class, 'index'])->name('dossiers');
-        Route::get('/create', [DossierController::class, 'create'])->name('dossiers.create');
-        Route::post('/store', [DossierController::class, 'store'])->name('dossiers.store');
-        Route::post("/search", [DossierController::class, 'search'])->name('dossiers.search');
-        Route::get('/search', function () {
-            return redirect()->route('dossiers');
+// ============ ROUTES AUTHENTIFIÉES ============
+Route::middleware(['auth', 'district.scope'])->group(function () {
+    
+    // Dashboard avec statistiques par district
+    Route::get('/dashboard', [StatController::class, 'index'])->name('dashboard');
+    
+    // ============ DOSSIERS ============
+    Route::prefix('dossiers')->name('dossiers')->group(function () {
+        Route::get('/', [DossierController::class, 'index']);
+        
+        // Création (permission create requise)
+        Route::middleware('district.access:create')->group(function () {
+            Route::get('/create', [DossierController::class, 'create'])->name('.create');
+            Route::post('/', [DossierController::class, 'store'])->name('.store');
         });
-        Route::get('/{id}/show', [DossierController::class, 'show'])->name('dossiers.show');
-        Route::get("/{id}/edit", [DossierController::class, 'edit'])->name('dossiers.edit');
-        Route::post("update/{id}", [DossierController::class, 'update'])->name('dossiers.update');
-        Route::get('{id}/list', [DemandeController::class, 'list'])->name('dossiers.list');
-
-        // ==========================================
-        // GÉNÉRATION DE DOCUMENTS (NOUVEAU SYSTÈME - ROUTES GET)
-        // ==========================================
-        Route::get('/{id}/documents/generate', [DocumentGenerationController::class, 'index'])
-            ->name('documents.generate');
         
-        // ✅ CHANGEMENT IMPORTANT : GET au lieu de POST pour permettre le téléchargement direct
-        Route::get('/documents/generate/acte', [DocumentGenerationController::class, 'generateActeVente'])
-            ->name('documents.generate.acte');
-        Route::get('/documents/generate/csf', [DocumentGenerationController::class, 'generateCsf'])
-            ->name('documents.generate.csf');
-        Route::get('/documents/generate/requisition', [DocumentGenerationController::class, 'generateRequisition'])
-            ->name('documents.generate.requisition');
-
-        // ==========================================
-        // DEMANDEUR-PROPRIETE (3 WORKFLOWS)
-        // ==========================================
+        // Consultation (vérification automatique du district)
+        Route::middleware('dossier.access:id')->group(function () {
+            Route::get('/{id}', [DossierController::class, 'show'])->name('.show');
+            Route::get('/{id}/demandeurs', [DossierController::class, 'demandeurs'])->name('.demandeurs');
+            Route::get('/{id}/proprietes', [DossierController::class, 'proprietes'])->name('.proprietes');
+        });
         
-        // 1. NOUVEAU LOT : Créer Propriété + Demandeurs ensemble
-        Route::get('/{id}/nouveau-lot', [DemandeurProprieteController::class, 'create'])
+        // Modification (permission update requise)
+        Route::middleware(['district.access:update', 'dossier.access:id'])->group(function () {
+            Route::get('/{id}/edit', [DossierController::class, 'edit'])->name('.edit');
+            Route::put('/{id}', [DossierController::class, 'update'])->name('.update');
+        });
+        
+        // Suppression (permission delete requise)
+        Route::delete('/{id}', [DossierController::class, 'destroy'])
+            ->middleware(['district.access:delete', 'dossier.access:id'])
+            ->name('.destroy');
+        
+        // Recherche
+        Route::get('/search', [DossierController::class, 'search'])->name('.search');
+    });
+
+    // ============ PROPRIÉTÉS ============
+    Route::prefix('proprietes')->name('proprietes.')->group(function () {
+        Route::get('/dossier/{id_dossier}', [ProprieteController::class, 'index'])
+            ->middleware('dossier.access:id_dossier')
+            ->name('index');
+        
+        Route::middleware('district.access:create')->group(function () {
+            Route::get('/create/{id}', [ProprieteController::class, 'create'])->name('create');
+            Route::post('/', [ProprieteController::class, 'store'])->name('store');
+        });
+        
+        Route::get('/{id}', [ProprieteController::class, 'show'])->name('show');
+        
+        Route::middleware('district.access:update')->group(function () {
+            Route::get('/{id}/edit', [ProprieteController::class, 'edit'])->name('edit');
+            Route::put('/{id}', [ProprieteController::class, 'update'])->name('update');
+        });
+        
+        Route::middleware('district.access:delete')->group(function () {
+            Route::delete('/{id}', [ProprieteController::class, 'destroy'])->name('destroy');
+        });
+        
+        // Archive (permission spéciale)
+        Route::middleware('district.access:archive')->group(function () {
+            Route::post('/archive', [ProprieteController::class, 'archive'])->name('archive');
+            Route::post('/unarchive', [ProprieteController::class, 'unarchive'])->name('unarchive');
+        });
+    });
+
+    // ============ DEMANDEURS ============
+    Route::prefix('demandeurs')->name('demandeurs.')->group(function () {
+        Route::get('/dossier/{id_dossier}', [DemandeurController::class, 'index'])
+            ->middleware('dossier.access:id_dossier')
+            ->name('index');
+        
+        Route::middleware('district.access:create')->group(function () {
+            Route::get('/create/{id}', [DemandeurController::class, 'create'])->name('create');
+            Route::post('/', [DemandeurController::class, 'store'])->name('store');
+            Route::get('/exist/{id}', [DemandeurController::class, 'exist'])->name('exist');
+            Route::post('/search-cin', [DemandeurController::class, 'searchCin'])->name('searchCin');
+            Route::post('/store-exist', [DemandeurController::class, 'storeExist'])->name('storeExist');
+        });
+        
+        Route::middleware('district.access:update')->group(function () {
+            Route::get('/{id_dossier}/{id_demandeur}/edit', [DemandeurController::class, 'edit'])->name('edit');
+            Route::put('/{id}', [DemandeurController::class, 'update'])->name('update');
+        });
+        
+        Route::middleware('district.access:delete')->group(function () {
+            Route::delete('/{id_dossier}/{id_demandeur}', [DemandeurController::class, 'destroy'])->name('destroy');
+            Route::delete('/{id_demandeur}/definitive', [DemandeurController::class, 'destroyDefinitive'])->name('destroyDefinitive');
+        });
+    });
+
+    // ============ DEMANDES (DOCUMENTS) ============
+    Route::prefix('demandes')->name('demandes.')->group(function () {
+        Route::get('/dossier/{dossierId}', [DemandeController::class, 'index'])
+            ->middleware('dossier.access:dossierId')
+            ->name('index');
+        
+        Route::middleware('district.access:create')->group(function () {
+            Route::get('/create/{id}', [DemandeController::class, 'create'])->name('create');
+            Route::post('/', [DemandeController::class, 'store'])->name('store');
+        });
+        
+        Route::get('/{id}/download', [DemandeController::class, 'download'])->name('download');
+        Route::get('/{id}/csf', [DemandeController::class, 'downloadCSF'])->name('downloadCSF');
+        
+        Route::middleware('district.access:archive')->group(function () {
+            Route::post('/archive', [DemandeController::class, 'archive'])->name('archive');
+            Route::post('/unarchive', [DemandeController::class, 'unarchive'])->name('unarchive');
+        });
+        
+        Route::middleware('district.access:export')->group(function () {
+            Route::get('/{id}/export', [DemandeController::class, 'exportList'])->name('export');
+        });
+    });
+
+    // ============ ASSOCIATIONS DEMANDEUR-PROPRIÉTÉ ============
+    Route::middleware('district.access:create')->group(function () {
+        // Nouveau lot - Créer une nouvelle propriété avec demandeur
+        Route::get('/nouveau-lot/{id}', [DemandeurProprieteController::class, 'create'])
             ->name('nouveau-lot.create');
-        Route::post('/nouveau-lot/store', [DemandeurProprieteController::class, 'store'])
+        Route::post('/nouveau-lot', [DemandeurProprieteController::class, 'store'])
             ->name('nouveau-lot.store');
-
-        // 2. AJOUTER DEMANDEUR : Ajouter un demandeur à une propriété existante
-        Route::get('/{id}/ajouter-demandeur/{id_propriete?}', [DemandeurProprieteController::class, 'addToProperty'])
-            ->name('ajouter-demandeur.create');
-        Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])
-            ->name('ajouter-demandeur.store');
-
-        // 3. LIER EXISTANT : Lier un demandeur existant à une propriété existante
-        Route::get('/{id}/lier-demandeur/{id_demandeur?}/{id_propriete?}', [DemandeurProprieteController::class, 'linkExisting'])
+        
+        // Lier demandeur existant - Associer un demandeur existant à une propriété existante
+        Route::get('/lier-demandeur/{id}/{id_demandeur?}/{id_propriete?}', [DemandeurProprieteController::class, 'linkExisting'])
             ->name('lier-demandeur.create');
         Route::post('/lier-demandeur/search', [DemandeurProprieteController::class, 'searchToLink'])
             ->name('lier-demandeur.search');
         Route::post('/lier-demandeur/store', [DemandeurProprieteController::class, 'storeLink'])
             ->name('lier-demandeur.store');
-
-        // 4. DISSOCIER : Dissocier un demandeur d'une propriété
-        Route::post('/dissocier', [DemandeurProprieteController::class, 'dissociate'])
+        
+        // Ajouter demandeur - Ajouter un nouveau demandeur à une propriété existante
+        Route::get('/ajouter-demandeur/{id}/{id_propriete?}', [DemandeurProprieteController::class, 'addToProperty'])
+            ->name('ajouter-demandeur.create');
+        Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])
+            ->name('ajouter-demandeur.store');
+    });
+    
+    // Dissocier - Retirer un demandeur d'une propriété
+    Route::middleware('district.access:delete')->group(function () {
+        Route::post('/demandeur-propriete/dissociate', [DemandeurProprieteController::class, 'dissociate'])
             ->name('demandeur-propriete.dissociate');
-
-        // ==========================================
-        // DEMANDEURS
-        // ==========================================
-        Route::get('/{id}/demandeurs', [DossierController::class, 'demandeurs'])->name('dossiers.demandeurs');
-        Route::get('/{id}/demandeur/create', [DemandeurController::class, 'create'])->name('demandeurs.create');
-        Route::get('/{dossier}/demandeur/edit/{demandeur}', [DemandeurController::class, 'edit'])->name('demandeurs.edit');
-        Route::delete('/{dossier}/demandeur/delete/{demandeur}', [DemandeurController::class, 'destroy'])->name('demandeurs.destroy');
-        Route::post('/demandeurs/search/insert', [DemandeurController::class, 'searchCin'])->name('demandeurs.searchCin');
-        Route::post('/demandeurs/store/exist', [DemandeurController::class, 'storeExist'])->name('store.exist');
-        Route::post('demandeurs/store', [DemandeurController::class, 'store'])->name('demandeurs.store');
-        Route::put('demandeurs/{id}', [DemandeurController::class, 'update'])->name('demandeurs.update');
-        Route::get('demandeurs/search/{dossier}', [DemandeurController::class, 'index'])->name('demandeurs.search');
-        Route::delete('/demandeurs/{demandeur}/destroy-definitive', [DemandeurController::class, 'destroyDefinitive'])->name('demandeurs.destroy.definitive');
-
-        // ==========================================
-        // PROPRIETES
-        // ==========================================
-        Route::get('{id}/proprietes', [DossierController::class, 'proprietes'])->name('dossiers.proprietes');
-        Route::get('{id}/proprietes/create', [ProprieteController::class, 'create'])->name('proprietes.create');
-        Route::get('propriete/edit/{id}', [ProprieteController::class, 'edit'])->name('proprietes.edit');
-        Route::delete('proprietes/{id}', [ProprieteController::class, 'destroy'])->name('proprietes.destroy');
-        Route::get('proprietes/search/{dossier}', [ProprieteController::class, 'index'])->name('proprietes.search');
-        
-        // Archive/Désarchive propriété
-        Route::post('/proprietes/archive', [ProprieteController::class, 'archive'])
-            ->name('proprietes.archive');
-        Route::post('/proprietes/unarchive', [ProprieteController::class, 'unarchive'])
-            ->name('proprietes.unarchive');
-
-        // ==========================================
-        // DOCUMENTS & LISTES (ANCIEN SYSTÈME)
-        // ==========================================
-        Route::get('/list/search/{dossier}', [DemandeController::class, 'index'])->name('documents.index');
-        Route::get('{id}/lier/document', [DemandeController::class, 'create'])->name('lier.document');
-        Route::post('document/archive', [DemandeController::class, 'archive'])->name('document.archive');
-        Route::post('document/unarchive', [DemandeController::class, 'unarchive'])->name('document.unarchive');
-        
-        // Téléchargements (ANCIEN - utilisé par l'ancien système)
-        Route::get('download/{id}/document', [DemandeController::class, 'download'])->name('document.download');
-        Route::get('download/{id}/CSF', [DemandeController::class, 'downloadCSF'])->name('download.CSF');
-        
-        Route::get('export/{id}/list', [DemandeController::class, 'exportList'])->name('export.list');
     });
 
-    // ==========================================
-    // ROUTES GLOBALES PROPRIETES
-    // ==========================================
-    Route::get('proprietes', [ProprieteController::class, 'index'])->name('proprietes');
-    Route::post('proprietes/store', [ProprieteController::class, 'store'])->name('proprietes.store');
-    Route::get('proprietes/{id}/edit', [ProprieteController::class, 'edit'])->name('proprietes.edit');
-    Route::put('proprietes/{id}', [ProprieteController::class, 'update'])->name('proprietes.update');
-    Route::get('proprietes/{id}/show', [ProprieteController::class, 'show'])->name('proprietes.show');
+    // ============ CONFIGURATION DES PRIX ============
+    // Accessible seulement aux super_admin et admin_district
+    Route::prefix('circonscription')->name('circonscription.')
+        ->middleware('district.access:configure_prices')
+        ->group(function () {
+            Route::get('/', [DistrictController::class, 'index'])->name('index');
+            Route::post('/update', [DistrictController::class, 'update'])->name('update');
+            Route::post('/bulk-update', [DistrictController::class, 'bulkUpdate'])->name('bulkUpdate');
+            Route::post('/reset', [DistrictController::class, 'resetPrices'])->name('reset');
+        });
 
-    // ==========================================
-    // ANCIEN SYSTÈME DE GÉNÉRATION (PEUT ÊTRE SUPPRIMÉ APRÈS MIGRATION COMPLÈTE)
-    // ==========================================
-    Route::get('documents/create', [DemandeController::class, 'create'])->name('documents.create');
-    Route::post('documents/store', [DemandeController::class, 'store'])->name('documents.store');
+    // ============ GESTION DES UTILISATEURS ============
+    // Accessible seulement aux super_admin
+    Route::prefix('users')->name('users.')
+        ->middleware('district.access:manage_users')
+        ->group(function () {
+            // Liste des utilisateurs
+            Route::get('/', [UserManagementController::class, 'index'])->name('index');
+            
+            // Créer un utilisateur
+            Route::get('/create', [UserManagementController::class, 'create'])->name('create');
+            Route::post('/', [UserManagementController::class, 'store'])->name('store');
+            
+            // Modifier un utilisateur
+            Route::get('/{id}/edit', [UserManagementController::class, 'edit'])->name('edit');
+            Route::put('/{id}', [UserManagementController::class, 'update'])->name('update');
+            
+            // Toggle statut actif/inactif
+            Route::post('/{id}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('toggleStatus');
+            
+            // Réinitialiser mot de passe
+            Route::post('/{id}/reset-password', [UserManagementController::class, 'resetPassword'])->name('resetPassword');
+            
+            // Supprimer un utilisateur (super admin seulement)
+            Route::delete('/{id}', [UserManagementController::class, 'destroy'])->name('destroy');
+        });
 
-    // ==========================================
-    // CONSORTS
-    // ==========================================
-    Route::get('consorts', [ConsortController::class, 'index'])->name('consorts');
-    Route::get('consorts/search', function () {
-        return redirect()->route('consorts');
-    })->name('consorts.search');
-    Route::prefix('consorts')->group(function () {
-        Route::get('archive/{id}/{demandeur}', [ConsortController::class, 'archive'])->name('consorts.archive');
-        Route::post('search', [ConsortController::class, 'search'])->name('consorts.search');
+    // ============ GÉNÉRATION DE DOCUMENTS ============
+    Route::prefix('documents')->name('documents.')->group(function () {
+        Route::get('/generate/{id_dossier}', [DocumentGenerationController::class, 'index'])
+            ->middleware('dossier.access:id_dossier')
+            ->name('generate');
+        
+        Route::get('/acte-vente', [DocumentGenerationController::class, 'generateActeVente'])->name('acte-vente');
+        Route::get('/csf', [DocumentGenerationController::class, 'generateCsf'])->name('csf');
+        Route::get('/requisition', [DocumentGenerationController::class, 'generateRequisition'])->name('requisition');
     });
 
-    // ==========================================
-    // PRIX DES TERRAINS
-    // ==========================================
-    Route::get('prix/terrain', [DistrictController::class, 'index'])->name('districts.terrain');
-    Route::prefix('terrain')->group(function () {
-        Route::post('update', [DistrictController::class, 'update'])->name('terrain.update');
+    // ============ API ENDPOINTS ============
+    Route::prefix('api')->name('api.')->group(function () {
+        Route::get('/demandeur/{id_demandeur}/proprietes', [AssociationController::class, 'getDemandeurProprietes'])
+            ->name('demandeur.proprietes');
+        
+        Route::get('/propriete/{id_propriete}/demandeurs', [AssociationController::class, 'getProprieteDemandeurs'])
+            ->name('propriete.demandeurs');
+        
+        Route::post('/dissociate', [AssociationController::class, 'dissociate'])
+            ->middleware('district.access:delete')
+            ->name('dissociate');
     });
 
-    // ==========================================
-    // GESTION UTILISATEURS
-    // ==========================================
-    Route::get('add/users', [RegisteredUserController::class, 'create'])->name('add.users');
-    Route::post('add/users', [RegisteredUserController::class, 'store'])->name('users.store');
+    // Logout
+    Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 });
-
-require __DIR__ . '/settings.php';
-require __DIR__ . '/auth.php';

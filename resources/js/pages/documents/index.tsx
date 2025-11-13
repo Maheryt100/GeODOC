@@ -303,7 +303,11 @@ export default function Index() {
                                                         <div className="flex items-center gap-2">
                                                             {document.propriete.lot}/ TNº{document.propriete.titre}
                                                             {isArchived && <Archive className="h-4 w-4 text-gray-500" />}
-                                                            {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" title="Données incomplètes" />}
+                                                             {isIncomplete && (
+                                                                <span title="Données incomplètes">
+                                                                    <AlertCircle className="h-4 w-4 text-red-500" />
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-sm">

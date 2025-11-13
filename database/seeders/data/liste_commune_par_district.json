@@ -131,6 +131,9 @@
             "Talata Volonondry",
             "Vilihazo"
         ],
+        "Antananarivo Renivohitra": [
+            "Commune Urbaine d'Antananarivo"
+        ],
         "Manjakandriana": [
             "Alarobia",
             "Ambanitsena",
@@ -157,28 +160,10 @@
             "Sadabe",
             "Sambaina",
             "Soavinandriana (Ambohidratrimoanala)"
-        ],
-        "Antananarivo-I": [
-            "Commune Urbaine d'Antananarivo"
-        ],
-        "Antananarivo-II": [
-            "Commune Urbaine d'Antananarivo"
-        ],
-        "Antananarivo-III": [
-            "Commune Urbaine d'Antananarivo"
-        ],
-        "Antananarivo-IV": [
-            "Commune Urbaine d'Antananarivo"
-        ],
-        "Antananarivo-V": [
-            "Commune Urbaine d'Antananarivo"
-        ],
-        "Antananarivo-VI": [
-            "Commune Urbaine d'Antananarivo"
         ]
     },
     "BONGOLAVA": {
-        "FENOARIVOBE": [
+        "Fenoarivobe": [
             "AMBATOMAINTY SUD",
             "AMBOHITROMBY",
             "FENOARIVOBE",
@@ -190,7 +175,7 @@
             "MANGATANY",
             "ANDRIAMPOTSY"
         ],
-        "TSIROANOMANDIDY": [
+        "Tsiroanomandidy": [
             "AMBALANIRANA",
             "AMBARARATABE",
             "AMBATOLAMPY",
@@ -214,7 +199,7 @@
         ]
     },
     "ITASY": {
-        "ARIVONIMAMO": [
+        "Arivonimamo": [
             "ALAKAMISIKELY",
             "AMBATOMANGA",
             "AMBATOMIRAHAVAVY",
@@ -239,7 +224,7 @@
             "MORARANO",
             "TALATA TSIMADILO"
         ],
-        "MIARINARIVO": [
+        "Miarinarivo": [
             "ALATSINAINIKELY",
             "AMBATOMANJAKA",
             "ANALAVORY",
@@ -255,7 +240,7 @@
             "SOAVIMBAZAHA",
             "ZOMA BEALOKA"
         ],
-        "SOAVINANDRIANA": [
+        "Soavinandriana": [
             "AMBATOASANA CENTRE",
             "AMBEROMANGA",
             "AMPARAKY",
@@ -275,7 +260,7 @@
         ]
     },
     "VAKINANKARATRA": {
-        "AMBATOLAMPY": [
+        "Ambatolampy": [
             "AMBATOLAMPY",
             "AMBATONDRAKALAVAO",
             "AMBODIFARIHY",
@@ -296,7 +281,7 @@
             "TSINJOARIVO",
             "ANDRIANTSIVALANA"
         ],
-        "ANTANIFOTSY": [
+        "Antanifotsy": [
             "AMBATOLAHY",
             "AMBATOMIADY",
             "AMBATOTSIPIHANA",
@@ -312,10 +297,10 @@
             "ANJAMANGA",
             "SOAMANANDRARINY"
         ],
-        "ANTSIRABE I": [
+        "Antsirabe I": [
             "ANTSIRABE"
         ],
-        "ANTSIRABE II": [
+        "Antsirabe II": [
             "ALAKAMISY",
             "ALATSINAINY IBITY",
             "AMBANO",
@@ -337,7 +322,7 @@
             "TSARAHONENANA SAHANIVOTRY",
             "VINANINKARENA"
         ],
-        "BETAFO": [
+        "Betafo": [
             "ALAKAMISY ANATIVATO",
             "ALAKAMISY MAROSOSONA",
             "ALAROBIA BEMAHA",
@@ -357,7 +342,7 @@
             "MAHAIZA",
             "INANANTONANA"
         ],
-        "FARATSIHO": [
+        "Faratsiho": [
             "AMBOHIBORONA",
             "ANDRANOMIADY",
             "ANTSAMPANIMAHAZO",
@@ -368,7 +353,7 @@
             "FARAVOHITRA",
             "VINANINONY SUD"
         ],
-        "MANDOTO": [
+        "Mandoto": [
             "MANDOTO",
             "VASIANA",
             "ANTANAMBAO AMBARY",
@@ -381,7 +366,7 @@
         ]
     },
     "DIANA": {
-        "AMBANJA": [
+        "Ambanja": [
             "AMBALAHONKO",
             "AMBALIHA",
             "AMBANJA",
@@ -407,7 +392,7 @@
             "MAROVATO",
             "ANTSAHABE CENTRE"
         ],
-        "AMBILOBE": [
+        "Ambilobe": [
             "AMBAKIRANO",
             "AMBARAKARAKA",
             "AMBATOBEN ' ANJAVY",
@@ -426,10 +411,10 @@
             "ANTANABE",
             "SIRAMA"
         ],
-        "ANTSIRANANA I": [
+        "Antsiranana I": [
             "ANTSIRANANA"
         ],
-        "ANTSIRANANA II": [
+        "Antsiranana II": [
             "AMBONDRONA",
             "ANDRAFIABE",
             "ANDRANOFANJAVA",
@@ -454,12 +439,12 @@
             "ANTSAKOABE",
             "AMBOLOBOZOBE"
         ],
-        "NOSY-BE": [
+        "Nosy-BE": [
             "CU NOSY-BE"
         ]
     },
     "SAVA": {
-        "ANDAPA": [
+        "Andapa": [
             "AMBALAMANASY II",
             "AMBODIANGEZOKA",
             "AMBODIMANGA I",
@@ -482,7 +467,7 @@
             "ANDASIBE KOBAHINA",
             "AMBALAVELONA"
         ],
-        "ANTALAHA": [
+        "Antalaha": [
             "AMBALABE",
             "AMBINANIFAHO",
             "AMBOHITRALANANA",
@@ -502,7 +487,7 @@
             "SAHANTAHA",
             "MANAKAMBAHINY ANKAVIA"
         ],
-        "SAMBAVA": [
+        "Sambava": [
             "AMBATOAFO",
             "AMBOANGIBE",
             "AMBODIAMPANA",
@@ -532,7 +517,7 @@
             "ANDAPABE",
             "MAHASOA ANTINDRA"
         ],
-        "VOHEMAR": [
+        "Vohemar": [
             "AMBALASATRANA",
             "AMBINANIN ' ANDRAVORY",
             "AMBORIALA",
@@ -555,7 +540,7 @@
         ]
     },
     "AMORON'I MANIA": {
-        "AMBATOFINANDRAHANA": [
+        "Ambatofinandrahana": [
             "AMBATOFINANDRAHANA",
             "AMBATOMIFANONGOA",
             "AMBONDROMISOTRA",
@@ -566,7 +551,7 @@
             "MANGATABOAHANGY",
             "SOAVINA"
         ],
-        "AMBOSITRA": [
+        "Ambositra": [
             "ALAKAMISY AMBOHIJATO",
             "AMBALAMANAKANA",
             "AMBATOFITORAHANA",
@@ -593,7 +578,7 @@
             "AMBOHIPERIVOANA",
             "ANKAZOTSARARAVINA"
         ],
-        "FANDRIANA": [
+        "Fandriana": [
             "ALAKAMISY AMBOHIMAHAZO",
             "ANKARINORO",
             "BETSIMISOTRA",
@@ -610,7 +595,7 @@
             "SOANAKAMBANA",
             "ISANDRANDAHY AMBONY"
         ],
-        "MANANDRIANA": [
+        "Manandriana": [
             "AMBATOMARINA",
             "AMBOHIMAHAZO",
             "AMBOHIMILANJA",
@@ -626,7 +611,7 @@
         ]
     },
     "ATSIMO-ATSINANANA": {
-        "BEFOTAKA ATSIMO": [
+        "Befotaka Atsimo": [
             "ANTANINARENINA",
             "ANTONDABE",
             "BEFOTAKA SUD",
@@ -637,7 +622,7 @@
             "ANTOKOBORITELO",
             "INOSY"
         ],
-        "FARAFANGANA": [
+        "Farafangana": [
             "AMBALATANY",
             "AMBALAVATO NORD",
             "AMBALAVATO\/ANTEVATO",
@@ -672,7 +657,7 @@
             "VOHITROMBY",
             "VOHILAVAN'I MANAMPATRANA"
         ],
-        "MIDONGY SUD": [
+        "Midongy Sud": [
             "ANDRANOLALINA",
             "ANKAZOVELO",
             "IVONDRO EX-LAVARATY",
@@ -681,7 +666,7 @@
             "ZARA EX-MALIORANO",
             "BEVAHO"
         ],
-        "VANGAINDRANO": [
+        "Vangaindrano": [
             "AMBATOLAVA",
             "AMBONGO",
             "AMPARIHY EST",
@@ -714,7 +699,7 @@
             "MAHABE",
             "FONILAZA"
         ],
-        "VONDROZO": [
+        "Vondrozo": [
             "AMBOHIMANA",
             "ANANDRAVY",
             "ANDAKANA",
@@ -736,7 +721,7 @@
         ]
     },
     "HAUTE MATSIATRA": {
-        "AMBALAVAO": [
+        "Ambalavao": [
             "AMBALAVAO",
             "AMBINANINDOVOKA",
             "AMBINANIROA",
@@ -757,7 +742,7 @@
             "NAMOLY",
             "VOLAMENA"
         ],
-        "AMBOHIMAHASOA": [
+        "Ambohimahasoa": [
             "AMBALAKINDRESY",
             "AMBATOSOA",
             "AMBOHIMAHASOA",
@@ -777,10 +762,10 @@
             "VOHIPOSA",
             "VOHITRARIVO"
         ],
-        "FIANARANTSOA": [
+        "Fianarantsoa": [
             "CU FIANARANTSOA"
         ],
-        "ISANDRA": [
+        "Isandra": [
             "AMBALAMIDERA II",
             "AMBONDRONA",
             "ANDOHARANOMAITSO",
@@ -795,7 +780,7 @@
             "ANDREAMALAMA",
             "AMBALAMIDERA AMBOHIMANA"
         ],
-        "IKALAMAVONY": [
+        "Ikalamavony": [
             "AMBATOMAINTY",
             "FITAMPITO",
             "IKALAMAVONY",
@@ -805,7 +790,7 @@
             "TANAMARINA BEKISOPA",
             "TSITONDROINA"
         ],
-        "VOHIBATO": [
+        "Vohibato": [
             "ALAKAMISY ITENINA",
             "ANDRANOMIDITRA",
             "ANDRANOVORIVATO",
@@ -823,7 +808,7 @@
             "LAMOSINA",
             "ANJANOMANONA TSIMIAVAKA"
         ],
-        "LALANGINA": [
+        "Lalangina": [
             "ALAKAMISY AMBOHIMAHA",
             "ALATSINAINY IALAMARINA",
             "AMBALAKELY",
@@ -843,14 +828,14 @@
         ]
     },
     "IHOROMBE": {
-        "IAKORA": [
+        "Iakora": [
             "BEGOGO",
             "IAKORA",
             "RANOTSARA NORD",
             "ANDRANOMBAO",
             "VOLAMBITA"
         ],
-        "IHOSY": [
+        "Ihosy": [
             "AMBATOLAHY",
             "AMBIA",
             "ANALALIRY",
@@ -872,7 +857,7 @@
             "ZAZAFOTSY",
             "ANDOHAN'ILAKAKA"
         ],
-        "IVOHIBE": [
+        "Ivohibe": [
             "ANTAMBOHOBE",
             "IVOHIBE",
             "IVONGO",
@@ -881,8 +866,80 @@
             "ANTARAMENA"
         ]
     },
+    "VATOVAVY": {
+        "Ifanadiana": [
+            "AMBOHIMANGA SUD",
+            "AMBOHIMIERA",
+            "ANALAMPASINA",
+            "ANDRORANGAVOLA",
+            "ANTARETRA",
+            "ANTSINDRA",
+            "FASINTSARA",
+            "IFANADIANA",
+            "KELILALINA",
+            "MAROHARATRA",
+            "MAROTOKO",
+            "RANOMAFANA",
+            "TSARATANANA",
+            "AMPASINAMBO",
+            "AMBIABE"
+        ],
+        "Mananjary": [
+            "AMBALAHOSY NORD",
+            "AMBODINONOKA",
+            "AMBOHIMIARINA II",
+            "AMBOHINIHAONANA",
+            "AMBOHITSARA EST",
+            "ANDONABE",
+            "ANDRANAMBOLAVA",
+            "ANDRANOMAVO",
+            "ANKATAFANA",
+            "ANOSIMPARIHY",
+            "ANTARETRA",
+            "ANTSENAVOLO",
+            "KIANJAVATO",
+            "MAHATSARA IEFAKA",
+            "MAHATSARA SUD",
+            "MAHAVOKY NORD",
+            "MAHELA",
+            "MANAKANA NORD",
+            "MANANJARY",
+            "MAROFOTOTRA",
+            "MAROKARIMA",
+            "MAROSANGY",
+            "MORAFENO",
+            "SANDROHY",
+            "TSARAVARY",
+            "TSIATOSIKA",
+            "VATOHANDRINA",
+            "VOHILAVA",
+            "TSARAHAFATRA",
+            "MAROFODY"
+        ],
+        "Nosy Varika": [
+            "AMBAHY",
+            "AMBAKOBE",
+            "AMBODIARA",
+            "AMBODILAFA",
+            "AMBODIRIAN'I SAHAFARY",
+            "AMPASINAMBO",
+            "ANDARA",
+            "ANDRORANGAVOLA",
+            "ANGODONGODONA",
+            "ANTANAMBAO",
+            "BEFODY",
+            "FIADANANA",
+            "NOSY VARIKA",
+            "SAHAVATO",
+            "SOAVINA",
+            "VOHIDROA",
+            "VOHILAVA",
+            "VOHITRANDRIANA",
+            "FANIVELONA"
+        ]
+    },
     "FITOVINANY": {
-        "IKONGO": [
+        "Ikongo": [
             "AMBATOFOTSY",
             "AMBINANITROMBY",
             "AMBOHIMISAFY",
@@ -901,7 +958,7 @@
             "TSIFENOKATAKA",
             "ANDEFAMPONY"
         ],
-        "MANAKARA": [
+        "Manakara": [
             "AMBAHATRAZO",
             "AMBAHIVE",
             "AMBALAROKA",
@@ -951,7 +1008,7 @@
             "MANJARIVO",
             "NAMORONA"
         ],
-        "VOHIPENO": [
+        "Vohipeno": [
             "ANDEMAKA",
             "ANKARIMBARY",
             "ANOLOKA",
@@ -975,80 +1032,8 @@
             "AMBOROBE"
         ]
     },
-    "VATOVAVY": {
-        "IFANADIANA": [
-            "AMBOHIMANGA SUD",
-            "AMBOHIMIERA",
-            "ANALAMPASINA",
-            "ANDRORANGAVOLA",
-            "ANTARETRA",
-            "ANTSINDRA",
-            "FASINTSARA",
-            "IFANADIANA",
-            "KELILALINA",
-            "MAROHARATRA",
-            "MAROTOKO",
-            "RANOMAFANA",
-            "TSARATANANA",
-            "AMPASINAMBO",
-            "AMBIABE"
-        ],
-        "MANANJARY": [
-            "AMBALAHOSY NORD",
-            "AMBODINONOKA",
-            "AMBOHIMIARINA II",
-            "AMBOHINIHAONANA",
-            "AMBOHITSARA EST",
-            "ANDONABE",
-            "ANDRANAMBOLAVA",
-            "ANDRANOMAVO",
-            "ANKATAFANA",
-            "ANOSIMPARIHY",
-            "ANTARETRA",
-            "ANTSENAVOLO",
-            "KIANJAVATO",
-            "MAHATSARA IEFAKA",
-            "MAHATSARA SUD",
-            "MAHAVOKY NORD",
-            "MAHELA",
-            "MANAKANA NORD",
-            "MANANJARY",
-            "MAROFOTOTRA",
-            "MAROKARIMA",
-            "MAROSANGY",
-            "MORAFENO",
-            "SANDROHY",
-            "TSARAVARY",
-            "TSIATOSIKA",
-            "VATOHANDRINA",
-            "VOHILAVA",
-            "TSARAHAFATRA",
-            "MAROFODY"
-        ],
-        "NOSY VARIKA": [
-            "AMBAHY",
-            "AMBAKOBE",
-            "AMBODIARA",
-            "AMBODILAFA",
-            "AMBODIRIAN'I SAHAFARY",
-            "AMPASINAMBO",
-            "ANDARA",
-            "ANDRORANGAVOLA",
-            "ANGODONGODONA",
-            "ANTANAMBAO",
-            "BEFODY",
-            "FIADANANA",
-            "NOSY VARIKA",
-            "SAHAVATO",
-            "SOAVINA",
-            "VOHIDROA",
-            "VOHILAVA",
-            "VOHITRANDRIANA",
-            "FANIVELONA"
-        ]
-    },
     "BETSIBOKA": {
-        "KANDREHO": [
+        "Kandreho": [
             "AMBALIHA",
             "ANDASIBE",
             "ANTANIMBARIBE",
@@ -1057,7 +1042,7 @@
             "KANDREHO",
             "MAHATSINJO SUD"
         ],
-        "MAEVATANANA": [
+        "Maevatanana": [
             "AMBALAJIA",
             "AMBALANJANAKOMBY",
             "ANDRIBA",
@@ -1078,7 +1063,7 @@
             "BEANANA",
             "BERIVOTRA 5\/5"
         ],
-        "TSARATANANA": [
+        "Tsaratanana": [
             "AMBAKIRENY",
             "AMPANDRANA",
             "ANDRIAMENA",
@@ -1095,7 +1080,7 @@
         ]
     },
     "BOENY": {
-        "AMBATO BOENI": [
+        "Ambato Boeni": [
             "AMBATOBOENY",
             "AMBONDROMAMY",
             "ANDRANOFASIKA",
@@ -1109,10 +1094,10 @@
             "TSARAMANDROSO",
             "AMBESISIKA"
         ],
-        "MAHAJANGA I": [
+        "Mahajanga I": [
             "MAHAJANGA"
         ],
-        "MAHAJANGA II": [
+        "Mahajanga II": [
             "AMBALABE BEFANJAVA",
             "AMBALAKIDA",
             "ANDRANOBOKA",
@@ -1123,7 +1108,7 @@
             "MAHAJAMBA USINE",
             "MARIARANO"
         ],
-        "MAROVOAY": [
+        "Marovoay": [
             "AMBOLOMOTY",
             "ANKARAOBATO",
             "ANKAZOMBORONA",
@@ -1138,7 +1123,7 @@
             "TSARARANO",
             "ANKABOKA"
         ],
-        "MITSINJO": [
+        "Mitsinjo": [
             "AMBARIMANINGA",
             "ANTONGOMENA BEVARY",
             "ANTSEZA",
@@ -1147,7 +1132,7 @@
             "MATSAKABANJA",
             "MITSINJO"
         ],
-        "SOALALA": [
+        "Soalala": [
             "AMBOHIPAKY",
             "ANDRANOMAVO",
             "SOALALA",
@@ -1155,14 +1140,14 @@
         ]
     },
     "MELAKY": {
-        "AMBATOMAINTY": [
+        "Ambatomainty": [
             "AMBATOMAINTY",
             "BEMARIVO",
             "MAROTSIALEHA",
             "SARODRANO",
             "MAKARAINGO"
         ],
-        "ANTSALOVA": [
+        "Antsalova": [
             "ANTSALOVA",
             "BEKOPAKA",
             "MASOARIVO",
@@ -1170,7 +1155,7 @@
             "TRANGAHY",
             "BEMARAHA ATSINANANA"
         ],
-        "BESALAMPY": [
+        "Besalampy": [
             "AMBOLODIA SUD",
             "AMPAKO",
             "ANKASAKASA TSIBIRAY",
@@ -1181,7 +1166,7 @@
             "SOANENGA",
             "ANTSIRASIRA"
         ],
-        "MAINTIRANO": [
+        "Maintirano": [
             "ANDABOTOKA",
             "ANDRANOVAO",
             "ANDREA",
@@ -1200,7 +1185,7 @@
             "TAMBOHORANO",
             "VEROMANGA"
         ],
-        "MORAFENOBE": [
+        "Morafenobe": [
             "ANDRAMY",
             "BERAVINA",
             "MORAFENOBE",
@@ -1208,7 +1193,7 @@
         ]
     },
     "SOFIA": {
-        "ANALALAVA": [
+        "Analalava": [
             "AMBALIHA",
             "AMBARIJEBY SUD",
             "AMBOLOBOZO",
@@ -1225,7 +1210,7 @@
             "BEJOFO",
             "ANDREVOREVO"
         ],
-        "ANTSOHIHY": [
+        "Antsohihy": [
             "AMBODIMADIRO",
             "AMBODIMANARY",
             "AMBODIMANDRESY",
@@ -1240,7 +1225,7 @@
             "MAROALA",
             "AMBALAFAMINTY"
         ],
-        "BEALANANA": [
+        "Bealanana": [
             "AMBALAROMBA",
             "AMBARARATA SOFIA",
             "AMBARARATABE NORD",
@@ -1262,7 +1247,7 @@
             "AMBOHIMISONDROTRA",
             "ANTSIRADAVA"
         ],
-        "BEFANDRIANA NORD": [
+        "Befandriana Nord": [
             "AMBARARATA",
             "AMBODIMOTSO SUD",
             "AMBOLIDIBE EST",
@@ -1278,7 +1263,7 @@
             "BELALONA",
             "AMBODIMOTSO-HAUT"
         ],
-        "MAMPIKONY": [
+        "Mampikony": [
             "AMBODIHAZOAMBO",
             "AMBOHITOAKA",
             "AMPASIMATERA",
@@ -1291,7 +1276,7 @@
             "MAMPIKONY II",
             "ANOVILAVA NORD"
         ],
-        "MANDRITSARA": [
+        "Mandritsara": [
             "AMBALAKIRAJY",
             "AMBARIKORANO",
             "AMBARIPAIKA",
@@ -1322,7 +1307,7 @@
             "TSARATANANA",
             "AMBINANIFANGO"
         ],
-        "PORT-BERGE": [
+        "Port-Berge": [
             "AMBANJABE",
             "AMBODIMAHABIBO",
             "AMBODISAKOANA",
@@ -1344,7 +1329,7 @@
         ]
     },
     "ALAOTRA-MANGORO": {
-        "AMBATONDRAZAKA": [
+        "Ambatondrazaka": [
             "AMBANDRIKA",
             "AMBATONDRAZAKA",
             "AMBATONDRAZAKA SUBURBAIN",
@@ -1368,7 +1353,7 @@
             "AMBOHIDAVA",
             "AMBOHIBOROMANGA"
         ],
-        "AMPARAFARAVOLA": [
+        "Amparafaravola": [
             "AMBATOMAINTY",
             "AMBOAVORY",
             "AMBODIMANGA",
@@ -1392,7 +1377,7 @@
             "ANDRANOBE",
             "AMBODIRANO"
         ],
-        "ANDILAMENA": [
+        "Andilamena": [
             "ANDILAMENA",
             "ANTANIMENABAKA",
             "BEMAITSO",
@@ -1403,7 +1388,7 @@
             "TANANANIFOLOLAHY",
             "AMPONDRABE"
         ],
-        "ANOSIBE AN ALA": [
+        "Anosibe An'Ala": [
             "AMBALAOMBY",
             "AMBATOHARANANA",
             "AMPANDROANTRAKA",
@@ -1416,7 +1401,7 @@
             "TSARAVINANY",
             "AMBODIMERANA"
         ],
-        "MORAMANGA": [
+        "Moramanga": [
             "AMBATOVOLA",
             "AMBOASARY",
             "AMBOHIBARY",
@@ -1443,7 +1428,7 @@
         ]
     },
     "ANALANJIROFO": {
-        "FENERIVE EST": [
+        "Fenerive Est": [
             "AMBATOHARANANA",
             "AMBODIMANGA II",
             "AMPASIMBE MANANTSANTRANA",
@@ -1459,7 +1444,7 @@
             "AMBANJAN 'I SAHALAVA",
             "BETAMPONA"
         ],
-        "MANANARA-NORD": [
+        "Mananara-Nord": [
             "AMBATOHARANANA",
             "AMBODIAMPANA",
             "AMBODIVOANIO",
@@ -1477,7 +1462,7 @@
             "ANALANAMPOTSY",
             "MAHANORO"
         ],
-        "MAROANTSETRA": [
+        "Maroantsetra": [
             "AMBANIZANA",
             "AMBINANITELO",
             "AMBODIMANGA RANTABE",
@@ -1499,10 +1484,10 @@
             "MARIARANO",
             "SAHASINDRO"
         ],
-        "SAINTE MARIE": [
+        "Sainte Marie": [
             "SAINTE MARIE"
         ],
-        "SOANIERANA IVONGO": [
+        "Soanierana Ivongo": [
             "AMBAHOABE",
             "AMBODIAMPANA",
             "ANDAPAFITO",
@@ -1513,7 +1498,7 @@
             "SOANIERANA IVONGO",
             "AMBINANISAKANA"
         ],
-        "VAVATENINA": [
+        "Vavatenina": [
             "AMBATOHARANANA",
             "AMBODIMANGAVALO",
             "AMBOHIBE",
@@ -1528,7 +1513,7 @@
         ]
     },
     "ATSINANANA": {
-        "ANTANAMBAO MANAMPO": [
+        "Antanambao Manampontsy": [
             "ATNSYTANAMBAO MANAMPOTSY",
             "ATNSYTANANDEHIBE",
             "MTSAYHELA",
@@ -1536,7 +1521,7 @@
             "STASIYVAZA",
             "MTSAYNARATSANDRY"
         ],
-        "BRICKAVILLE": [
+        "Brickaville": [
             "AMBALARONDRA",
             "AMBINANINONY",
             "AMBOHIMANANA",
@@ -1556,7 +1541,7 @@
             "VOHITRANIVONA",
             "ANTSAMPANANA"
         ],
-        "MAHANORO": [
+        "Mahanoro": [
             "AMBINANIDILANA",
             "AMBINANINDRANO",
             "AMBODIBONARA",
@@ -1570,7 +1555,7 @@
             "TSARAVINANY",
             "ANDRANAMBOMARO"
         ],
-        "MAROLAMBO": [
+        "Marolambo": [
             "AMBALAPAISO II",
             "AMBATOFISAKA II",
             "AMBOASARY",
@@ -1587,14 +1572,14 @@
             "TANAMBAO RABEMANANA",
             "MAROMITETY I"
         ],
-        "TOAMASINA I": [
+        "Toamasina I": [
             "CU TOAMASINA",
             "CU TOAMASINA arr. ANJOMA",
             "CU TOAMASINA arr. ANKIRIHIRY",
             "CU TOAMASINA arr. MORARANO",
             "CU TOAMASINA arr. TANAMBAO"
         ],
-        "TOAMASINA II": [
+        "Toamasina II": [
             "AMBODILAZANA",
             "AMBODIRIANA",
             "AMBODITANDROHO",
@@ -1614,7 +1599,7 @@
             "TOAMASINA SUBURBAINE",
             "SATRANDROY"
         ],
-        "VATOMANDRY": [
+        "Vatomandry": [
             "AMBALABE",
             "AMBALAVOLO",
             "AMBODITAVOLO",
@@ -1639,7 +1624,7 @@
         ]
     },
     "ANDROY": {
-        "AMBOVOMBE ANDROY": [
+        "Ambovombe Androy": [
             "AMBANISARIKA",
             "AMBAZOA",
             "AMBOHIMALAZA",
@@ -1662,7 +1647,7 @@
             "ANDRAGNANIVO",
             "ANDOHARANO"
         ],
-        "BEKILY": [
+        "Bekily": [
             "AMBAHITA",
             "AMBATOSOLA",
             "ANIVORANO MITSINJO",
@@ -1684,7 +1669,7 @@
             "VOHIMANGA",
             "MIKAIKARIVO AMBATOMAINTY"
         ],
-        "BELOHA ANDROY": [
+        "Beloha Androy": [
             "BEHABOBO",
             "BELOHA ANDROY",
             "KOPOKY",
@@ -1694,7 +1679,7 @@
             "AMBATOTSIVALA",
             "MAHAENEGNE"
         ],
-        "TSIHOMBE": [
+        "Tsihombe": [
             "ANJAMPALY",
             "ANTARITARIKA",
             "FAUX CAP",
@@ -1707,7 +1692,7 @@
         ]
     },
     "ANOSY": {
-        "AMBOASARY SUD": [
+        "Amboasary Sud": [
             "AMBOASARY SUD",
             "BEHARA",
             "EBELO",
@@ -1727,7 +1712,7 @@
             "MAHABO",
             "BERANO VILLE"
         ],
-        "BETROKA": [
+        "Betroka": [
             "AMBALASOA",
             "AMBATOMIVARY",
             "ANALAMARY",
@@ -1751,7 +1736,7 @@
             "TSARAITSO",
             "KELIVAHO"
         ],
-        "TAOLANARO": [
+        "Taolanaro": [
             "AMBATOABO",
             "AMPASIMENA",
             "AMPASY NAHAMPOANA",
@@ -1784,7 +1769,7 @@
         ]
     },
     "ATSIMO-ANDREFANA": {
-        "AMPANIHY OUEST": [
+        "Ampanihy Ouest": [
             "AMBOROPOTSY",
             "AMPANIHY CENTRE",
             "ANDROKA",
@@ -1805,7 +1790,7 @@
             "ANDROIMPANO",
             "BEARA"
         ],
-        "ANKAZOABO SUD": [
+        "Ankazoabo Sud": [
             "ANDRANOMAFANA",
             "ANKAZOABO SUD",
             "BERENTY",
@@ -1816,7 +1801,7 @@
             "AMBATOLAHY",
             "ANKERIKY"
         ],
-        "BENENITRA": [
+        "Benenitra": [
             "AMBALAVATO",
             "BENENITRA",
             "EHARA",
@@ -1824,7 +1809,7 @@
             "BENONOKY",
             "ANKILIMARY"
         ],
-        "BEROROHA": [
+        "Beroroha": [
             "BEHISATSY",
             "BEMAVO",
             "BEROROHA",
@@ -1835,7 +1820,7 @@
             "TANAMARY",
             "TANANDAVA"
         ],
-        "BETIOKY SUD": [
+        "Betioky Sud": [
             "AMBATRY MITSINJO",
             "ANDRANOMANGATSIAKA",
             "ANKAZOMANGA OUEST",
@@ -1867,7 +1852,7 @@
             "SAVAZY II",
             "VOHIMARY"
         ],
-        "MOROMBE": [
+        "Morombe": [
             "AMBAHIKILY",
             "ANTANIMIEVA",
             "ANTONGO VAOVAO",
@@ -1878,7 +1863,7 @@
             "TANANDAVA STATION",
             "ANKATSAKANTSA SUD"
         ],
-        "SAKARAHA": [
+        "Sakaraha": [
             "AMBINANY",
             "AMBORONABO",
             "ANDAMASINY VINETA",
@@ -1892,10 +1877,10 @@
             "MITSINJO",
             "SAKARAHA"
         ],
-        "TOLIARY I": [
+        "Toliary I": [
             "TOLIARA I"
         ],
-        "TOLIARY II": [
+        "Toliary II": [
             "AMBOHIMAHAVELONA",
             "AMBOLOFOTY",
             "ANAKAO",
@@ -1925,7 +1910,7 @@
         ]
     },
     "MENABE": {
-        "BELO SUR TSIRIBIHINA": [
+        "Belo Sur Tsiribihina": [
             "AMBIKY",
             "ABOALIMENA",
             "ANDIMAKY MANAMBOLO",
@@ -1942,7 +1927,7 @@
             "TSIMAFANA",
             "DELTA"
         ],
-        "MAHABO": [
+        "Mahabo": [
             "AMBIA",
             "AMPANIHY",
             "ANALAMITSIVALANA",
@@ -1956,7 +1941,7 @@
             "TSIMAZAVA",
             "BEZEZIKA"
         ],
-        "MANJA": [
+        "Manja": [
             "ANDRANOPASY",
             "ANKILIABO",
             "ANONTSIBE CENTRE",
@@ -1965,7 +1950,7 @@
             "SOASERANA",
             "BETSIOKY"
         ],
-        "MIANDRIVAZO": [
+        "Miandrivazo": [
             "AMBATOLAHY",
             "AMPANIHY",
             "ANKAVANDRA",
@@ -1983,7 +1968,7 @@
             "SOALOKA",
             "ANDRANOMAINTY"
         ],
-        "MORONDAVA": [
+        "Morondava": [
             "ANALAIVA",
             "BEFASY",
             "BELO SUR MER",

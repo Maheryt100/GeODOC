@@ -1,3 +1,4 @@
+// this is demandeurs/createExist.tsx
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, Demandeur, Dossier } from '@/types';
@@ -50,7 +51,7 @@ export default function CreateExist({ demandeur }: { demandeur: Demandeur }) {
             return;
         }
 
-        post(route('store.exist'), {
+        post(route('demandeurs.storeExist'), {
             onError: (errors) => {
                 const messages = Object.values(errors).flat();
                 toast.error('Erreur de validation', {

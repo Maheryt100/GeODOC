@@ -1,3 +1,4 @@
+// this is dossiers/index.tsx
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, Dossier, SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -318,7 +319,7 @@ export default function Index() {
                                                             {dossier.nom_dossier}
                                                         </h3>
 
-                                                        {/* ✅ Indicateur propriétés archivées */}
+                                                        {/* Indicateur propriétés archivées */}
                                                         {dossier.proprietes?.some((p) => p.is_archived === true) && (
                                                             <Badge variant="outline" className="text-xs flex items-center gap-1">
                                                                 <Archive className="h-3 w-3" />
@@ -385,12 +386,12 @@ export default function Index() {
                                                             
                                                             <DropdownMenuSeparator />
                                                             
-                                                            <DropdownMenuItem asChild>
+                                                            {/* <DropdownMenuItem asChild>
                                                                 <Link href={route("dossiers.list", dossier.id)} className="flex items-center">
                                                                     <List className="mr-2 h-4 w-4" />
                                                                     Liste
                                                                 </Link>
-                                                            </DropdownMenuItem>
+                                                            </DropdownMenuItem> */}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

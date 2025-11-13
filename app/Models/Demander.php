@@ -24,8 +24,5 @@ class Demander extends Model
     public function propriete(){
         return $this->belongsTo(Propriete::class, 'id_propriete');
     }
-    public function consorts()
-    {
-        return $this->belongsToMany(Consort::class, 'demande_consorts', 'id_demande', 'id_consort');
-    }
+    
 }

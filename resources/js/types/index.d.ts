@@ -9,6 +9,7 @@ export interface Auth {
 export interface BreadcrumbItem {
     title: ReactNode;
     href: string;
+    label?: string;
 }
 
 export interface NavGroup {

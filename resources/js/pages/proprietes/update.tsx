@@ -1,3 +1,4 @@
+// this is proprietes/update.tsx
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import React, { useEffect, useState } from 'react';
@@ -145,7 +146,7 @@ export default function Update() {
                             <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.list', dossier.id)}>Liste</Link>
+                            <Link href={route('demandes.index', dossier.id)}>Liste</Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

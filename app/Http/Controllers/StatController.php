@@ -19,17 +19,17 @@ class StatController extends Controller
         $totalDmdrEtPptByDossier = $dossiers->totalDemandeurPropriete();
 
 
-        $totalDmdrWithoutPptByDossier = Dossier::withCount([
-            'demandeurs as demandeurs_sans_propriete' => function (Builder $query) {
-                $query->whereDoesntHave('proprietes', function (Builder $subQuery) {
-                    $subQuery->whereColumn('proprietes.id_dossier', 'dossiers.id');
-                });
-                $query->whereDoesntHave('consortLinks');
-            }
-        ])
-            ->orderBy('created_at', 'desc')
-            ->limit(6)
-            ->get();
+        // $totalDmdrWithoutPptByDossier = Dossier::withCount([
+        //     'demandeurs as demandeurs_sans_propriete' => function (Builder $query) {
+        //         $query->whereDoesntHave('proprietes', function (Builder $subQuery) {
+        //             $subQuery->whereColumn('proprietes.id_dossier', 'dossiers.id');
+        //         });
+        //         $query->whereDoesntHave('consortLinks');
+        //     }
+        // ])
+        //     ->orderBy('created_at', 'desc')
+        //     ->limit(6)
+        //     ->get();
 
         $dossiersTotals = Dossier::withCount('demandes');
 
@@ -44,7 +44,7 @@ class StatController extends Controller
         return Inertia::render('dashboard',[
             'lineChartData' => $totalDemandeByDossier,
             'barChartData' => $totalDmdrEtPptByDossier,
-            'chartRadialData' => $totalDmdrWithoutPptByDossier,
+            // 'chartRadialData' => $totalDmdrWithoutPptByDossier,
             'barChartInteractiveData' => $dossiersWithTotals,
         ]);
     }

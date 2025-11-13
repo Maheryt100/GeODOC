@@ -1,3 +1,4 @@
+// this is dossier/Show.tsx
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -62,8 +63,8 @@ export default function Show() {
         if (deleteType === 'dossier') {
             router.delete(
                 route('demandeurs.destroy', { 
-                    dossier: dossier.id, 
-                    demandeur: itemToDelete.id 
+                    id_dossier: dossier.id, 
+                    id_demandeur: itemToDelete.id 
                 }), 
                 {
                     preserveScroll: true,
@@ -87,7 +88,7 @@ export default function Show() {
             );
         } else {
             router.delete(
-                route('demandeurs.destroy.definitive', itemToDelete.id), 
+                route('demandeurs.destroyDefinitive', itemToDelete.id), 
                 {
                     preserveScroll: true,
                     onSuccess: () => {
@@ -185,15 +186,11 @@ export default function Show() {
         return Array.from(demandeursMap.values());
     };
 
-
-    // Récupérer les lots acquis pour un demandeur
     const getAcquiredLotsForDemandeur = (demandeurId: number): string[] => {
         const lots: string[] = [];
         
         proprietes.forEach(prop => {
-            // ✅ Utiliser l'attribut calculé côté serveur
             if (prop.is_archived === true) {
-                // Vérifier si le demandeur est lié
                 const isLinked = prop.demandeurs?.some((d: any) => d.id === demandeurId);
                 if (isLinked) {
                     lots.push(prop.lot);
@@ -207,7 +204,6 @@ export default function Show() {
     const allDemandeurs = getAllDemandeurs();
     const proprietes = dossier.proprietes || [];
 
-    // Vérifier si toutes les propriétés sont archivées
     const allProprietesArchived = proprietes.length > 0 && proprietes.every(p => 
         p.demandeurs && p.demandeurs.every((d: any) => d.status === 'archive')
     );
@@ -226,9 +222,9 @@ export default function Show() {
     };
 
     const isPropertyArchived = (prop: Propriete): boolean => {
-        // ✅ Utiliser l'attribut is_archived calculé côté serveur
         return prop.is_archived === true;
     };
+
     const paginateDemandeurs = () => {
         const startIndex = (currentDemandeurPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
@@ -306,7 +302,6 @@ export default function Show() {
                                         </Badge>
                                     )}
                                 </div>
-                                
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 <Button asChild variant="outline" size="sm">
@@ -328,13 +323,6 @@ export default function Show() {
                                         Générer documents
                                     </Link>
                                 </Button>
-                            
-                                {/* <Button asChild variant="outline" size="sm">
-                                    <Link href={route('dossiers.list', dossier.id)}>
-                                        <List className="mr-2 h-4 w-4" />
-                                        Liste
-                                    </Link>
-                                </Button> */}
                             </div>
                         </div>
                     </CardHeader>
@@ -456,7 +444,6 @@ export default function Show() {
                                                         <div className="flex items-center gap-2">
                                                             {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
                                                             {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
-                                                            {/* ✅ Badge pour propriétés acquises */}
                                                             {hasAcquiredProperty && (
                                                                 <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
                                                                     <Archive className="mr-1 h-3 w-3" />
@@ -489,8 +476,8 @@ export default function Show() {
                                                                 <DropdownMenuItem asChild>
                                                                     <Link
                                                                         href={route('demandeurs.edit', {
-                                                                            dossier: dossier.id,
-                                                                            demandeur: demandeur.id
+                                                                            id_dossier: dossier.id,
+                                                                            id_demandeur: demandeur.id
                                                                         })}
                                                                         className="flex items-center"
                                                                     >
@@ -591,7 +578,7 @@ export default function Show() {
                                         paginateProprietes().map((propriete) => {
                                             const isIncomplete = isPropertyIncomplete(propriete);
                                             const hasDemandeurs = hasLinkedDemandeurs(propriete);
-                                            const isArchived = propriete.is_archived === true; // ✅ Utiliser l'attribut serveur
+                                            const isArchived = propriete.is_archived === true;
                                             
                                             const rowClass = isArchived
                                                 ? 'border-b hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-50/80 dark:bg-gray-900/50 cursor-pointer'
@@ -703,7 +690,7 @@ export default function Show() {
                 </Card>
             </div>
 
-            {/* Dialog Demandeur - AMÉLIORÉ */}
+            {/* Dialog Demandeur */}
             <Dialog open={!!selectedDemandeur} onOpenChange={() => setSelectedDemandeur(null)}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
@@ -729,7 +716,7 @@ export default function Show() {
                                     )}
                                 </div>
                             </div>
-                            {/* ✅ NOUVEAU : Section Propriétés Associées */}
+
                             {(() => {
                                 const proprietesAssociees = proprietes.filter(prop => 
                                     prop.demandeurs?.some((d: any) => d.id === selectedDemandeur.id)
@@ -883,7 +870,10 @@ export default function Show() {
 
                             <div className="flex justify-end gap-2 pt-4 border-t">
                                 <Button asChild variant="outline">
-                                    <Link href={route('demandeurs.edit', { dossier: dossier.id, demandeur: selectedDemandeur.id })}>
+                                    <Link href={route('demandeurs.edit', { 
+                                        id_dossier: dossier.id, 
+                                        id_demandeur: selectedDemandeur.id 
+                                    })}>
                                         <Pencil className="mr-2 h-4 w-4" />
                                         Modifier
                                     </Link>
@@ -897,7 +887,7 @@ export default function Show() {
                 </DialogContent>
             </Dialog>
 
-            {/* Dialog Propriété - AMÉLIORÉ */}
+            {/* Dialog Propriété */}
             <Dialog open={!!selectedPropriete} onOpenChange={() => setSelectedPropriete(null)}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
