@@ -1,11 +1,12 @@
 <?php
-
+// this is bootstrap/app.php
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\DistrictAccessMiddleware;
 use App\Http\Middleware\CheckDossierAccess;
 use App\Http\Middleware\LogUserAccess;
+use App\Http\Middleware\EnsureDistrictScope;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'district.access' => DistrictAccessMiddleware::class,
             'dossier.access' => CheckDossierAccess::class,
             'log.access' => LogUserAccess::class,
+            'district.scope' => EnsureDistrictScope::class,
         ]);;
     })
     ->withExceptions(function (Exceptions $exceptions) {

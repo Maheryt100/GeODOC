@@ -2,12 +2,12 @@
 
 namespace App\Models;
 use App\Traits\HasPiecesJointes;
-
+use App\Traits\HasDistrictScope;
 use Illuminate\Database\Eloquent\Model;
 
 class Demandeur extends Model
 {
-    use HasPiecesJointes;
+    use HasPiecesJointes, HasDistrictScope;
     //
     protected $fillable = [
         'titre_demandeur',

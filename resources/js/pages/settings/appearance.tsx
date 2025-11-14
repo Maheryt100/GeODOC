@@ -1,3 +1,4 @@
+// this is settings/appearance.tsx
 import { Head } from '@inertiajs/react';
 
 import AppearanceTabs from '@/components/appearance-tabs';

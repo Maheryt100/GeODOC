@@ -8,18 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class District extends Model
 {
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
     protected $table = 'districts';
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<string>
-     */
     protected $fillable = [
         'nom_district',
         'id_region',
@@ -29,11 +19,6 @@ class District extends Model
         'touristique',   
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'edilitaire' => 'integer',
         'agricole' => 'integer',
@@ -42,7 +27,7 @@ class District extends Model
     ];
 
     /**
-     * Get the region that owns the district.
+     * Un district appartient à une région
      */
     public function region(): BelongsTo
     {
@@ -50,7 +35,15 @@ class District extends Model
     }
     
     /**
-     * Get the demandeurs for the district.
+     * ✅ AJOUT : Un district a plusieurs utilisateurs
+     */
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'id_district');
+    }
+    
+    /**
+     * Un district a plusieurs demandeurs
      */
     public function demandeurs(): HasMany
     {
@@ -58,7 +51,7 @@ class District extends Model
     }
     
     /**
-     * Get the proprietes for the district.
+     * Un district a plusieurs propriétés
      */
     public function proprietes(): HasMany
     {
@@ -66,15 +59,15 @@ class District extends Model
     }
 
     /**
-     * Get the communes for the district.
+     * ✅ AJOUT : Un district a plusieurs dossiers
      */
-    public function communes(): HasMany
+    public function dossiers(): HasMany
     {
-        return $this->hasMany(Commune::class, 'id_district');
+        return $this->hasMany(Dossier::class, 'id_district');
     }
 
     /**
-     * Scope to filter by region
+     * Scope pour filtrer par région
      */
     public function scopeByRegion($query, $regionId)
     {
@@ -82,7 +75,7 @@ class District extends Model
     }
 
     /**
-     * Scope to filter districts with prices set
+     * Scope pour les districts avec prix définis
      */
     public function scopeWithPrices($query)
     {
@@ -95,7 +88,7 @@ class District extends Model
     }
 
     /**
-     * Check if all prices are set for this district
+     * Vérifier si tous les prix sont définis
      */
     public function hasPricesSet(): bool
     {
@@ -106,7 +99,7 @@ class District extends Model
     }
 
     /**
-     * Get the formatted price for a given vocation
+     * Obtenir le prix formaté pour une vocation donnée
      */
     public function getFormattedPrice(string $vocation): string
     {

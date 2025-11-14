@@ -1,3 +1,4 @@
+// this index.d.ts
 import { LucideIcon } from 'lucide-react';
 import type { Config } from 'ziggy-js';
 import { ReactNode } from 'react';

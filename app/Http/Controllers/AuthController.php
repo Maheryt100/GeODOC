@@ -27,30 +27,45 @@ class AuthController extends Controller
         $credentials = $request->validate([
             'email'    => 'required|email',
             'password' => 'required'
+        ], [
+            'email.required' => 'L\'email est obligatoire',
+            'email.email' => 'Format d\'email invalide',
+            'password.required' => 'Le mot de passe est obligatoire',
         ]);
 
         if (Auth::attempt($credentials)) {
+            /** @var User $user */
+            $user = Auth::user();
+
+            // ✅ Vérifier si le compte est actif
+            if (!$user->status) {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Votre compte est désactivé. Contactez un administrateur.'
+                ]);
+            }
+
+            // ✅ Vérifier si un district est requis et assigné
+            if (in_array($user->role, [User::ROLE_ADMIN_DISTRICT, User::ROLE_USER_DISTRICT])) {
+                if (!$user->id_district) {
+                    Auth::logout();
+                    return back()->withErrors([
+                        'email' => 'Aucun district assigné. Contactez un administrateur.'
+                    ]);
+                }
+            }
+
             // Régénère la session
             $request->session()->regenerate();
 
-            $user = Auth::user();
-
-            // Redirection selon le rôle
-            switch($user->role) {
-                case 'super_admin':
-                    return redirect()->intended('/dashboard');
-                case 'admin_district':
-                case 'user_district':
-                    return redirect()->intended('/districts/' . $user->id_district . '/dashboard');
-                default:
-                    Auth::logout();
-                    return back()->withErrors(['email' => 'Rôle utilisateur inconnu']);
-            }
+            // ✅ CORRECTION: Tous les rôles vont au même dashboard
+            // Le middleware district.scope s'occupera du filtrage
+            return redirect()->intended('/dashboard');
         }
 
         return back()->withErrors([
-            'email' => 'Identifiants incorrects ou utilisateur inactif',
-        ]);
+            'email' => 'Identifiants incorrects.',
+        ])->onlyInput('email');
     }
 
     /**
@@ -61,7 +76,8 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect('/login');
+        
+        return redirect('/login')->with('success', 'Déconnexion réussie');
     }
 
     /**

@@ -1,4 +1,4 @@
-// this is Users/Create.tsx 
+// this is users/Create.tsx 
 import { useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import AppSidebarLayout from '@/layouts/app/app-sidebar-layout';
@@ -362,6 +362,7 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                                     <SelectValue placeholder="Sélectionner une province" />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                    {/* ❌ NE PAS mettre : <SelectItem value="">Sélectionner...</SelectItem> */}
                                                     {locations.map((province) => (
                                                         <SelectItem key={province.id} value={province.id.toString()}>
                                                             {province.nom_province}
@@ -382,6 +383,7 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                                     <SelectValue placeholder="Sélectionner une région" />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                 
                                                     {regions.map((region) => (
                                                         <SelectItem key={region.id} value={region.id.toString()}>
                                                             {region.nom_region}
@@ -402,6 +404,7 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                                     <SelectValue placeholder="Sélectionner un district" />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                 
                                                     {districts.map((district) => (
                                                         <SelectItem key={district.id} value={district.id.toString()}>
                                                             {district.nom_district}
@@ -409,6 +412,7 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                                     ))}
                                                 </SelectContent>
                                             </Select>
+
                                             {errors.id_district && (
                                                 <p className="text-sm text-destructive">{errors.id_district}</p>
                                             )}

@@ -8,7 +8,6 @@ use App\Http\Controllers\DemandeurController;
 use App\Http\Controllers\DemandeurProprieteController;
 use App\Http\Controllers\DemandeController;
 use App\Http\Controllers\DistrictController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\DocumentGenerationController;
 use App\Http\Controllers\AssociationController;
@@ -19,7 +18,7 @@ use Inertia\Inertia;
 
 // ============ ROUTES PUBLIQUES ============
 Route::get('/', function () {
-    return Inertia::render('Home');
+    return to_route('login');
 })->name('home');
 
 Route::middleware('guest')->group(function () {

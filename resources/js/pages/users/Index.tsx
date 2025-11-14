@@ -1,5 +1,5 @@
-// this is Users/index.tsx 
-import { useState } from 'react';
+// this is users/Index.tsx
+import { useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppSidebarLayout from '@/layouts/app/app-sidebar-layout';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-// Composants de table inline
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -49,7 +48,8 @@ import {
     Shield,
     MapPin,
     Filter,
-    X
+    X,
+    Loader2
 } from 'lucide-react';
 
 interface User {
@@ -100,21 +100,43 @@ interface PageProps {
 }
 
 export default function UsersIndex({ users, stats, districts, filters, roles }: PageProps) {
+    // États synchronisés avec le backend
     const [search, setSearch] = useState(filters.search || '');
     const [selectedRole, setSelectedRole] = useState(filters.role || '');
     const [selectedDistrict, setSelectedDistrict] = useState(filters.district || '');
     const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
     const [deleteUser, setDeleteUser] = useState<User | null>(null);
     const [toggleStatusUser, setToggleStatusUser] = useState<User | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get('/users', {
-            search,
-            role: selectedRole,
-            district: selectedDistrict,
-            status: selectedStatus,
-        }, { preserveState: true });
+    // 🔥 RECHERCHE AUTOMATIQUE avec debounce
+    useEffect(() => {
+        setIsSearching(true);
+        
+        // Debounce de 500ms pour la performance
+        const timer = setTimeout(() => {
+            performSearch();
+        }, 500);
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [search, selectedRole, selectedDistrict, selectedStatus]);
+
+    const performSearch = () => {
+        const params: Record<string, string> = {};
+        
+        if (search.trim()) params.search = search.trim();
+        if (selectedRole) params.role = selectedRole;
+        if (selectedDistrict) params.district = selectedDistrict;
+        if (selectedStatus) params.status = selectedStatus;
+        
+        router.get('/users', params, { 
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onFinish: () => setIsSearching(false),
+        });
     };
 
     const clearFilters = () => {
@@ -122,7 +144,6 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
         setSelectedRole('');
         setSelectedDistrict('');
         setSelectedStatus('');
-        router.get('/users', {}, { preserveState: true });
     };
 
     const hasActiveFilters = search || selectedRole || selectedDistrict || selectedStatus;
@@ -165,10 +186,7 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
         <AppSidebarLayout
             breadcrumbs={[
                 { title: 'Dashboard', href: '/dashboard' },
-                {
-                    title: 'Utilisateurs',
-                    href: ''
-                },
+                { title: 'Utilisateurs', href: '' },
             ]}
         >
             <Head title="Gestion des utilisateurs" />
@@ -239,20 +257,24 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                     </Card>
                 </div>
 
-                {/* Filtres */}
+                {/* Filtres avec recherche automatique */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Filter className="h-5 w-5" />
                             Filtres de recherche
+                            {isSearching && (
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            )}
                         </CardTitle>
                         <CardDescription>
-                            Rechercher et filtrer les utilisateurs
+                            Les résultats se mettent à jour automatiquement pendant la saisie
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div onSubmit={handleSearch} className="space-y-4">
+                        <div className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                {/* Recherche */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Recherche</label>
                                     <div className="relative">
@@ -266,6 +288,7 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                     </div>
                                 </div>
 
+                                {/* Rôle */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Rôle</label>
                                     <Select value={selectedRole} onValueChange={setSelectedRole}>
@@ -273,7 +296,6 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                             <SelectValue placeholder="Tous les rôles" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">Tous les rôles</SelectItem>
                                             {Object.entries(roles).map(([key, label]) => (
                                                 <SelectItem key={key} value={key}>
                                                     {label}
@@ -283,6 +305,7 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                     </Select>
                                 </div>
 
+                                {/* District */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">District</label>
                                     <Select value={selectedDistrict} onValueChange={setSelectedDistrict}>
@@ -290,7 +313,6 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                             <SelectValue placeholder="Tous les districts" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">Tous les districts</SelectItem>
                                             {districts.map((district) => (
                                                 <SelectItem key={district.id} value={district.id.toString()}>
                                                     {district.nom_district} ({district.region.nom_region})
@@ -300,6 +322,7 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                     </Select>
                                 </div>
 
+                                {/* Statut */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Statut</label>
                                     <Select value={selectedStatus} onValueChange={setSelectedStatus}>
@@ -307,7 +330,6 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                             <SelectValue placeholder="Tous les statuts" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">Tous les statuts</SelectItem>
                                             <SelectItem value="active">Actif</SelectItem>
                                             <SelectItem value="inactive">Inactif</SelectItem>
                                         </SelectContent>
@@ -315,27 +337,25 @@ export default function UsersIndex({ users, stats, districts, filters, roles }: 
                                 </div>
                             </div>
 
-                            <div className="flex gap-2">
-                                <Button type="submit">
-                                    <Search className="mr-2 h-4 w-4" />
-                                    Rechercher
-                                </Button>
-                                {hasActiveFilters && (
+                            {/* Bouton réinitialiser */}
+                            {hasActiveFilters && (
+                                <div className="flex justify-end">
                                     <Button
                                         type="button"
                                         variant="outline"
                                         onClick={clearFilters}
+                                        size="sm"
                                     >
                                         <X className="mr-2 h-4 w-4" />
-                                        Réinitialiser
+                                        Réinitialiser les filtres
                                     </Button>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Table */}
+                {/* Table des utilisateurs */}
                 <Card>
                     <CardHeader>
                         <CardTitle>

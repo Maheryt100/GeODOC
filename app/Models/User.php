@@ -288,14 +288,16 @@ class User extends Authenticatable
             return 'Non assigné';
         }
 
-        // Charger les relations si nécessaire
-        $this->loadMissing('district.region.province');
+        // ✅ CORRECTION : Utiliser l'opérateur null-safe et valeurs par défaut
+        $districtName = $this->district->nom_district ?? 'District inconnu';
+        $regionName = $this->district->region?->nom_region ?? 'Région inconnue';
+        $provinceName = $this->district->region?->province?->nom_province ?? 'Province inconnue';
         
         return sprintf(
             '%s, %s, %s',
-            $this->district->nom_district,
-            $this->district->region->nom_region ?? 'Région inconnue',
-            $this->district->region->province->nom_province ?? 'Province inconnue'
+            $districtName,
+            $regionName,
+            $provinceName
         );
     }
 
@@ -499,4 +501,6 @@ class User extends Authenticatable
 
         return [];
     }
+
+    
 }

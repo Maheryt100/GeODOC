@@ -33,30 +33,36 @@ class UserManagementController extends Controller
         /** @var User $user */
         $user = Auth::user();
         
-        // Query de base
+        // Query de base avec eager loading
         $query = User::with(['district.region.province']);
 
         // Si admin district, voir seulement les users de son district
         if ($user->isAdminDistrict()) {
             $query->where(function($q) use ($user) {
                 $q->where('id_district', $user->id_district)
-                  ->orWhere('role', User::ROLE_USER); // Anciens users sans district
+                  ->orWhere('role', User::ROLE_USER);
             });
         }
 
-        // Filtres
+        // 🔍 FILTRES
+        
+        // Filtre par rôle
         if ($request->filled('role')) {
             $query->where('role', $request->role);
         }
 
+        // Filtre par district
         if ($request->filled('district')) {
             $query->where('id_district', $request->district);
         }
 
+        // Filtre par statut
         if ($request->filled('status')) {
-            $query->where('status', $request->status === 'active');
+            $isActive = $request->status === 'active';
+            $query->where('status', $isActive);
         }
 
+        // Recherche par nom ou email
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -71,6 +77,7 @@ class UserManagementController extends Controller
 
         $users = $query->orderBy('created_at', 'desc')
             ->paginate(15)
+            ->withQueryString() //  Important pour conserver les filtres dans la pagination
             ->through(fn($user) => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -81,8 +88,8 @@ class UserManagementController extends Controller
                 'district' => $user->district ? [
                     'id' => $user->district->id,
                     'nom_district' => $user->district->nom_district,
-                    'nom_region' => $user->district->region->nom_region,
-                    'nom_province' => $user->district->region->province->nom_province,
+                    'nom_region' => $user->district->region?->nom_region ?? 'Région inconnue',
+                    'nom_province' => $user->district->region?->province?->nom_province ?? 'Province inconnue',
                 ] : null,
                 'location' => $user->location,
                 'created_at' => $user->created_at->format('d/m/Y'),
@@ -104,12 +111,16 @@ class UserManagementController extends Controller
         // Districts pour les filtres
         $districts = District::with('region')->orderBy('nom_district')->get();
 
-        // ✅ CORRECTION PRINCIPALE : Utiliser le bon chemin
-        return Inertia::render('users/index', [  // Changé de 'Users/Index' à 'users/index'
+        return Inertia::render('users/Index', [
             'users' => $users,
             'stats' => $stats,
             'districts' => $districts,
-            'filters' => $request->only(['role', 'district', 'status', 'search']),
+            'filters' => [
+                'role' => $request->get('role'),
+                'district' => $request->get('district'),
+                'status' => $request->get('status'),
+                'search' => $request->get('search'),
+            ],
             'roles' => [
                 User::ROLE_SUPER_ADMIN => 'Super Administrateur',
                 User::ROLE_ADMIN_DISTRICT => 'Administrateur District',
@@ -165,7 +176,7 @@ class UserManagementController extends Controller
         }
 
         // ✅ Utiliser le bon chemin
-        return Inertia::render('users/create', [  // Changé de 'Users/Create' à 'users/create'
+        return Inertia::render('users/Create', [  // Changé de 'Users/Create' à 'users/create'
             'locations' => $locations,
             'roles' => $availableRoles,
             'currentUserDistrict' => $user->id_district,
@@ -316,7 +327,7 @@ class UserManagementController extends Controller
         }
 
         // ✅ Utiliser le bon chemin ET renommer pour réutiliser le composant Create
-        return Inertia::render('users/create', [  // Réutilise 'users/create' au lieu de créer un fichier Edit séparé
+        return Inertia::render('users/Create', [  // Réutilise 'users/create' au lieu de créer un fichier Edit séparé
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
