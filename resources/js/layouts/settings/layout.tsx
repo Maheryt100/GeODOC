@@ -22,16 +22,6 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/appearance',
         icon: null,
     },
-    {
-        title: 'Ajouter un Utilisateur',
-        href: route('add.users'),
-        icon: null,
-    },
-    {
-        title: 'Listes des Utilisateurs',
-        href: route('list.users'),
-        icon: null,
-    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

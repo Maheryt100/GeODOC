@@ -3,62 +3,46 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
-use Inertia\Response;
-use App\Models\User;
 
 class PasswordController extends Controller
 {
     /**
-     * Show the user's password settings page.
+     * Afficher le formulaire de changement de mot de passe
      */
-    public function edit(): Response
+    public function edit()
     {
         return Inertia::render('settings/password');
     }
 
     /**
-     * Update the user's password.
+     * Mettre à jour le mot de passe
      */
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request)
     {
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', Password::defaults(), 'confirmed'],
+        ], [
+            'current_password.required' => 'Le mot de passe actuel est obligatoire',
+            'current_password.current_password' => 'Le mot de passe actuel est incorrect',
+            'password.required' => 'Le nouveau mot de passe est obligatoire',
+            'password.confirmed' => 'Les mots de passe ne correspondent pas',
         ]);
 
-        $request->user()->update([
-            'password' => Hash::make($validated['password']),
-        ]);
-
-        return back();
-    }
-
-    /**
-     * Admin reset password for a user identified by email.
-     */
-    public function adminStore(Request $request): RedirectResponse
-    {
-        // Only allow administrators to perform this action
-        if ($request->user()->role !== 'admin') {
-            abort(403);
-        }
-
-        $validated = $request->validate([
-            'email' => ['required', 'email', 'exists:users,email'],
-            'password' => ['required', Password::defaults(), 'confirmed'],
-        ]);
-
-        $user = User::where('email', $validated['email'])->first();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
         $user->update([
             'password' => Hash::make($validated['password']),
         ]);
 
-        return back();
+        return Redirect::route('password.edit')
+            ->with('success', 'Mot de passe mis à jour avec succès');
     }
 }

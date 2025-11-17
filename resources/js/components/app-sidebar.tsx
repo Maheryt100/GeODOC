@@ -12,7 +12,8 @@ import {
     LayoutGrid,
     Users,
     Settings,
-    UserCog
+    UserCog,
+    Activity
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -48,6 +49,12 @@ export function AppSidebar() {
             title: 'Prix du terrain',
             href: '/circonscription',
             icon: HandCoinsIcon,
+        });
+        // ✅ AJOUT : Logs d'activité
+        configNavItems.push({
+            title: 'Logs d\'activité',
+            href: '/admin/activity-logs',
+            icon: Activity, // N'oubliez pas d'importer Activity de lucide-react
         });
     }
 

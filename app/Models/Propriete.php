@@ -28,6 +28,7 @@ class Propriete extends Model
         'date_requisition',
         'date_inscription',
         'dep_vol',
+        'numero_dep_vol',
         'status',
         'type_operation',
         'id_dossier',
@@ -38,9 +39,15 @@ class Propriete extends Model
         'date_requisition' => 'date',
         'date_inscription' => 'date',
         'status' => 'boolean',
+        'is_archived' => 'boolean',
         'contenance' => 'integer',
     ];
 
+    protected $appends = [
+        'dep_vol_complet', // ✅ NOUVEAU: Format "Dep/Vol - Numéro"
+        'is_incomplete',
+    ];
+    
     // ============ RELATIONS ============
 
     public function dossier(): BelongsTo

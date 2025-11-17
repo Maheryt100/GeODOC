@@ -1,4 +1,4 @@
-// this index.d.ts
+// this is types/index.d.ts
 import { LucideIcon } from 'lucide-react';
 import type { Config } from 'ziggy-js';
 import { ReactNode } from 'react';
@@ -31,7 +31,7 @@ export interface SharedData {
     quote: { message: string; author: string };
     auth: Auth;
     flash: {
-        error: any; message?: string; success?: string;
+        error: string; message?: string; success?: string;
 };
     districts: District[];
     ziggy: Config & { location: string };
@@ -40,6 +40,7 @@ export interface SharedData {
 }
 
 export interface User {
+    district: any;
     id: number;
     name: string;
     email: string;
@@ -90,45 +91,62 @@ export interface Propriete {
 export interface Dossier {
     id: number;
     nom_dossier: string;
+    date_descente_debut: string;
+    date_descente_fin: string;
+    date_ouverture: string; // ✅ AJOUTÉ
+    date_fermeture?: string | null; // ✅ AJOUTÉ
+    closed_by?: number | null; // ✅ AJOUTÉ
+    motif_fermeture?: string | null; // ✅ AJOUTÉ
     type_commune: string;
     commune: string;
     fokontany: string;
-    date_descente_debut: string;
-    date_descente_fin: string;
     circonscription: string;
     id_district: number;
-    demandeurs?: Demandeur[];
-    proprietes?: Propriete[];
+    id_user: number;
     demandeurs_count: number;
     proprietes_count: number;
-    is_incomplete?: boolean;
+    is_closed: boolean; // ✅ AJOUTÉ
+    is_open: boolean; // ✅ AJOUTÉ
+    can_close?: boolean; // ✅ AJOUTÉ - Permission de fermer/rouvrir
+    can_modify?: boolean; // ✅ AJOUTÉ - Permission de modifier
+    status_label?: string;
+    closedBy?: User; // ✅ AJOUTÉ - Relation avec l'utilisateur qui a fermé
+    demandeurs?: Demandeur[];
+    proprietes?: Propriete[];
+    created_at: string;
+    updated_at: string;
 }
 
 export interface Demandeur {
     id: number;
     titre_demandeur: string;
     nom_demandeur: string;
-    prenom_demandeur: string;
+    prenom_demandeur?: string;
     date_naissance: string;
-    lieu_naissance: string;
-    sexe: string;
-    occupation: string;
-    nom_pere: string;
-    nom_mere: string;
+    lieu_naissance?: string;
+    sexe?: string;
+    occupation?: string;
+    nom_pere?: string;
+    nom_mere?: string;
     cin: string;
-    date_delivrance: string;
-    lieu_delivrance: string;
-    date_delivrance_duplicata: string;
-    lieu_delivrance_duplicata: string;
-    domiciliation: string;
-    situation_familiale: string;
-    regime_matrimoniale: string;
-    date_mariage: string;
-    lieu_mariage: string;
+    date_delivrance?: string;
+    lieu_delivrance?: string;
+    date_delivrance_duplicata?: string;
+    lieu_delivrance_duplicata?: string;
+    domiciliation?: string;
+    situation_familiale?: string;
+    regime_matrimoniale?: string;
     nationalite: string;
-    marie_a: string;
-    telephone: string;
-    is_incomplete?: boolean;
+    telephone?: string;
+    date_mariage?: string;
+    lieu_mariage?: string;
+    marie_a?: string;
+    id_user: number;
+    status?: string; // Pour les relations avec proprietes
+    id_demande?: number; // Pour les relations avec proprietes
+    hasProperty?: boolean; // Pour l'affichage dans l'interface
+    created_at: string;
+    updated_at: string;
 }
 
 export interface Demander {

@@ -1,5 +1,6 @@
+// documents/Generate.tsx
 import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,12 +22,44 @@ import {
     Download,
     AlertCircle,
     Users,
-    Info
+    Info,
+    Receipt,
+    CheckCircle2,
+    Lock,
+    History,
+    RotateCcw
 } from 'lucide-react';
 import { BreadcrumbItem, Demandeur, Dossier, Propriete } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import axios from 'axios';
+
+interface RecuHistoryItem {
+    id: number;
+    numero_recu: string;
+    montant: string;
+    date_recu: string;
+    demandeur: string;
+    cree_par: string;
+    cree_le: string;
+    status: string;
+    file_exists: boolean;
+}
+
+interface RecuPaiement {
+    id: number;
+    numero_recu: string;
+    montant: string;
+    date_recu: string;
+    status: string;
+}
 
 interface ProprieteWithDemandeurs extends Propriete {
     demandeurs_lies: Array<{
@@ -37,6 +70,8 @@ interface ProprieteWithDemandeurs extends Propriete {
         cin: string;
         status_consort: boolean;
     }>;
+    has_recu?: boolean;
+    dernier_recu?: RecuPaiement | null;
 }
 
 interface GenerateProps {
@@ -48,12 +83,23 @@ interface GenerateProps {
 export default function Generate({ dossier, proprietes, demandeurs }: GenerateProps) {
     const [activeTab, setActiveTab] = useState<'acte_vente' | 'csf' | 'requisition'>('acte_vente');
 
+    // États pour Acte de Vente
     const [selectedPropriete, setSelectedPropriete] = useState<string>('');
     const [selectedDemandeur, setSelectedDemandeur] = useState<string>('');
+    
+    // États pour CSF
     const [csfPropriete, setCsfPropriete] = useState<string>('');
     const [csfDemandeur, setCsfDemandeur] = useState<string>('');
+    
+    // États pour Réquisition
     const [reqPropriete, setReqPropriete] = useState<string>('');
 
+    // États pour l'historique des reçus
+    const [showHistoryPopover, setShowHistoryPopover] = useState(false);
+    const [recuHistory, setRecuHistory] = useState<RecuHistoryItem[]>([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+    // Vérifications de complétude
     const isProprieteComplete = (prop: ProprieteWithDemandeurs) => {
         return !!(prop.titre && prop.contenance && prop.proprietaire && 
                   prop.nature && prop.vocation && prop.situation);
@@ -70,7 +116,8 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
             const prop = proprietes.find(p => p.id === Number(selectedPropriete));
             const dem = demandeurs.find(d => d.id === Number(selectedDemandeur));
             if (!prop || !dem) return false;
-            return isProprieteComplete(prop) && isDemandeurComplete(dem);
+            // Vérifier qu'un reçu existe ET que les données sont complètes
+            return isProprieteComplete(prop) && isDemandeurComplete(dem) && prop.has_recu;
         }
         if (type === 'csf') {
             return !!(csfPropriete && csfDemandeur);
@@ -87,6 +134,10 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
             const dem = demandeurs.find(d => d.id === Number(selectedDemandeur));
             const propComplete = prop ? isProprieteComplete(prop) : false;
             const demComplete = dem ? isDemandeurComplete(dem) : false;
+            
+            if (!prop?.has_recu) {
+                return "⚠️ Vous devez d'abord générer le reçu de paiement";
+            }
             if (!propComplete && !demComplete) {
                 return "⚠️ La propriété et le demandeur ont des données incomplètes";
             } else if (!propComplete) {
@@ -108,19 +159,62 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
     };
 
     /**
+     * Charger l'historique des reçus
+     */
+    const loadRecuHistory = async (idPropriete: string) => {
+        setIsLoadingHistory(true);
+
+        try {
+            const response = await axios.get(route('documents.recu.history', idPropriete));
+
+            if (response.data.success) {
+                setRecuHistory(response.data.recus);
+                setShowHistoryPopover(true);
+            }
+        } catch (error: any) {
+            console.error('Erreur chargement historique:', error);
+            toast.error('Erreur lors du chargement de l\'historique');
+        } finally {
+            setIsLoadingHistory(false);
+        }
+    };
+
+    /**
+     * Retélécharger un reçu existant
+     */
+    const handleDownloadExistingRecu = (recuId: number) => {
+        try {
+            const url = route('documents.recu.download', recuId);
+            window.location.href = url;
+            
+            toast.success('Téléchargement du reçu en cours...');
+        } catch (error) {
+            console.error('Erreur téléchargement reçu:', error);
+            toast.error('Erreur lors du téléchargement du reçu');
+        }
+    };
+
+    /**
      * Construire l'URL de téléchargement avec les paramètres
      */
-    const buildDownloadUrl = (type: 'acte_vente' | 'csf' | 'requisition') => {
-        const baseUrl = route(`documents.generate.${type === 'acte_vente' ? 'acte' : type}`);
+    const buildDownloadUrl = (type: 'acte_vente' | 'csf' | 'requisition' | 'recu') => {
+        let baseUrl: string;
         const params = new URLSearchParams();
 
-        if (type === 'acte_vente') {
+        if (type === 'recu') {
+            baseUrl = route('documents.recu');
+            params.append('id_propriete', selectedPropriete);
+            params.append('id_demandeur', selectedDemandeur);
+        } else if (type === 'acte_vente') {
+            baseUrl = route('documents.acte-vente');
             params.append('id_propriete', selectedPropriete);
             params.append('id_demandeur', selectedDemandeur);
         } else if (type === 'csf') {
+            baseUrl = route('documents.csf');
             params.append('id_propriete', csfPropriete);
             params.append('id_demandeur', csfDemandeur);
-        } else if (type === 'requisition') {
+        } else {
+            baseUrl = route('documents.requisition');
             params.append('id_propriete', reqPropriete);
         }
 
@@ -130,7 +224,11 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
     /**
      * Télécharger le document
      */
-    const handleDownload = (type: 'acte_vente' | 'csf' | 'requisition') => {
+    const handleDownload = (type: 'acte_vente' | 'csf' | 'requisition' | 'recu') => {
+        if (type === 'recu' && (!selectedPropriete || !selectedDemandeur)) {
+            toast.warning('Veuillez sélectionner une propriété et un demandeur');
+            return;
+        }
         if (type === 'acte_vente' && (!selectedPropriete || !selectedDemandeur)) {
             toast.warning('Veuillez sélectionner une propriété et un demandeur');
             return;
@@ -144,28 +242,40 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
             return;
         }
 
-        const url = buildDownloadUrl(type);
-        
-        // Ouvrir dans une nouvelle fenêtre pour télécharger
-        window.location.href = url;
-        
-        // Message de confirmation
-        const messages = {
-            acte_vente: hasConsorts(selectedPropriete) 
-                ? `Téléchargement en cours (${getDemandeursForPropriete(selectedPropriete).length} demandeurs)`
-                : 'Téléchargement de l\'acte de vente en cours',
-            csf: 'Téléchargement du CSF en cours',
-            requisition: 'Téléchargement de la réquisition en cours'
-        };
-        
-        toast.success(messages[type]);
+        try {
+            const url = buildDownloadUrl(type);
+            window.location.href = url;
+            
+            const messages = {
+                recu: 'Téléchargement du reçu de paiement en cours',
+                acte_vente: hasConsorts(selectedPropriete) 
+                    ? `Téléchargement en cours (${getDemandeursForPropriete(selectedPropriete).length} demandeurs)`
+                    : 'Téléchargement de l\'acte de vente en cours',
+                csf: 'Téléchargement du CSF en cours',
+                requisition: 'Téléchargement de la réquisition en cours'
+            };
+            
+            toast.success(messages[type]);
+            
+            // Recharger la page après génération du reçu pour actualiser les données
+            if (type === 'recu') {
+                setTimeout(() => {
+                    router.reload({ only: ['proprietes'] });
+                }, 1500);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la génération de l\'URL:', error);
+            toast.error('Erreur lors de la préparation du téléchargement');
+        }
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: "Accueil", href: "/" },
         { title: "Dossiers", href: `/dossiers/${dossier.id}` },
-        { title: "Génération de documents", href: `/dossiers/${dossier.id}/documents/generate` },
+        { title: "Génération de documents", href: `/documents/generate/${dossier.id}` },
     ];
+
+    const selectedProprieteData = proprietes.find(p => p.id === Number(selectedPropriete));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -180,16 +290,11 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                     </p>
                 </div>
 
-                {/* Info sur le téléchargement */}
                 <Alert className="mb-6 bg-blue-500/10 border-blue-500/50">
                     <Info className="h-4 w-4 text-blue-500" />
                     <AlertDescription className="text-blue-700 dark:text-blue-300">
-                        <strong>Information :</strong> Les documents seront téléchargés automatiquement dans votre dossier "Téléchargements".
-                        <br />
-                        <span className="text-xs mt-1 block">
-                            💡 Astuce : Pour choisir l'emplacement à chaque fois, configurez votre navigateur : 
-                            Paramètres → Téléchargements → "Demander où enregistrer chaque fichier"
-                        </span>
+                        <strong>Information :</strong> Les documents seront téléchargés automatiquement dans votre dossier "Téléchargements" 
+                        et une copie sera sauvegardée dans le système.
                     </AlertDescription>
                 </Alert>
 
@@ -236,8 +341,14 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                                     <SelectItem key={prop.id} value={String(prop.id)}>
                                                         <div className="flex items-center gap-2">
                                                             <span>Lot {prop.lot} - TN°{prop.titre} ({prop.type_operation})</span>
+                                                            {prop.has_recu && (
+                                                                <Badge variant="default" className="bg-green-500">
+                                                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                                    Reçu OK
+                                                                </Badge>
+                                                            )}
                                                             {nbDemandeurs > 1 && (
-                                                                <Badge variant="outline" className="ml-2">
+                                                                <Badge variant="outline">
                                                                     <Users className="h-3 w-3 mr-1" />
                                                                     {nbDemandeurs}
                                                                 </Badge>
@@ -255,6 +366,153 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
 
                                 {selectedPropriete && (
                                     <>
+                                        {/* Afficher le statut du reçu avec option historique */}
+                                        {!selectedProprieteData?.has_recu ? (
+                                            <Alert className="bg-amber-500/10 border-amber-500/50">
+                                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                                <AlertDescription className="text-amber-700 dark:text-amber-300">
+                                                    <strong>Étape obligatoire :</strong> Vous devez d'abord générer le reçu de paiement avant de pouvoir créer l'acte de vente.
+                                                </AlertDescription>
+                                            </Alert>
+                                        ) : (
+                                            <Alert className="bg-green-500/10 border-green-500/50">
+                                                <div className="flex items-center justify-between w-full">
+                                                    <div className="flex items-center gap-2">
+                                                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                                        <AlertDescription className="text-green-700 dark:text-green-300">
+                                                            Reçu de paiement N°{selectedProprieteData.dernier_recu?.numero_recu} confirmé
+                                                        </AlertDescription>
+                                                    </div>
+                                                    
+                                                    {/* Bouton historique et retéléchargement */}
+                                                    <div className="flex items-center gap-2">
+                                                        {selectedProprieteData.dernier_recu && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleDownloadExistingRecu(selectedProprieteData.dernier_recu!.id)}
+                                                                className="h-8"
+                                                            >
+                                                                <Download className="h-3 w-3 mr-1" />
+                                                                Retélécharger
+                                                            </Button>
+                                                        )}
+                                                        
+                                                        <Popover open={showHistoryPopover} onOpenChange={setShowHistoryPopover}>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => loadRecuHistory(selectedPropriete)}
+                                                                    disabled={isLoadingHistory}
+                                                                    className="h-8"
+                                                                >
+                                                                    <History className="h-3 w-3 mr-1" />
+                                                                    Historique
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-[500px]" align="end">
+                                                                <div className="space-y-4">
+                                                                    <div>
+                                                                        <h4 className="font-semibold flex items-center gap-2">
+                                                                            <History className="h-4 w-4" />
+                                                                            Historique des reçus
+                                                                        </h4>
+                                                                        <p className="text-sm text-muted-foreground">
+                                                                            Tous les reçus générés pour cette propriété
+                                                                        </p>
+                                                                    </div>
+                                                                    
+                                                                    <Separator />
+                                                                    
+                                                                    <ScrollArea className="h-[300px] pr-4">
+                                                                        {isLoadingHistory ? (
+                                                                            <div className="text-center py-8 text-muted-foreground">
+                                                                                Chargement...
+                                                                            </div>
+                                                                        ) : recuHistory.length === 0 ? (
+                                                                            <div className="text-center py-8 text-muted-foreground">
+                                                                                Aucun historique
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="space-y-3">
+                                                                                {recuHistory.map((recu) => (
+                                                                                    <Card key={recu.id} className="p-3">
+                                                                                        <div className="space-y-2">
+                                                                                            <div className="flex items-start justify-between">
+                                                                                                <div>
+                                                                                                    <div className="font-semibold text-sm">
+                                                                                                        Reçu N° {recu.numero_recu}
+                                                                                                    </div>
+                                                                                                    <div className="text-xs text-muted-foreground">
+                                                                                                        {recu.demandeur}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <Badge variant={recu.status === 'confirmed' ? 'default' : 'secondary'}>
+                                                                                                    {recu.status}
+                                                                                                </Badge>
+                                                                                            </div>
+                                                                                            
+                                                                                            <div className="text-sm space-y-1">
+                                                                                                <div className="flex justify-between">
+                                                                                                    <span className="text-muted-foreground">Montant:</span>
+                                                                                                    <span className="font-semibold">{recu.montant} Ar</span>
+                                                                                                </div>
+                                                                                                <div className="flex justify-between">
+                                                                                                    <span className="text-muted-foreground">Date:</span>
+                                                                                                    <span>{recu.date_recu}</span>
+                                                                                                </div>
+                                                                                                <div className="flex justify-between">
+                                                                                                    <span className="text-muted-foreground">Créé par:</span>
+                                                                                                    <span>{recu.cree_par}</span>
+                                                                                                </div>
+                                                                                                <div className="flex justify-between">
+                                                                                                    <span className="text-muted-foreground">Créé le:</span>
+                                                                                                    <span>{recu.cree_le}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            
+                                                                                            <div className="pt-2 flex items-center gap-2">
+                                                                                                <Button
+                                                                                                    size="sm"
+                                                                                                    variant="outline"
+                                                                                                    className="flex-1"
+                                                                                                    onClick={() => handleDownloadExistingRecu(recu.id)}
+                                                                                                >
+                                                                                                    {recu.file_exists ? (
+                                                                                                        <>
+                                                                                                            <Download className="h-3 w-3 mr-1" />
+                                                                                                            Télécharger
+                                                                                                        </>
+                                                                                                    ) : (
+                                                                                                        <>
+                                                                                                            <RotateCcw className="h-3 w-3 mr-1" />
+                                                                                                            Régénérer
+                                                                                                        </>
+                                                                                                    )}
+                                                                                                </Button>
+                                                                                                
+                                                                                                {!recu.file_exists && (
+                                                                                                    <div className="text-xs text-amber-600 flex items-center gap-1">
+                                                                                                        <AlertCircle className="h-3 w-3" />
+                                                                                                        Fichier perdu
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </Card>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </ScrollArea>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                </div>
+                                            </Alert>
+                                        )}
+
                                         {hasConsorts(selectedPropriete) && (
                                             <Alert className="bg-blue-500/10 border-blue-500/50">
                                                 <Users className="h-4 w-4 text-blue-500" />
@@ -301,14 +559,37 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                     </Alert>
                                 )}
 
+                                {/* Bouton pour générer le reçu */}
+                                {selectedPropriete && selectedDemandeur && !selectedProprieteData?.has_recu && (
+                                    <Button
+                                        onClick={() => handleDownload('recu')}
+                                        className="w-full"
+                                        size="lg"
+                                        variant="outline"
+                                    >
+                                        <Receipt className="h-4 w-4 mr-2" />
+                                        Générer le Reçu de Paiement
+                                    </Button>
+                                )}
+
+                                {/* Bouton acte de vente (désactivé si pas de reçu) */}
                                 <Button
                                     onClick={() => handleDownload('acte_vente')}
                                     disabled={!canGenerate('acte_vente')}
                                     className="w-full"
                                     size="lg"
                                 >
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Télécharger l'Acte de Vente
+                                    {!selectedProprieteData?.has_recu ? (
+                                        <>
+                                            <Lock className="h-4 w-4 mr-2" />
+                                            Reçu requis pour continuer
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Download className="h-4 w-4 mr-2" />
+                                            Télécharger l'Acte de Vente
+                                        </>
+                                    )}
                                 </Button>
                             </CardContent>
                         </Card>

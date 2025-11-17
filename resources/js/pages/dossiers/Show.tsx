@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { 
     LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, 
     AlertCircle, Eye, MapPin, Calendar, Building2, FileOutput, 
-    Archive, ArchiveRestore, Unlink
+    Archive, ArchiveRestore, Unlink, Lock, LockOpen, AlertTriangle 
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
+import { CloseDossierDialog } from '@/components/CloseDossierDialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
@@ -38,7 +40,7 @@ export default function Show() {
     const [deleteType, setDeleteType] = useState<'dossier' | 'definitif'>('dossier');
     const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const [currentDemandeurPage, setCurrentDemandeurPage] = useState(1);
     const [currentProprietePage, setCurrentProprietePage] = useState(1);
     const itemsPerPage = 10;
@@ -286,6 +288,31 @@ export default function Show() {
             <Toaster position="top-right" richColors />
 
             <div className="flex flex-col gap-6 p-6">
+                {/* ✅ NOUVEAU : Alerte si dossier fermé */}
+                {dossier.is_closed && (
+                    <Alert variant="destructive" className="border-orange-500 bg-orange-50 dark:bg-orange-950/20">
+                        <Lock className="h-4 w-4" />
+                        <AlertTitle>Dossier fermé</AlertTitle>
+                        <AlertDescription className="space-y-2">
+                            <p>
+                                Ce dossier a été fermé le{' '}
+                                <strong>{new Date(dossier.date_fermeture!).toLocaleDateString('fr-FR')}</strong>
+                                {dossier.closedBy && (
+                                    <>
+                                        {' '}par <strong>{dossier.closedBy.name}</strong>
+                                    </>
+                                )}
+                            </p>
+                            {dossier.motif_fermeture && (
+                                <p className="text-sm italic">Motif : {dossier.motif_fermeture}</p>
+                            )}
+                            <p className="text-sm">
+                                Aucune modification n'est possible. Seuls les administrateurs peuvent rouvrir ce dossier.
+                            </p>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {/* Section Informations du Dossier */}
                 <Card className={`border-2 ${allProprietesArchived ? 'bg-gray-50 dark:bg-gray-900/50' : ''}`}>
                     <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
@@ -295,27 +322,65 @@ export default function Show() {
                                     <CardTitle className="text-3xl font-bold text-blue-900 dark:text-blue-100">
                                         {dossier.nom_dossier}
                                     </CardTitle>
-                                    {allProprietesArchived && (
-                                        <Badge variant="secondary" className="bg-gray-200 text-gray-700">
-                                            <Archive className="mr-1 h-3 w-3" />
-                                            Dossier terminé
+                                    {/* ✅ NOUVEAU : Badge de statut */}
+                                    {dossier.is_closed ? (
+                                        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
+                                            <Lock className="mr-1 h-3 w-3" />
+                                            Fermé
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                                            <LockOpen className="mr-1 h-3 w-3" />
+                                            Ouvert
                                         </Badge>
                                     )}
                                 </div>
                             </div>
                             <div className="flex gap-2 flex-wrap">
-                                <Button asChild variant="outline" size="sm">
-                                    <Link href={route('dossiers.edit', dossier.id)}>
-                                        <Pencil className="mr-2 h-4 w-4" />
-                                        Modifier
-                                    </Link>
-                                </Button>
-                                <Button asChild variant="default" size="sm">
-                                    <Link href={route('nouveau-lot.create', dossier.id)}>
-                                        <LandPlot className="mr-2 h-4 w-4" />
-                                        Nouveau Lot + Demandeur(s)
-                                    </Link>
-                                </Button>
+                                {/* ✅ NOUVEAU : Bouton Fermer/Rouvrir */}
+                                {dossier.can_close && (
+                                    <Button
+                                        variant={dossier.is_closed ? "default" : "destructive"}
+                                        size="sm"
+                                        onClick={() => setCloseDialogOpen(true)}
+                                        className={dossier.is_closed 
+                                            ? "bg-green-600 hover:bg-green-700" 
+                                            : "bg-orange-600 hover:bg-orange-700"
+                                        }
+                                    >
+                                        {dossier.is_closed ? (
+                                            <>
+                                                <LockOpen className="mr-2 h-4 w-4" />
+                                                Rouvrir
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Lock className="mr-2 h-4 w-4" />
+                                                Fermer le dossier
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+
+                                {/* Bouton Modifier - désactivé si fermé et pas admin */}
+                                {dossier.can_modify && (
+                                    <Button asChild variant="outline" size="sm" disabled={dossier.is_closed && !dossier.can_close}>
+                                        <Link href={route('dossiers.edit', dossier.id)}>
+                                            <Pencil className="mr-2 h-4 w-4" />
+                                            Modifier
+                                        </Link>
+                                    </Button>
+                                )}
+                                
+                                {/* Bouton Nouveau Lot - désactivé si fermé */}
+                                {!dossier.is_closed && (
+                                    <Button asChild variant="default" size="sm">
+                                        <Link href={route('nouveau-lot.create', dossier.id)}>
+                                            <LandPlot className="mr-2 h-4 w-4" />
+                                            Nouvel entrée
+                                        </Link>
+                                    </Button>
+                                )}
                                 
                                 <Button asChild size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
                                     <Link href={route('documents.generate', dossier.id)}>
@@ -366,9 +431,16 @@ export default function Show() {
                             <Badge variant="secondary" className="text-sm">
                                 {proprietes.length} Propriété{proprietes.length > 1 ? 's' : ''}
                             </Badge>
-                            {allProprietesArchived && (
-                                <Badge variant="outline" className="text-sm bg-green-50 text-green-700 border-green-300">
-                                    Toutes les propriétés sont acquises
+                            
+                            {/* ✅ NOUVEAU : Afficher les dates d'ouverture/fermeture */}
+                            <Badge variant="outline" className="text-sm">
+                                Ouvert le {new Date(dossier.date_ouverture).toLocaleDateString('fr-FR')}
+                            </Badge>
+                            
+                            {dossier.is_closed && dossier.date_fermeture && (
+                                <Badge variant="outline" className="text-sm bg-orange-50 text-orange-700 border-orange-300">
+                                    <Lock className="mr-1 h-3 w-3" />
+                                    Fermé le {new Date(dossier.date_fermeture).toLocaleDateString('fr-FR')}
                                 </Badge>
                             )}
                         </div>
@@ -395,7 +467,8 @@ export default function Show() {
                                     </span>
                                 </CardDescription>
                             </div>
-                            {proprietes.length > 0 && (
+                            {/* Désactiver le bouton si fermé */}
+                            {proprietes.length > 0 && !dossier.is_closed && (
                                 <Button asChild size="sm">
                                     <Link href={route('ajouter-demandeur.create', dossier.id)}>
                                         <UserPlus className="mr-2 h-4 w-4" />
@@ -403,6 +476,7 @@ export default function Show() {
                                     </Link>
                                 </Button>
                             )}
+                         
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -533,17 +607,17 @@ export default function Show() {
                                 <CardTitle>Propriétés</CardTitle>
                                 <CardDescription>
                                     Liste des propriétés du dossier ({proprietes.length})
-                                    <span className="ml-2 text-xs">
-                                        <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded mr-1"></span>
-                                        Sans demandeur
-                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded ml-3 mr-1"></span>
-                                        Informations incomplètes
-                                        <span className="inline-block w-3 h-3 bg-gray-200 border border-gray-400 rounded ml-3 mr-1"></span>
-                                        Archivée
-                                    </span>
+                                    {dossier.is_closed && (
+                                        <span className="block mt-1 text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                                            <AlertTriangle className="h-3 w-3" />
+                                            Aucune modification possible (dossier fermé)
+                                        </span>
+                                    )}
                                 </CardDescription>
                             </div>
-                            {allDemandeurs.length > 0 && (
+                            
+                            {/* ✅ Désactiver le bouton si fermé */}
+                            {allDemandeurs.length > 0 && !dossier.is_closed && (
                                 <Button asChild size="sm">
                                     <Link href={route('lier-demandeur.create', dossier.id)}>
                                         <Link2 className="mr-2 h-4 w-4" />
@@ -689,6 +763,18 @@ export default function Show() {
                     </CardContent>
                 </Card>
             </div>
+
+
+            {/* ✅ NOUVEAU : Dialog de fermeture/réouverture */}
+            <CloseDossierDialog
+                dossier={{
+                ...dossier,
+                date_fermeture: dossier.date_fermeture ?? undefined,
+                // répète avec d'autres champs si besoin : date_ouverture, is_closed, can_close...
+            }}
+                open={closeDialogOpen}
+                onOpenChange={setCloseDialogOpen}
+            />
 
             {/* Dialog Demandeur */}
             <Dialog open={!!selectedDemandeur} onOpenChange={() => setSelectedDemandeur(null)}>

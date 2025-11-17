@@ -56,6 +56,12 @@ class User extends Authenticatable
         return $this->hasMany(UserPermission::class, 'id_user');
     }
 
+    // ✅ AJOUT : Relation avec ActivityLog
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(ActivityLog::class, 'id_user');
+    }
+
     // Relations avec les entités créées
     public function dossiers(): HasMany
     {
@@ -87,6 +93,12 @@ class User extends Authenticatable
     public function isUserDistrict(): bool
     {
         return $this->role === self::ROLE_USER_DISTRICT && $this->status;
+    }
+
+    // ✅ AJOUT : Méthode isAdmin() pour faciliter les vérifications
+    public function isAdmin(): bool
+    {
+        return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
     public function hasDistrictAccess(): bool
@@ -133,7 +145,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Vérifier les permissions CRUD (corrigées)
+     * Vérifier les permissions CRUD
      */
     public function canCreate(?string $resource = null): bool
     {
@@ -206,7 +218,6 @@ class User extends Authenticatable
             return false;
         }
 
-        // ✅ CORRECTION : Admin district peut aussi gérer les users de son district
         return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
@@ -288,7 +299,6 @@ class User extends Authenticatable
             return 'Non assigné';
         }
 
-        // ✅ CORRECTION : Utiliser l'opérateur null-safe et valeurs par défaut
         $districtName = $this->district->nom_district ?? 'District inconnu';
         $regionName = $this->district->region?->nom_region ?? 'Région inconnue';
         $provinceName = $this->district->region?->province?->nom_province ?? 'Province inconnue';
@@ -364,10 +374,10 @@ class User extends Authenticatable
         return UserPermission::getUserPermissions($this->id);
     }
 
-    // ============ LOGGING ============
+    // ============ LOGGING (UserAccessLog - ancien système) ============
     
     /**
-     * Log d'accès
+     * Log d'accès (ancien système - à conserver pour compatibilité)
      */
     public function logAccess(string $action, string $resourceType, ?int $resourceId = null): void
     {
@@ -382,7 +392,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Obtenir les logs récents de l'utilisateur
+     * Obtenir les logs récents de l'utilisateur (ancien système)
      */
     public function getRecentLogs(int $limit = 10)
     {
@@ -390,6 +400,39 @@ class User extends Authenticatable
             ->latest()
             ->limit($limit)
             ->get();
+    }
+
+    // ✅ AJOUT : Méthodes pour ActivityLog (nouveau système)
+    
+    /**
+     * Obtenir les logs d'activité récents
+     */
+    public function getRecentActivityLogs(int $limit = 50)
+    {
+        return $this->activityLogs()
+            ->with(['district:id,nom_district'])
+            ->latest()
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Obtenir les statistiques d'activité
+     */
+    public function getActivityStats(): array
+    {
+        return [
+            'total_actions' => $this->activityLogs()->count(),
+            'documents_generated' => $this->activityLogs()
+                ->where('entity_type', ActivityLog::ENTITY_DOCUMENT)
+                ->where('action', ActivityLog::ACTION_GENERATE)
+                ->count(),
+            'documents_downloaded' => $this->activityLogs()
+                ->where('entity_type', ActivityLog::ENTITY_DOCUMENT)
+                ->where('action', ActivityLog::ACTION_DOWNLOAD)
+                ->count(),
+            'last_activity' => $this->activityLogs()->latest()->first()?->created_at,
+        ];
     }
 
     // ============ MÉTHODES UTILITAIRES ============
@@ -501,6 +544,4 @@ class User extends Authenticatable
 
         return [];
     }
-
-    
 }

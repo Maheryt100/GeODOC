@@ -1,10 +1,10 @@
-// this is dossiers/index.tsx
+// resources/js/pages/dossiers/index.tsx
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, Dossier, SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { FolderPlus, Search, Calendar, SlidersHorizontal, Eye, Pencil, ChevronDown, ChevronUp, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderPlus, Search, Calendar, SlidersHorizontal, Eye, Pencil, ChevronDown, ChevronUp, X, ChevronLeft, ChevronRight, LockOpen, Lock as LockIcon } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -15,8 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { LandPlot, UserPlus, Link2, List, EllipsisVertical, Archive } from 'lucide-react';
-
-
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dossiers', href: '/dossiers' },
@@ -38,6 +36,7 @@ export default function Index() {
     const [showFilters, setShowFilters] = useState(false);
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
+    const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all'); // ✅ AJOUTÉ
 
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -75,6 +74,13 @@ export default function Index() {
             );
         }
 
+        // ✅ Filtre par statut
+        if (statusFilter === 'open') {
+            result = result.filter(d => !d.is_closed);
+        } else if (statusFilter === 'closed') {
+            result = result.filter(d => d.is_closed);
+        }
+
         // Trier
         result.sort((a, b) => {
             if (sortBy === 'date') {
@@ -90,7 +96,7 @@ export default function Index() {
 
         setFilteredDossiers(result);
         setCurrentPage(1);
-    }, [dossiers, search, dateDebut, dateFin, selectedLetter, sortBy, sortOrder]);
+    }, [dossiers, search, dateDebut, dateFin, selectedLetter, sortBy, sortOrder, statusFilter]);
 
     const clearFilters = () => {
         setSearch('');
@@ -99,6 +105,7 @@ export default function Index() {
         setSelectedLetter(null);
         setSortBy('date');
         setSortOrder('desc');
+        setStatusFilter('all'); // ✅ AJOUTÉ
     };
 
     const toggleExpand = (id: number) => {
@@ -111,7 +118,7 @@ export default function Index() {
         setExpandedRows(newExpanded);
     };
 
-    const hasActiveFilters = search || dateDebut || dateFin || selectedLetter;
+    const hasActiveFilters = search || dateDebut || dateFin || selectedLetter || statusFilter !== 'all'; // ✅ MODIFIÉ
     const showAlphabet = sortBy === 'nom';
 
     // Pagination
@@ -167,6 +174,21 @@ export default function Index() {
                                 <div className="space-y-4">
                                     <div>
                                         <h4 className="font-semibold mb-3">Filtres avancés</h4>
+                                    </div>
+
+                                    {/* Filtre par statut */}
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-medium">Statut du dossier</Label>
+                                        <Select value={statusFilter} onValueChange={(value: 'all' | 'open' | 'closed') => setStatusFilter(value)}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">Tous les dossiers</SelectItem>
+                                                <SelectItem value="open">Dossiers ouverts</SelectItem>
+                                                <SelectItem value="closed">Dossiers fermés</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     {/* Filtres par date */}
@@ -264,6 +286,12 @@ export default function Index() {
                                     <X className="h-2 w-2 cursor-pointer" onClick={() => setSelectedLetter(null)} />
                                 </Badge>
                             )}
+                            {statusFilter !== 'all' && (
+                                <Badge variant="secondary" className="gap-1 h-5 text-[10px]">
+                                    Statut: {statusFilter === 'open' ? 'Ouvert' : 'Fermé'}
+                                    <X className="h-2 w-2 cursor-pointer" onClick={() => setStatusFilter('all')} />
+                                </Badge>
+                            )}
                         </div>
                     )}
                 </div>
@@ -271,7 +299,7 @@ export default function Index() {
 
             <div className="container mx-auto px-3 pb-3 pt-2">
                 <div className="flex gap-3">
-                    {/* Liste des dossiers - Version compacte */}
+                    {/* Liste des dossiers */}
                     <div className="flex-1 space-y-1">
                         {currentDossiers.length === 0 ? (
                             <Card>
@@ -292,15 +320,10 @@ export default function Index() {
                             <>
                                 {currentDossiers.map((dossier) => {
                                     const isExpanded = expandedRows.has(dossier.id);
-                                    const hasArchivedProperties = dossier.proprietes?.some(p => p.is_archived === true);
                                     return (
-                                        <Card
-                                            key={dossier.id}
-                                            className="hover:shadow-md transition-shadow"
-                                        >
+                                        <Card key={dossier.id} className="hover:shadow-md transition-shadow">
                                             <CardContent className="p-2">
                                                 <div className="flex items-center gap-2">
-                                                    {/* Bouton expand/collapse */}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -310,8 +333,7 @@ export default function Index() {
                                                         {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                                     </Button>
 
-                                                  
-                                                   <div
+                                                    <div
                                                         className="flex-1 cursor-pointer flex items-center gap-3 text-base"
                                                         onClick={() => router.visit(route('dossiers.show', dossier.id))}
                                                     >
@@ -319,7 +341,19 @@ export default function Index() {
                                                             {dossier.nom_dossier}
                                                         </h3>
 
-                                                        {/* Indicateur propriétés archivées */}
+                                                        {/* Badge de statut */}
+                                                        {dossier.is_closed ? (
+                                                            <Badge variant="outline" className="text-xs flex items-center gap-1 bg-orange-100 text-orange-700 border-orange-300">
+                                                                <LockIcon className="h-3 w-3" />
+                                                                Fermé
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-xs flex items-center gap-1 bg-green-100 text-green-700 border-green-300">
+                                                                <LockOpen className="h-3 w-3" />
+                                                                Ouvert
+                                                            </Badge>
+                                                        )}
+
                                                         {dossier.proprietes?.some((p) => p.is_archived === true) && (
                                                             <Badge variant="outline" className="text-xs flex items-center gap-1">
                                                                 <Archive className="h-3 w-3" />
@@ -338,9 +372,6 @@ export default function Index() {
                                                         </span>
                                                     </div>
 
-
-
-                                                    {/* Menu actions */}
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
@@ -355,7 +386,10 @@ export default function Index() {
                                                                     Voir Détails
                                                                 </Link>
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild>
+                                                            <DropdownMenuItem 
+                                                                asChild={dossier.can_modify}
+                                                                disabled={!dossier.can_modify}
+                                                            >
                                                                 <Link href={route("dossiers.edit", dossier.id)} className="flex items-center">
                                                                     <Pencil className="mr-2 h-4 w-4" />
                                                                     Modifier
@@ -365,7 +399,10 @@ export default function Index() {
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuLabel>Ajouter</DropdownMenuLabel>
                                                             
-                                                            <DropdownMenuItem asChild>
+                                                            <DropdownMenuItem 
+                                                                asChild={!dossier.is_closed}
+                                                                disabled={dossier.is_closed}
+                                                            >
                                                                 <Link href={route("nouveau-lot.create", dossier.id)} className="flex items-center">
                                                                     <LandPlot className="mr-2 h-4 w-4" />
                                                                     Nouveau Lot
@@ -396,8 +433,7 @@ export default function Index() {
                                                     </DropdownMenu>
                                                 </div>
 
-                                                {/* Détails supplémentaires */}
-                           {                    isExpanded && (
+                                                {isExpanded && (
                                                     <div className="mt-3 pt-3 border-t ml-8 grid grid-cols-2 md:grid-cols-4 gap-4 text-base">
                                                         <div className="space-y-2">
                                                             <p className="text-muted-foreground text-[14px]">Type Commune</p>
@@ -418,6 +454,21 @@ export default function Index() {
                                                                 {new Date(dossier.date_descente_fin).toLocaleDateString('fr-FR')}
                                                             </p>
                                                         </div>
+                                                        <div className="space-y-2">
+                                                            <p className="text-muted-foreground text-[14px]">Date d'ouverture</p>
+                                                            <p className="font-medium text-[15px]">
+                                                                {new Date(dossier.date_ouverture).toLocaleDateString('fr-FR')}
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        {dossier.is_closed && dossier.date_fermeture && (
+                                                            <div className="space-y-2">
+                                                                <p className="text-muted-foreground text-[14px]">Date de fermeture</p>
+                                                                <p className="font-medium text-[15px] text-orange-700">
+                                                                    {new Date(dossier.date_fermeture).toLocaleDateString('fr-FR')}
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </CardContent>
@@ -481,7 +532,7 @@ export default function Index() {
                         )}
                     </div>
 
-                    {/* Navigation alphabétique - uniquement si tri par nom */}
+                    {/* Navigation alphabétique */}
                     {showAlphabet && (
                         <div className="hidden lg:block">
                             <div className="sticky top-20">

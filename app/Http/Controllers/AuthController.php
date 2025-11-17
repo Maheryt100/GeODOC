@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Inertia\Inertia;
+use App\Services\ActivityLogger;
 
 class AuthController extends Controller
 {
@@ -36,6 +37,8 @@ class AuthController extends Controller
         if (Auth::attempt($credentials)) {
             /** @var User $user */
             $user = Auth::user();
+
+            ActivityLogger::logLogin($user);
 
             // ✅ Vérifier si le compte est actif
             if (!$user->status) {
@@ -73,6 +76,13 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+          $user = Auth::user();
+        
+        // ✅ Logger la déconnexion AVANT de déconnecter
+        if ($user) {
+            ActivityLogger::logLogout($user);
+        }
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

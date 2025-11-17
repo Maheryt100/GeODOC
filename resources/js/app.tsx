@@ -1,3 +1,4 @@
+// this is js/app.tsx
 import '../css/app.css';
 
 import { createInertiaApp } from '@inertiajs/react';
