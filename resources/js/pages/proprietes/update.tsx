@@ -1,434 +1,197 @@
-// this is proprietes/update.tsx
+// pages/proprietes/update.tsx
+// Page de modification de propriété - Réutilise ProprieteCreate.tsx
+
+import { useState } from 'react';
+import { Head, usePage, useForm } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import React, { useEffect, useState } from 'react';
-import { toast, Toaster } from 'sonner';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Save, Eye } from 'lucide-react';
-import { BreadcrumbItem, Dossier, Propriete, SharedData, Nature, Vocation } from '@/types';
-import {
-    Sheet,
-    SheetClose,
-    SheetContent,
-    SheetDescription,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger
-} from '@/components/ui/sheet';
-import { ChevronDown } from 'lucide-react';
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem
-} from '@/components/ui/dropdown-menu';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast, Toaster } from 'sonner';
+import { ArrowLeft, Save, AlertTriangle } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import type { BreadcrumbItem, Dossier, Propriete } from '@/types';
 
+import ProprieteCreate, { ProprieteFormData } from '@/pages/proprietes/create';
 
+interface PageProps {
+    propriete: Propriete;
+    dossier: Dossier;
+    [key: string]: any;
+}
 
-export default function Update() {
-    const { propriete, dossier } = usePage<{
-        propriete: Propriete;
-        dossier: Dossier;
-    }>().props;
-    const { flash } = usePage<SharedData>().props;
+export default function ProprieteUpdate() {
+    const { propriete, dossier } = usePage<PageProps>().props;
+    const [processing, setProcessing] = useState(false);
+    const [selectedCharges, setSelectedCharges] = useState<string[]>(
+        propriete?.charge ? propriete.charge.split(', ').map(c => c.trim()) : []
+    );
 
-    const [selectedCharges, setSelectedCharges] = useState<string[]>(() => {
-        if (propriete.charge) {
-            return propriete.charge.split(', ').filter(c => c.trim());
-        }
-        return [];
+    const { data, setData, put, errors } = useForm<ProprieteFormData>({
+        lot: propriete?.lot || '',
+        type_operation: propriete?.type_operation || 'immatriculation',
+        nature: propriete?.nature || '',
+        vocation: propriete?.vocation || '',
+        proprietaire: propriete?.proprietaire || '',
+        situation: propriete?.situation || '',
+        propriete_mere: propriete?.propriete_mere || '',
+        titre_mere: propriete?.titre_mere || '',
+        titre: propriete?.titre || '',
+        contenance: propriete?.contenance?.toString() || '',
+        charge: propriete?.charge || '',
+        numero_FN: propriete?.numero_FN || '',
+        numero_requisition: propriete?.numero_requisition || '',
+        date_requisition: propriete?.date_requisition || '',
+        date_inscription: propriete?.date_inscription || '',
+        dep_vol: propriete?.dep_vol || '',
+        numero_dep_vol: propriete?.numero_dep_vol || '',
+        id_dossier: dossier?.id || 0,
+        
     });
 
-    const { data, setData, put, processing } = useForm({
-        id_dossier: dossier.id,
-        lot: propriete.lot ?? '',
-        propriete_mere: propriete.propriete_mere ?? '',
-        titre_mere: propriete.titre_mere ?? '',
-        titre: propriete.titre ?? '',
-        proprietaire: propriete.proprietaire ?? '',
-        contenance: propriete.contenance ?? 0,
-        charge: propriete.charge ?? '',
-        situation: propriete.situation ?? '',
-        numero_FN: propriete.numero_FN ?? '',
-        nature: propriete.nature ?? '',
-        vocation: propriete.vocation ?? '',
-        type_operation: propriete.type_operation ?? 'immatriculation',
-        numero_requisition: propriete.numero_requisition ?? '',
-        date_requisition: propriete.date_requisition ?? '',
-        date_inscription: propriete.date_inscription ?? '',
-        dep_vol: propriete.dep_vol ?? '',
-    });
-
-    const chargeOptions = [
-        "Voie(s) publique(s)",
-        "Voie(s) d'accès",
-        "Servitude(s)",
-        "Aucune"
-    ];
-
+    const isArchived = propriete?.is_archived === true;
+    const isClosed = dossier?.is_closed === true;
+    const isDisabled = isArchived || isClosed;
 
     const handleChargeChange = (charge: string, checked: boolean) => {
         let newCharges: string[];
-
+        
         if (checked) {
-            // Si "Aucune" est sélectionnée, désélectionner les autres
             if (charge === "Aucune") {
                 newCharges = ["Aucune"];
             } else {
-                // Retirer "Aucune" si elle était cochée
                 newCharges = selectedCharges.filter(c => c !== "Aucune");
                 newCharges = [...newCharges, charge];
             }
         } else {
             newCharges = selectedCharges.filter(c => c !== charge);
         }
-
+        
         setSelectedCharges(newCharges);
         setData('charge', newCharges.join(', '));
     };
 
-
-    useEffect(() => {
-        if (flash.message) {
-            toast.warning(flash.message);
-        }
-    }, [flash]);
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!data.lot) {
-            toast.error('Le numéro de lot est obligatoire');
+        // Validation de base
+        if (!data.lot?.trim()) {
+            toast.error('Le lot est obligatoire');
             return;
         }
-
         if (!data.type_operation) {
             toast.error('Le type d\'opération est obligatoire');
             return;
         }
+        if (!data.nature) {
+            toast.error('La nature est obligatoire');
+            return;
+        }
+        if (!data.vocation) {
+            toast.error('La vocation est obligatoire');
+            return;
+        }
+
+        setProcessing(true);
 
         put(route('proprietes.update', propriete.id), {
             onError: (errors) => {
-                const messages = Object.values(errors).flat();
-                toast.error('Erreur de validation', {
-                    description: messages.join('\n'),
-                });
+                console.error('Erreurs de validation:', errors);
+                const errorMessages = Object.entries(errors)
+                    .map(([field, message]) => `${field}: ${message}`)
+                    .join('\n');
+                toast.error('Erreur de validation', { description: errorMessages });
+                setProcessing(false);
             },
             onSuccess: () => {
                 toast.success('Propriété modifiée avec succès !');
-            },
+            }
         });
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: dossier.nom_dossier,
-            href: '#',
-        },
-        {
-            title: (
-                <DropdownMenu>
-                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1">
-                        Propriétés
-                        <ChevronDown className="h-3.5 w-3.5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('demandes.index', dossier.id)}>Liste</Link>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            ),
-            href: route('dossiers.proprietes', dossier.id),
-        },
-        {
-            title: 'Modification',
-            href: '#',
-        },
+        { title: 'Dossiers', href: route('dossiers') },
+        { title: dossier.nom_dossier, href: route('dossiers.show', dossier.id) },
+        { title: `Modifier Lot ${propriete.lot}`, href: '#' }
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Modification Propriété" />
-            <Toaster richColors position="top-right" />
+            <Head title={`Modifier Lot ${propriete.lot}`} />
+            <Toaster position="top-right" richColors />
 
-            <div className="container mx-auto p-6 max-w-6xl">
-                <div className="mb-6 flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold">Modifier Propriété</h1>
-                        <p className="text-muted-foreground">Dossier: {dossier.nom_dossier}</p>
-                    </div>
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="outline">
-                                <Eye className="mr-2 h-4 w-4" />
-                                Voir le dossier
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent>
-                            <SheetHeader>
-                                <SheetTitle>À propos du Dossier</SheetTitle>
-                                <SheetDescription>
-                                    Vérifier les informations du Dossier
-                                </SheetDescription>
-                            </SheetHeader>
-                            <div className="grid flex-1 auto-rows-min gap-6 px-4 mt-6">
-                                <div className="grid gap-3">
-                                    <Label>Nom du dossier</Label>
-                                    <Input value={dossier.nom_dossier} disabled />
-                                </div>
-                                <div className="grid gap-3">
-                                    <Label>Circonscription</Label>
-                                    <Input value={dossier.circonscription} disabled />
-                                </div>
-                                <div className="grid gap-3">
-                                    <Label>Commune / fokontany</Label>
-                                    <Input value={`${dossier.commune} / ${dossier.fokontany}`} disabled />
-                                </div>
-                                <div className="grid gap-3">
-                                    <Label>Date descente</Label>
-                                    <Input value={`${dossier.date_descente_debut} au ${dossier.date_descente_fin}`} disabled />
-                                </div>
-                            </div>
-                            <SheetFooter>
-                                <SheetClose asChild>
-                                    <Button variant="outline">Fermer</Button>
-                                </SheetClose>
-                            </SheetFooter>
-                        </SheetContent>
-                    </Sheet>
+            <div className="container mx-auto p-6 max-w-5xl">
+                {/* Header */}
+                <div className="mb-8">
+                    <Button asChild variant="ghost" size="sm" className="mb-4">
+                        <Link href={route('dossiers.show', dossier.id)}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Retour au dossier
+                        </Link>
+                    </Button>
+                    
+                    <h1 className="text-3xl font-bold">Modifier Lot {propriete.lot}</h1>
+                    <p className="text-muted-foreground mt-2">
+                        Dossier: {dossier.nom_dossier}
+                    </p>
                 </div>
 
+                {/* Alertes */}
+                {isDisabled && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                            {isClosed && 'Ce dossier est fermé. Aucune modification n\'est possible.'}
+                            {isArchived && 'Cette propriété est archivée (acquise). Aucune modification n\'est possible.'}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Formulaire */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Informations de la Propriété</CardTitle>
+                        <CardTitle>Informations de la propriété</CardTitle>
                         <CardDescription>
-                            Tous les champs marqués d'un astérisque (*) sont obligatoires
+                            Modifiez les informations ci-dessous et cliquez sur "Enregistrer les modifications"
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Type d'opération */}
-                            <div>
-                                <Label className="text-red-500">Type d'opération *</Label>
-                                <Select
-                                    value={data.type_operation}
-                                    onValueChange={(e) => setData('type_operation', e as 'morcellement' | 'immatriculation')}
-                                    required
-                                >
-                                    <SelectTrigger className="w-[220px]">
-                                        <SelectValue placeholder="Sélectionner le type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="morcellement">Morcellement</SelectItem>
-                                        <SelectItem value="immatriculation">Immatriculation</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <form onSubmit={handleSubmit} className="space-y-8">
+                            <ProprieteCreate
+                                data={data}
+                                onChange={(field, value) => setData(field, value)}
+                                index={0}
+                                showRemoveButton={false}
+                                selectedCharges={selectedCharges}
+                                onChargeChange={handleChargeChange}
+                            />
 
-                            {/* Nature et Vocation */}
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                    <Label>Nature</Label>
-                                    <Select value={data.nature} onValueChange={(e) => setData('nature', e as Nature)}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Nature" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Urbaine">Urbaine</SelectItem>
-                                            <SelectItem value="Suburbaine">Suburbaine</SelectItem>
-                                            <SelectItem value="Rurale">Rurale</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Vocation</Label>
-                                    <Select value={data.vocation} onValueChange={(e) => setData('vocation', e as Vocation)}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Vocation" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Edilitaire">Edilitaire</SelectItem>
-                                            <SelectItem value="Agricole">Agricole</SelectItem>
-                                            <SelectItem value="Forestière">Forestière</SelectItem>
-                                            <SelectItem value="Touristique">Touristique</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            {/* Champs conditionnels pour Morcellement */}
-                            {data.type_operation === 'morcellement' && (
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div>
-                                        <Label>Nom propriété mère</Label>
-                                        <Input
-                                            type="text"
-                                            value={data.propriete_mere}
-                                            onChange={(e) => setData('propriete_mere', e.target.value)}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Titre mère</Label>
-                                        <Input
-                                            type="text"
-                                            value={data.titre_mere}
-                                            onChange={(e) => setData('titre_mere', e.target.value)}
-                                            placeholder="12.54-B"
-                                        />
-                                    </div>
-                                </div>
+                            {/* Messages d'erreur globaux */}
+                            {Object.keys(errors).length > 0 && (
+                                <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertDescription>
+                                        Veuillez corriger les erreurs ci-dessus
+                                    </AlertDescription>
+                                </Alert>
                             )}
 
-                            {/* Titre et Propriétaire */}
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                    <Label>Titre</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.titre}
-                                        onChange={(e) => setData('titre', e.target.value)}
-                                        placeholder="54.21-A"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Nom propriété / Propriétaire</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.proprietaire}
-                                        onChange={(e) => setData('proprietaire', e.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Lot, Numero FN, Nº Requisition */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label className="text-red-500">Lot *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.lot}
-                                        onChange={(e) => setData('lot', e.target.value)}
-                                        required
-                                        placeholder="T 45"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Numero FNº</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.numero_FN}
-                                        onChange={(e) => setData('numero_FN', e.target.value)}
-                                        placeholder="78-A/25"
-                                    />
-                                </div>
-                                {data.type_operation === 'immatriculation' && (
-                                    <div>
-                                        <Label>Nº Requisition</Label>
-                                        <Input
-                                            type="text"
-                                            value={data.numero_requisition}
-                                            onChange={(e) => setData('numero_requisition', e.target.value)}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Contenance, Situation, Charge */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label>Contenance (m²)</Label>
-                                    <Input
-                                        type="number"
-                                        value={data.contenance}
-                                        min={1}
-                                        placeholder="en m²"
-                                        onChange={(e) => setData('contenance', Number(e.target.value))}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Situation (sise à)</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.situation}
-                                        onChange={(e) => setData('situation', e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                <Label>Charge</Label>
-                                <div className="space-y-2 mt-2">
-                                    {chargeOptions.map((charge) => (
-                                        <div key={charge} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`charge-${charge}`}
-                                                checked={selectedCharges.includes(charge)}
-                                                onCheckedChange={(checked) => handleChargeChange(charge, checked as boolean)}
-                                            />
-                                            <label
-                                                htmlFor={`charge-${charge}`}
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                            >
-                                                {charge}
-                                            </label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            </div>
-
-                            {/* Dates et Dep Vol */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label>Date inscription</Label>
-                                    <Input
-                                        type="date"
-                                        onChange={(e) => setData('date_inscription', e.target.value)}
-                                        value={data.date_inscription}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Date requisition</Label>
-                                    <Input
-                                        type="date"
-                                        onChange={(e) => setData('date_requisition', e.target.value)}
-                                        value={data.date_requisition}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Dep Vol</Label>
-                                    <Input
-                                        type="text"
-                                        onChange={(e) => setData('dep_vol', e.target.value)}
-                                        value={data.dep_vol}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Boutons */}
-                            <div className="flex gap-4 justify-end">
+                            {/* Actions */}
+                            <div className="flex gap-4 justify-end pt-6 border-t">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     onClick={() => window.history.back()}
+                                    disabled={processing}
                                 >
                                     Annuler
                                 </Button>
-                                <Button type="submit" disabled={processing}>
+                                <Button
+                                    type="submit"
+                                    disabled={processing || isDisabled}
+                                >
                                     <Save className="mr-2 h-4 w-4" />
-                                    {processing ? 'Enregistrement...' : 'Modifier'}
+                                    {processing ? 'Enregistrement...' : 'Enregistrer les modifications'}
                                 </Button>
                             </div>
                         </form>

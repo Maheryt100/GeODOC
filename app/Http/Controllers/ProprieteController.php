@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
+use Illuminate\Support\Facades\Validator;
 use App\Services\PrixCalculatorService;
 
 class ProprieteController extends Controller
@@ -75,6 +76,7 @@ class ProprieteController extends Controller
             'date_requisition' => 'nullable|date',
             'date_inscription' => 'nullable|date',
             'dep_vol' => 'nullable|string',
+            'numero_dep_vol' => 'nullable|string', // ✅ NOUVEAU
         ],[
             'lot.required' => 'Le lot est obligatoire',
             'type_operation.required' => 'Le type d\'opération est obligatoire',
@@ -82,9 +84,6 @@ class ProprieteController extends Controller
             'nature.in' => 'La nature doit être: Urbaine, Suburbaine ou Rurale',
             'vocation.required' => 'La vocation est obligatoire',
             'vocation.in' => 'La vocation doit être: Edilitaire, Agricole, Forestière ou Touristique',
-            'proprietaire.nullable' => 'Le nom de la propriété est obligatoire',
-            'situation.nullable' => 'La situation est obligatoire',
-            'id_dossier.exists' => 'Le dossier n\'existe pas',
             'contenance.min' => 'La contenance est invalide'
         ]);
         
@@ -98,6 +97,101 @@ class ProprieteController extends Controller
         }
     }
 
+    /**
+     * ✅ NOUVEAU : Créer plusieurs propriétés à la fois
+     */
+    public function storeMultiple(Request $request)
+    {
+        // ✅ Décoder le JSON si nécessaire
+        $proprietes = is_string($request->proprietes) 
+            ? json_decode($request->proprietes, true) 
+            : $request->proprietes;
+
+        $validated = $request->validate([
+            'id_dossier' => 'required|exists:dossiers,id',
+        ]);
+
+        // Valider chaque propriété
+        $validator = Validator::make(['proprietes' => $proprietes], [
+            'proprietes' => 'required|array|min:1',
+            'proprietes.*.lot' => 'required|string|max:15',
+            'proprietes.*.titre' => 'nullable|string|max:30',
+            'proprietes.*.contenance' => 'nullable|numeric',
+            'proprietes.*.proprietaire' => 'nullable|string|max:100',
+            'proprietes.*.propriete_mere' => 'nullable|string|max:15',
+            'proprietes.*.titre_mere' => 'nullable|string|max:30',
+            'proprietes.*.charge' => 'nullable|string',
+            'proprietes.*.situation' => 'nullable|string',
+            'proprietes.*.nature' => 'required|in:Urbaine,Suburbaine,Rurale',
+            'proprietes.*.vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
+            'proprietes.*.numero_FN' => 'nullable|string|max:30',
+            'proprietes.*.numero_requisition' => 'nullable|string|max:30',
+            'proprietes.*.date_requisition' => 'nullable|date',
+            'proprietes.*.date_inscription' => 'nullable|date',
+            'proprietes.*.dep_vol' => 'nullable|string|max:30',
+            'proprietes.*.numero_dep_vol' => 'nullable|string|max:30',
+            'proprietes.*.type_operation' => 'required|in:morcellement,immatriculation',
+        ], [
+            'proprietes.*.lot.required' => 'Le numéro de lot est obligatoire (propriété :position).',
+            'proprietes.*.nature.required' => 'La nature est obligatoire (propriété :position).',
+            'proprietes.*.vocation.required' => 'La vocation est obligatoire (propriété :position).',
+            'proprietes.*.type_operation.required' => 'Le type d\'opération est obligatoire (propriété :position).',
+        ]);
+
+        if ($validator->fails()) {
+            Log::warning('Validation échouée pour propriétés multiples', [
+                'errors' => $validator->errors()->toArray(),
+                'data' => $proprietes
+            ]);
+            return back()->withErrors($validator->errors());
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $createdCount = 0;
+            
+            foreach ($proprietes as $proprieteData) {
+                // ✅ Nettoyer les chaînes vides en null
+                foreach ($proprieteData as $key => $value) {
+                    if ($value === '') {
+                        $proprieteData[$key] = null;
+                    }
+                }
+                
+                $proprieteData['id_user'] = Auth::id();
+                $proprieteData['id_dossier'] = $validated['id_dossier'];
+                $proprieteData['status'] = false; // Pas de demandeur associé par défaut
+                
+                Propriete::create($proprieteData);
+                
+                $createdCount++;
+            }
+
+            DB::commit();
+
+           Log::info('Propriétés multiples créées', [
+                'count' => $createdCount,
+                'dossier_id' => $validated['id_dossier'],
+                'user_id' => Auth::id()
+            ]);
+
+            return Redirect::route('dossiers.show', $validated['id_dossier'])
+                ->with('success', "{$createdCount} propriété(s) créée(s) avec succès");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur création multiple propriétés', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $proprietes
+            ]);
+
+            return back()->withErrors(['error' => 'Erreur lors de la création: ' . $e->getMessage()]);
+        }
+    }
+
     public function show($id)
     {
         $propriete = Propriete::findOrFail($id);
@@ -106,12 +200,11 @@ class ProprieteController extends Controller
         ]);
     }
 
-     public function edit(string $id)
+    public function edit(string $id)
     {
         $propriete = Propriete::findOrFail($id);
         $dossier = Dossier::findOrFail($propriete->id_dossier);
         
-        // ✅ Bloquer si archivée
         if ($this->isPropertyArchived($propriete)) {
             return Redirect::route('dossiers.show', $dossier->id)
                 ->with('error', $this->getBlockedActionMessage($propriete, 'modification'));
@@ -131,7 +224,6 @@ class ProprieteController extends Controller
             return back()->with('message', 'Propriété introuvable');
         }
         
-        // Bloquer si archivée
         if ($this->isPropertyArchived($existPropriete)) {
             return back()->with('error', $this->getBlockedActionMessage($existPropriete, 'modification'));
         }
@@ -159,6 +251,7 @@ class ProprieteController extends Controller
             'date_requisition' => 'nullable|date',
             'date_inscription' => 'nullable|date',
             'dep_vol' => 'nullable|string',
+            'numero_dep_vol' => 'nullable|string', // ✅ NOUVEAU
             'id_dossier' => 'required|numeric|exists:dossiers,id',
         ], [
             'lot.required' => 'Le lot est obligatoire',
@@ -171,55 +264,36 @@ class ProprieteController extends Controller
         DB::beginTransaction();
         
         try {
-            // Vérifier si la contenance ou la vocation a changé
             $contenanceChanged = $existPropriete->contenance != $validate['contenance'];
             $vocationChanged = $existPropriete->vocation != $validate['vocation'];
             
-            // Mettre à jour la propriété
             $existPropriete->update($validate);
             
-            // Recalculer les prix si nécessaire
             if ($contenanceChanged || $vocationChanged) {
                 $demandes = Demander::where('id_propriete', $existPropriete->id)
                     ->where('status', 'active')
                     ->get();
                 
                 if ($demandes->count() > 0) {
-                    try {
-                        $nouveauPrix = PrixCalculatorService::calculerPrixTotal($existPropriete);
+                    $nouveauPrix = PrixCalculatorService::calculerPrixTotal($existPropriete);
+                    
+                    foreach ($demandes as $demande) {
+                        $ancienPrix = $demande->total_prix;
+                        $demande->update(['total_prix' => $nouveauPrix]);
                         
-                        foreach ($demandes as $demande) {
-                            $ancienPrix = $demande->total_prix;
-                            $demande->update(['total_prix' => $nouveauPrix]);
-                            
-                            Log::info('Prix recalculé après modification propriété', [
-                                'propriete_id' => $existPropriete->id,
-                                'lot' => $existPropriete->lot,
-                                'demande_id' => $demande->id,
-                                'ancien_prix' => $ancienPrix,
-                                'nouveau_prix' => $nouveauPrix,
-                                'contenance_changee' => $contenanceChanged,
-                                'vocation_changee' => $vocationChanged
-                            ]);
-                        }
-                        
-                        DB::commit();
-                        
-                        return Redirect::route('dossiers.show', $request->id_dossier)
-                            ->with('success', "Propriété modifiée et {$demandes->count()} prix recalculé(s) avec succès");
-                            
-                    } catch (\Exception $e) {
-                        DB::rollBack();
-                        
-                        Log::error('Erreur recalcul prix après modification', [
+                        Log::info('Prix recalculé après modification propriété', [
                             'propriete_id' => $existPropriete->id,
-                            'error' => $e->getMessage()
-                        ]);
-                        
-                        return back()->withErrors([
-                            'error' => "Propriété modifiée mais erreur lors du recalcul des prix: {$e->getMessage()}"
+                            'lot' => $existPropriete->lot,
+                            'demande_id' => $demande->id,
+                            'ancien_prix' => $ancienPrix,
+                            'nouveau_prix' => $nouveauPrix,
                         ]);
                     }
+                    
+                    DB::commit();
+                    
+                    return Redirect::route('dossiers.show', $request->id_dossier)
+                        ->with('success', "Propriété modifiée et {$demandes->count()} prix recalculé(s)");
                 }
             }
             
@@ -248,7 +322,6 @@ class ProprieteController extends Controller
             return back()->with('message', 'Propriété introuvable');
         }
         
-        // ✅ Bloquer si archivée
         if ($this->isPropertyArchived($propriete)) {
             return back()->with('error', $this->getBlockedActionMessage($propriete, 'suppression'));
         }
@@ -260,9 +333,6 @@ class ProprieteController extends Controller
             ->with('success', 'Propriété supprimée avec succès');
     }
 
-    /**
-     * ✅ Archiver une propriété - vérifier que toutes les demandes sont actives
-     */
     public function archive(Request $request)
     {
         $request->validate([
@@ -274,7 +344,6 @@ class ProprieteController extends Controller
         try {
             $propriete = Propriete::findOrFail($request->id);
             
-            // Vérifier s'il y a des demandes actives
             $demandesActives = Demander::where('id_propriete', $propriete->id)
                 ->where('status', 'active')
                 ->count();
@@ -283,7 +352,6 @@ class ProprieteController extends Controller
                 return back()->withErrors(['error' => 'Impossible d\'archiver : cette propriété n\'a aucun demandeur actif.']);
             }
             
-            // Archiver toutes les demandes actives liées à cette propriété
             Demander::where('id_propriete', $propriete->id)
                 ->where('status', 'active')
                 ->update(['status' => 'archive']);
@@ -296,7 +364,7 @@ class ProprieteController extends Controller
                 'demandes_archivees' => $demandesActives
             ]);
             
-            return back()->with('success', "Propriété Lot {$propriete->lot} archivée avec succès (acquise). Toutes les actions sont maintenant bloquées.");
+            return back()->with('success', "Propriété Lot {$propriete->lot} archivée (acquise)");
                 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -309,62 +377,55 @@ class ProprieteController extends Controller
             return back()->withErrors(['error' => 'Erreur lors de l\'archivage : ' . $e->getMessage()]);
         }
     }
-    
-    public function downloadRequisition($id_dossier, $id)
+
+    public function unarchive(Request $request)
     {
-        $propriete = Propriete::findOrFail($id);
-        $dossier = Dossier::findOrFail($id_dossier);
+        $request->validate([
+            'id' => 'required|exists:proprietes,id',
+        ]);
 
-        if ($propriete->type_operation == 'morcellement') {
-            $requisition_model = new TemplateProcessor(
-                storage_path('app/public/modele_odoc/requisition_MO.docx')
-            );
-        } else {
-            $requisition_model = new TemplateProcessor(
-                storage_path('app/public/modele_odoc/requisition_IM.docx')
-            );
+        DB::beginTransaction();
+        
+        try {
+            $propriete = Propriete::findOrFail($request->id);
+            
+            $demandesArchivees = Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'archive')
+                ->count();
+            
+            if ($demandesArchivees === 0) {
+                return back()->withErrors(['error' => 'Cette propriété n\'a aucune demande archivée.']);
+            }
+            
+            Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'archive')
+                ->update(['status' => 'active']);
+            
+            DB::commit();
+            
+            Log::info('Propriété désarchivée', [
+                'propriete_id' => $propriete->id,
+                'lot' => $propriete->lot,
+                'demandes_reactivees' => $demandesArchivees
+            ]);
+            
+            return back()->with('success', "Propriété Lot {$propriete->lot} désarchivée");
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur désarchivage propriété', [
+                'propriete_id' => $request->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->withErrors(['error' => 'Erreur lors de la désarchivation : ' . $e->getMessage()]);
         }
-
-        $place = DB::table('dossiers')
-            ->join('districts', 'districts.id', '=', 'dossiers.id_district')
-            ->join('regions', 'regions.id', '=', 'districts.id_region')
-            ->join('provinces', 'provinces.id', '=', 'regions.id_province')
-            ->where('dossiers.id', $dossier->id)
-            ->select('provinces.nom_province', 'regions.nom_region', 'districts.nom_district')
-            ->first();
-
-        $requisition_model->setValues([
-            'Province' => $place->nom_province,
-            'Region' => $place->nom_region,
-            'District' => $place->nom_district,
-            'DISTRICT' => Str::upper($place->nom_district),
-            'Situation' => $propriete->situation,
-            'Nom_propriete' => Str::upper($propriete->proprietaire),
-            'Titre' => $propriete->titre,
-            'Commune' => $dossier->commune,
-            'Fokotany' => $dossier->fokontany,
-            'Numero_fn' => $propriete->numero_FN,
-            'Propriete_mere' => Str::upper($propriete->propriete_mere),
-            'Titre_mere' => $propriete->titre_mere,
-        ]);
-
-        $fileName = 'Requisition_' . $propriete->titre . '_' . $propriete->lot . '_' . $propriete->type_operation . '.docx';
-        $requisition_model->saveAs(storage_path('app/public/modele_odoc/document_requisition/' . $fileName));
-        
-        UserRequisition::create([
-            'id_user' => Auth::id(),
-            'id_propriete' => $propriete->id,
-        ]);
-        
-        return response()->download(storage_path('app/public/modele_odoc/document_requisition/' . $fileName));
     }
-
- 
 
     /**
      * Vérifier si une propriété est archivée
      */
-   
     private function isPropertyArchived(Propriete $propriete): bool
     {
         $demandesActives = Demander::where('id_propriete', $propriete->id)
@@ -378,7 +439,9 @@ class ProprieteController extends Controller
         return $demandesArchivees > 0 && $demandesActives === 0;
     }
 
-
+    /**
+     * Message bloqué pour propriété archivée
+     */
     private function getBlockedActionMessage(Propriete $propriete, string $action = 'action'): string
     {
         $demandes = Demander::where('id_propriete', $propriete->id)
@@ -389,64 +452,7 @@ class ProprieteController extends Controller
         $demandeurs = $demandes->pluck('demandeur.nom_demandeur')->filter()->toArray();
         $demandeursStr = !empty($demandeurs) ? implode(', ', $demandeurs) : 'demandeur(s) inconnu(s)';
         
-        return "🔒 PROPRIÉTÉ ARCHIVÉE (ACQUISE)\n\n" .
-               "La propriété Lot {$propriete->lot} est archivée (acquise) par : {$demandeursStr}.\n\n" .
-               "❌ Aucune {$action} n'est possible sur cette propriété tant qu'elle reste archivée.\n\n" .
-               "💡 Pour effectuer cette action, vous devez d'abord DÉSARCHIVER cette propriété depuis l'écran du dossier.";
-    }
-
-    /**
-     * NOUVELLE MÉTHODE : Archiver une propriété (propriété acquise)
-     */
-   
-
-    /**
-     * NOUVELLE MÉTHODE : Désarchiver une propriété
-     */
-    public function unarchive(Request $request)
-    {
-        $request->validate([
-            'id' => 'required|exists:proprietes,id',
-        ]);
-
-        DB::beginTransaction();
-        
-        try {
-            $propriete = Propriete::findOrFail($request->id);
-            
-            // Vérifier s'il y a des demandes archivées
-            $demandesArchivees = Demander::where('id_propriete', $propriete->id)
-                ->where('status', 'archive')
-                ->count();
-            
-            if ($demandesArchivees === 0) {
-                return back()->withErrors(['error' => 'Cette propriété n\'a aucune demande archivée.']);
-            }
-            
-            // Réactiver toutes les demandes archivées liées à cette propriété
-            Demander::where('id_propriete', $propriete->id)
-                ->where('status', 'archive')
-                ->update(['status' => 'active']);
-            
-            DB::commit();
-            
-            Log::info('Propriété désarchivée', [
-                'propriete_id' => $propriete->id,
-                'lot' => $propriete->lot,
-                'demandes_reactivees' => $demandesArchivees
-            ]);
-            
-            return back()->with('success', "Propriété Lot {$propriete->lot} désarchivée avec succès. Modifications maintenant possibles.");
-                
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            Log::error('Erreur désarchivage propriété', [
-                'propriete_id' => $request->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return back()->withErrors(['error' => 'Erreur lors de la désarchivation : ' . $e->getMessage()]);
-        }
+        return "🔒 PROPRIÉTÉ ARCHIVÉE (ACQUISE) - La propriété Lot {$propriete->lot} est archivée par : {$demandeursStr}. " .
+               "❌ Aucune {$action} possible tant qu'elle reste archivée.";
     }
 }

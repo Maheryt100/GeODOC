@@ -1,4 +1,4 @@
-// this is types/index.d.ts
+// types/index.d.ts
 import { LucideIcon } from 'lucide-react';
 import type { Config } from 'ziggy-js';
 import { ReactNode } from 'react';
@@ -31,27 +31,31 @@ export interface SharedData {
     quote: { message: string; author: string };
     auth: Auth;
     flash: {
-        error: string; message?: string; success?: string;
-};
+        error: string; 
+        message?: string; 
+        success?: string;
+    };
     districts: District[];
     ziggy: Config & { location: string };
     sidebarOpen: boolean;
     [key: string]: unknown;
 }
 
+// ✅ MODIFIÉ : Ajout du type UserRole
+export type UserRole = 'super_admin' | 'central_user' | 'admin_district' | 'user_district' | 'user';
+
 export interface User {
     district: any;
     id: number;
     name: string;
     email: string;
-    role: string;
+    role: UserRole; // ✅ Type plus strict
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
 }
 
-// DÉFINITIONS DES TYPES (Solution simplifiée)
 export type Nature = 'Urbaine' | 'Suburbaine' | 'Rurale';
 export type Vocation = 'Edilitaire' | 'Agricole' | 'Forestière' | 'Touristique';
 export type TypeOperation = 'morcellement' | 'immatriculation';
@@ -67,8 +71,8 @@ export interface Propriete {
     titre_mere: string;
     charge: string;
     situation: string;
-    nature: Nature;              // Urbaine | Suburbaine | Rurale
-    vocation: Vocation;          // Edilitaire | Agricole | Forestière | Touristique
+    nature: Nature;
+    vocation: Vocation;
     numero_FN: string;
     numero_requisition: string;
     status: boolean;
@@ -76,6 +80,8 @@ export interface Propriete {
     date_requisition: string;
     date_inscription: string;
     dep_vol: string;
+    numero_dep_vol?: string;
+    dep_vol_complet?: string;
     id_dossier: number;
     demandeurs?: Demandeur[];
     is_incomplete?: boolean;
@@ -85,18 +91,19 @@ export interface Propriete {
         id_demandeur: number;
         status: 'active' | 'archive';
     }>;
-    demandeurs?: Array<Demandeur & { status?: 'active' | 'archive' }>;
 }
 
 export interface Dossier {
     id: number;
     nom_dossier: string;
+    numero_ouverture?: string;
+    numero_ouverture_display?: string;
     date_descente_debut: string;
     date_descente_fin: string;
-    date_ouverture: string; // ✅ AJOUTÉ
-    date_fermeture?: string | null; // ✅ AJOUTÉ
-    closed_by?: number | null; // ✅ AJOUTÉ
-    motif_fermeture?: string | null; // ✅ AJOUTÉ
+    date_ouverture: string;
+    date_fermeture?: string | null;
+    closed_by?: number | null;
+    motif_fermeture?: string | null;
     type_commune: string;
     commune: string;
     fokontany: string;
@@ -105,12 +112,12 @@ export interface Dossier {
     id_user: number;
     demandeurs_count: number;
     proprietes_count: number;
-    is_closed: boolean; // ✅ AJOUTÉ
-    is_open: boolean; // ✅ AJOUTÉ
-    can_close?: boolean; // ✅ AJOUTÉ - Permission de fermer/rouvrir
-    can_modify?: boolean; // ✅ AJOUTÉ - Permission de modifier
+    is_closed: boolean;
+    is_open: boolean;
+    can_close?: boolean;
+    can_modify?: boolean;
     status_label?: string;
-    closedBy?: User; // ✅ AJOUTÉ - Relation avec l'utilisateur qui a fermé
+    closedBy?: User;
     demandeurs?: Demandeur[];
     proprietes?: Propriete[];
     created_at: string;
@@ -142,9 +149,9 @@ export interface Demandeur {
     lieu_mariage?: string;
     marie_a?: string;
     id_user: number;
-    status?: string; // Pour les relations avec proprietes
-    id_demande?: number; // Pour les relations avec proprietes
-    hasProperty?: boolean; // Pour l'affichage dans l'interface
+    status?: string;
+    id_demande?: number;
+    hasProperty?: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -161,15 +168,13 @@ export interface Demander {
     motif_archive: string;
 }
 
-// ✅ DISTRICT CORRIGÉ (4 colonnes au lieu de 12)
 export interface District {
     id: number;
     nom_district: string;
-    // COLONNES DE PRIX BASÉES SUR LA VOCATION
-    edilitaire: number;      // Prix pour vocation Edilitaire
-    agricole: number;        // Prix pour vocation Agricole
-    forestiere: number;      // Prix pour vocation Forestière
-    touristique: number;     // Prix pour vocation Touristique
+    edilitaire: number;
+    agricole: number;
+    forestiere: number;
+    touristique: number;
 }
 
 export interface PageProps {
@@ -178,6 +183,7 @@ export interface PageProps {
     proprietes?: Propriete[];
     documents?: Paginated<Demander>;
     districts?: District[];
+    suggested_numero?: string;
 }
 
 export interface Paginated<T> {
@@ -193,7 +199,6 @@ export interface Link {
     url: string | null;
 }
 
-// TYPES HELPERS
 export type Proprietes = Propriete[];
 export type Demandeurs = Demandeur[];
 

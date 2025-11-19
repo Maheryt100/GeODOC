@@ -1,300 +1,297 @@
-import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, Demandeur, Dossier, Paginated, SharedData } from '@/types';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+// pages/demandeurs/index.tsx
+// Composant de liste des demandeurs AVEC MODALS DE DÉTAILS
+// Utilisé par : dossiers/Show.tsx
+
+import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Ellipsis, Eye, Pencil, Trash, UserPlus, UserRoundSearch } from 'lucide-react';
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import React, { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import { Toaster } from '@/components/ui/sonner';
-import { Input } from '@/components/ui/input';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import {
-    Pagination,
-    PaginationContent,
-    PaginationEllipsis,
-    PaginationItem, PaginationLink, PaginationNext,
-    PaginationPrevious
-} from '@/components/ui/pagination';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertCircle, Eye, Pencil, Trash, Ellipsis, UserPlus, Link2, Archive } from 'lucide-react';
+import type { Demandeur, Dossier, Propriete } from '@/types';
+import DemandeurDetailDialog from '@/components/DemandeurDetailDialog';
+import ProprieteDetailDialog from '@/components/ProprieteDetailDialog';
 
 
-export default function Index() {
-    const { demandeurs } = usePage<{demandeurs: Paginated<Demandeur> }>().props;
-    const { dossier } = usePage<{
-        dossier: Dossier;
-    }>().props;
+interface DemandeurWithProperty extends Demandeur {
+    hasProperty: boolean;
+}
 
-    const { flash } = usePage<SharedData>().props;
-    const { delete: destroy } = useForm();
-    const [cin, setCin] = useState("");
-    const [search, setSearch] = useState("");
+interface DemandeursIndexProps {
+    demandeurs: DemandeurWithProperty[];
+    dossier: Dossier;
+    proprietes: Propriete[];
+    onDeleteDemandeur: (id: number) => void;
+    onSelectDemandeur?: (demandeur: DemandeurWithProperty) => void;
+    isDemandeurIncomplete: (dem: Demandeur) => boolean;
+}
 
-    useEffect (() => {
+export default function DemandeursIndex({
+    demandeurs,
+    dossier,
+    proprietes,
+    onDeleteDemandeur,
+    onSelectDemandeur,
+    isDemandeurIncomplete
+}: DemandeursIndexProps) {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
-        if (flash.message !== null){
-            toast.info(flash.message);
-        }
-    },[flash]);
+    // ✅ États pour les modals de détails
+    const [selectedDemandeur, setSelectedDemandeur] = useState<DemandeurWithProperty | null>(null);
+    const [showDemandeurDetail, setShowDemandeurDetail] = useState(false);
+    const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
+    const [showProprieteDetail, setShowProprieteDetail] = useState(false);
 
-    const handleDelete = async (id:number) => {
-        if(confirm('voulez vous vraiment supprimer cette Demandeur? ')){
-            destroy(route('demandeurs.destroy', { dossier: dossier.id, demandeur: id }));
-        }
-    }
-    const [filter, setFilter] = useState("");
-
-    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) =>{
-        setSearch(e.target.value);
-
-        router.get(route('demandeurs.search', dossier.id), {
-            search: e.target.value
-        }, {
-            preserveState: true,
-            replace: true,
+    const getAcquiredLotsForDemandeur = (demandeurId: number): string[] => {
+        const lots: string[] = [];
+        
+        proprietes.forEach(prop => {
+            if (prop.is_archived === true) {
+                const isLinked = prop.demandeurs?.some((d: any) => d.id === demandeurId);
+                if (isLinked) {
+                    lots.push(prop.lot);
+                }
+            }
         });
-    }
-    const handleSearchCin= (e: React.FormEvent) =>{
-        e.preventDefault();
-        const cinIsValid = /^\d+$/.test(cin);
-        if(!cinIsValid){
-            toast.warning("CIN invalide, le CIN doit comporter que 12 chiffres!");
-            return;
-        }
-        router.post(route('demandeurs.searchCin'),{
-            id_dossier: dossier.id,
-            cin: cin
-        })
-    }
+        
+        return lots;
+    };
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: dossier.nom_dossier,
-            href: '#',
-        },
-        {
-            title: (
-                <DropdownMenu>
-                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5">
-                        Demandeurs
-                        <ChevronDown />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.list', dossier.id)}>Documents</Link>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            ),
-            href: route('dossiers.proprietes', dossier.id),
-        },
-    ];
+    // ✅ Handler pour ouvrir le détail demandeur
+    const handleSelectDemandeur = (demandeur: DemandeurWithProperty) => {
+        setSelectedDemandeur(demandeur);
+        setShowDemandeurDetail(true);
+    };
+
+    // ✅ Handler pour ouvrir le détail propriété depuis le modal demandeur
+    const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
+        setSelectedPropriete(propriete);
+        setShowProprieteDetail(true);
+    };
+
+    // ✅ Handler pour ouvrir le détail demandeur depuis le modal propriété
+    const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
+        const demandeurWithProperty = demandeurs.find(d => d.id === demandeur.id);
+        if (demandeurWithProperty) {
+            setSelectedDemandeur(demandeurWithProperty);
+            setShowDemandeurDetail(true);
+        }
+    };
+
+    const paginateDemandeurs = () => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return demandeurs.slice(startIndex, endIndex);
+    };
+
+    const totalPages = Math.ceil(demandeurs.length / itemsPerPage);
+
+    const Pagination = () => {
+        if (totalPages <= 1) return null;
+
+        return (
+            <div className="flex justify-center items-center gap-2 mt-4">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                >
+                    Précédent
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                    >
+                        {page}
+                    </Button>
+                ))}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                >
+                    Suivant
+                </Button>
+            </div>
+        );
+    };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dashboard" />
-            <Toaster position={'top-right'}/>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <div className={"w-full flex justify-between bo mt-6 px-5"}>
-                    <div className="flex flex-col md:flex-row">
-                        <Input type={'text'}
-                               placeholder={"Recherche..."}
-                               value={search}
-                               onChange={handleSearch}
-                               maxLength={30}
-                               className="min-w-[200px]"
-                        />
-                    </div>
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <Dialog>
-
-                            <DialogTrigger asChild>
-                                <Button>
-                                    <UserRoundSearch/>
-                                    Demandeur Existant
-                                </Button>
-                            </DialogTrigger>
-                                <DialogContent className="sm:max-w-[425px]">
-                                    <form onSubmit={handleSearchCin}>
-                                        <DialogHeader>
-                                            <DialogTitle>Recherche par CIN</DialogTitle>
-                                            <DialogDescription>
-                                                Rechercher un demandeur dans un autre dossier par CIN pour l'insérer dans ce dossier.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="grid gap-4 mb-3.5">
-                                            <div className="grid gap-3">
-                                                <Label htmlFor="cin">CIN</Label>
-                                                <Input id="cin"
-                                                       name="cin"
-                                                       minLength={12}
-                                                       maxLength={12}
-                                                       onChange={(e) => setCin(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                        <DialogFooter>
-                                            <DialogClose asChild>
-                                                <Button type="submit">Rechercher</Button>
-                                            </DialogClose>
-                                        </DialogFooter>
-                                    </form>
-                                </DialogContent>
-                        </Dialog>
-                        <Button asChild>
-                            <Link href={route("demandeurs.create", dossier.id)}>
-                                <UserPlus/>
-                                Inserer un demandeur
-                            </Link>
-                        </Button>
-                    </div>
-                </div>
-                {dossier && (
-                    <div className={"m-3"}>
-                        <div >
-                            <p>Dossier: <strong>{dossier.nom_dossier}</strong></p>
+        <>
+            <Card>
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <CardTitle>Demandeurs</CardTitle>
+                            <CardDescription>
+                                Liste des demandeurs du dossier ({demandeurs.length})
+                                <span className="ml-2 text-xs block mt-2">
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded"></span>
+                                        <span>Données incomplètes</span>
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 ml-3">
+                                        <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded"></span>
+                                        <span>Sans propriété</span>
+                                    </span>
+                                </span>
+                            </CardDescription>
                         </div>
+                        {proprietes.length > 0 && !dossier.is_closed && (
+                            <Button asChild size="sm">
+                                <Link href={route('ajouter-demandeur.create', dossier.id)}>
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    Ajouter un demandeur à un lot
+                                </Link>
+                            </Button>
+                        )}
                     </div>
-                )}
-                <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <div className={'m-6 border rounded-md'}>
-                        <Table>
-                            <TableCaption>Liste des Demandeur</TableCaption>
-                            <TableCaption>
-                                <Pagination>
-                                    <PaginationContent>
-                                        {demandeurs.links.map((link, index: number) => {
-                                            const isPrevious = link.label.includes('Previous') || link.label.includes('&laquo;');
-                                            const isNext = link.label.includes('Next') || link.label.includes('&raquo;');
-                                            const isEllipsis = link.label === '...';
-
-                                            if (isEllipsis) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <PaginationEllipsis />
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            if (!link.url) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <span className="px-3 py-1 text-muted-foreground cursor-not-allowed">
-                                                          {link.label.replace(/&laquo;|&raquo;/g, '')}
-                                                        </span>
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            if (isPrevious) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <PaginationPrevious href={link.url} />
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            if (isNext) {
-                                                return (
-                                                    <PaginationItem key={index}>
-                                                        <PaginationNext href={link.url} />
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            return (
-                                                <PaginationItem key={index}>
-                                                    <PaginationLink
-                                                        href={link.url}
-                                                        isActive={link.active}
-                                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                                    />
-                                                </PaginationItem>
-                                            );
-                                        })}
-                                    </PaginationContent>
-                                </Pagination>
-                            </TableCaption>
-                            <TableHeader className={'w-[100px]'}>
-                                <TableRow>
-                                    <TableHead className={'text-center'}>Titre</TableHead>
-                                    <TableHead className={'text-center'}>Nom</TableHead>
-                                    <TableHead className={'text-center'}>CIN</TableHead>
-                                    <TableHead className={'text-center'}>Domiciliation</TableHead>
-                                    <TableHead className={'text-center'}>Situation Familiale</TableHead>
-                                    <TableHead className={'text-center'}>Téléphone</TableHead>
-                                    <TableHead></TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {demandeurs.data.map((demandeur) => (
-                                    <TableRow key={demandeur.id}>
-                                        <TableCell className={'text-center'}>{demandeur.titre_demandeur}</TableCell>
-                                        <TableCell className={'text-center'}>{demandeur.nom_demandeur} {demandeur.prenom_demandeur}</TableCell>
-                                        <TableCell className={'text-center'}>{demandeur.cin}</TableCell>
-                                        <TableCell className={'text-center'}>{demandeur.domiciliation}</TableCell>
-                                        <TableCell className={'text-center'}>{demandeur.situation_familiale}</TableCell>
-                                        <TableCell className={'text-center'}>{demandeur.telephone}</TableCell>
-                                        <TableCell className={'text-center'}>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger>
-                                                    <Ellipsis className={'opacity-50'}/>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem
-                                                    >
-                                                        <Link href={`demandeurs/${demandeur.id}/show`} className={'w-full flex gap-2 items-center'}>
-                                                            <Eye/>
-                                                            Voir
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem>
-                                                        <Link href={route('demandeurs.edit', {dossier: dossier.id, demandeur: demandeur.id})}
-                                                              className={'w-full flex gap-2 items-center'}>
-                                                            <Pencil/>
-                                                            Modifier
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        className={'text-red-500'}
-                                                        onClick={() => {handleDelete(demandeur.id);
-                                                        }}
-                                                    >
-                                                        <Trash className={'text-red-500'}/>
-                                                        Supprimer
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                </CardHeader>
+                <CardContent>
+                    <div className="rounded-md border overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="border-b bg-muted/50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-sm font-medium">Nom complet</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium">CIN</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium">Domiciliation</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium">Situation</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium">Téléphone</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium">Statut</th>
+                                    <th className="px-4 py-3 w-[50px]"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {demandeurs.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="text-center text-muted-foreground py-8">
+                                            Aucun demandeur enregistré
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    paginateDemandeurs().map((demandeur) => {
+                                        const isIncomplete = isDemandeurIncomplete(demandeur);
+                                        const acquiredLots = getAcquiredLotsForDemandeur(demandeur.id);
+                                        const hasAcquiredProperty = acquiredLots.length > 0;
+                                        
+                                        const rowClass = isIncomplete 
+                                            ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer' 
+                                            : demandeur.hasProperty
+                                                ? 'border-b hover:bg-muted/50 cursor-pointer'
+                                                : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
+                                        
+                                        return (
+                                            <tr 
+                                                key={demandeur.id} 
+                                                className={rowClass} 
+                                                onClick={() => handleSelectDemandeur(demandeur)}
+                                            >
+                                                <td className="px-4 py-3 text-sm font-medium">
+                                                    <div className="flex items-center gap-2">
+                                                        {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                                                        {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
+                                                        {hasAcquiredProperty && (
+                                                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                                                                <Archive className="mr-1 h-3 w-3" />
+                                                                Lot(s) acquis: {acquiredLots.join(', ')}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm font-mono">{demandeur.cin}</td>
+                                                <td className="px-4 py-3 text-sm">{demandeur.domiciliation || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{demandeur.situation_familiale || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{demandeur.telephone || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <Badge variant={demandeur.hasProperty ? "default" : "secondary"} className="text-xs">
+                                                        {demandeur.hasProperty ? "Avec propriété" : "Sans propriété"}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <Ellipsis className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem onClick={() => handleSelectDemandeur(demandeur)}>
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                Voir détails
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem asChild>
+                                                                <Link
+                                                                    href={route('demandeurs.edit', {
+                                                                        id_dossier: dossier.id,
+                                                                        id_demandeur: demandeur.id
+                                                                    })}
+                                                                    className="flex items-center"
+                                                                >
+                                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                                    Modifier
+                                                                </Link>
+                                                            </DropdownMenuItem>
+                                                            {proprietes.length > 0 && (
+                                                                <DropdownMenuItem asChild>
+                                                                    <Link
+                                                                        href={route('lier-demandeur.create', {
+                                                                            id: dossier.id,
+                                                                            id_demandeur: demandeur.id
+                                                                        })}
+                                                                        className="flex items-center"
+                                                                    >
+                                                                        <Link2 className="mr-2 h-4 w-4" />
+                                                                        Lier à une propriété
+                                                                    </Link>
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                className="text-red-500"
+                                                                onClick={() => onDeleteDemandeur(demandeur.id)}
+                                                            >
+                                                                <Trash className="mr-2 h-4 w-4" />
+                                                                Supprimer
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            </div>
-        </AppLayout>
+                    <Pagination />
+                </CardContent>
+            </Card>
+
+            {/* ✅ Modals de détails avec navigation entre eux */}
+            <DemandeurDetailDialog
+                demandeur={selectedDemandeur}
+                open={showDemandeurDetail}
+                onOpenChange={setShowDemandeurDetail}
+                proprietes={proprietes}
+                onSelectPropriete={handleSelectProprieteFromDemandeur}
+                dossierId={dossier.id}
+                dossierClosed={dossier.is_closed}
+            />
+
+            <ProprieteDetailDialog
+                propriete={selectedPropriete}
+                open={showProprieteDetail}
+                onOpenChange={setShowProprieteDetail}
+                onSelectDemandeur={handleSelectDemandeurFromPropriete}
+                dossierClosed={dossier.is_closed}
+            />
+        </>
     );
 }

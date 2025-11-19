@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
+
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class DemandeurProprieteController extends Controller
@@ -29,24 +31,30 @@ class DemandeurProprieteController extends Controller
 
     /**
      * 1. NOUVEAU LOT : Enregistrer le nouveau lot (propriété + demandeurs)
+     * ✅ CORRECTION MAJEURE : Nettoyage des données et validation stricte
      */
-   public function store(Request $request)
+    public function store(Request $request)
     {
+        // ✅ FIX 1: Décoder et nettoyer les demandeurs JSON
         $demandeurs = json_decode($request->demandeurs_json, true);
         
         if (!$demandeurs || !is_array($demandeurs) || count($demandeurs) === 0) {
             return back()->withErrors(['demandeurs' => 'Au moins un demandeur est requis']);
         }
+
+        Log::info('📥 Données reçues', [
+            'propriete' => $request->except('demandeurs_json'),
+            'demandeurs_count' => count($demandeurs),
+            'premier_demandeur' => $demandeurs[0] ?? null
+        ]);
         
-        // ✅ Validation minimale de la propriété
+        // ✅ FIX 2: Validation stricte de la propriété
         $request->validate([
             'lot' => 'required|string|max:15',
             'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
             'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
             'type_operation' => 'required|in:morcellement,immatriculation',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
-            'proprietaire' => 'nullable|string|max:50',
-            'situation' => 'nullable|string',
         ], [
             'lot.required' => 'Le numéro de lot est obligatoire',
             'nature.required' => 'La nature est obligatoire',
@@ -54,15 +62,24 @@ class DemandeurProprieteController extends Controller
             'type_operation.required' => 'Le type d\'opération est obligatoire',
         ]);
         
-        // ✅ Validation minimale des demandeurs
+        // ✅ FIX 3: Validation détaillée de chaque demandeur
         foreach ($demandeurs as $index => $demandeur) {
             $num = $index + 1;
             
+            // Nettoyer les valeurs vides
+            $demandeur = array_map(function($value) {
+                return $value === '' ? null : $value;
+            }, $demandeur);
+            
             if (empty($demandeur['titre_demandeur'])) {
-                return back()->withErrors(['demandeurs' => "Demandeur $num: Le titre est obligatoire"]);
+                Log::error("❌ Demandeur $num: titre manquant", ['data' => $demandeur]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le titre de civilité est obligatoire"]);
             }
             if (empty($demandeur['nom_demandeur'])) {
                 return back()->withErrors(['demandeurs' => "Demandeur $num: Le nom est obligatoire"]);
+            }
+            if (empty($demandeur['prenom_demandeur'])) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le prénom est obligatoire"]);
             }
             if (empty($demandeur['date_naissance'])) {
                 return back()->withErrors(['demandeurs' => "Demandeur $num: La date de naissance est obligatoire"]);
@@ -71,13 +88,16 @@ class DemandeurProprieteController extends Controller
                 return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN est obligatoire"]);
             }
             if (!preg_match('/^\d{12}$/', $demandeur['cin'])) {
-                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN doit contenir exactement 12 chiffres"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN doit contenir exactement 12 chiffres (actuellement: " . strlen($demandeur['cin']) . " caractères)"]);
             }
             
             // Vérifier l'unicité du CIN
             if (Demandeur::where('cin', $demandeur['cin'])->exists()) {
-                return back()->withErrors(['demandeurs' => "Demandeur $num: Ce CIN existe déjà"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN {$demandeur['cin']} existe déjà"]);
             }
+            
+            // Mettre à jour le tableau nettoyé
+            $demandeurs[$index] = $demandeur;
         }
 
         DB::beginTransaction();
@@ -85,67 +105,81 @@ class DemandeurProprieteController extends Controller
         try {
             $id_user = Auth::id();
             
-            // ✅ Création de la propriété
-            $propriete = Propriete::create([
+            // ✅ FIX 4: Créer la propriété avec nettoyage des valeurs vides
+            $proprieteData = [
                 'lot' => $request->lot,
-                'propriete_mere' => $request->propriete_mere,
-                'titre_mere' => $request->titre_mere,
-                'titre' => $request->titre,
-                'proprietaire' => $request->proprietaire,
-                'contenance' => $request->contenance,
-                'charge' => $request->charge,
-                'situation' => $request->situation,
+                'propriete_mere' => $request->propriete_mere ?: null,
+                'titre_mere' => $request->titre_mere ?: null,
+                'titre' => $request->titre ?: null,
+                'proprietaire' => $request->proprietaire ?: null,
+                'contenance' => $request->contenance ?: null,
+                'charge' => $request->charge ?: null,
+                'situation' => $request->situation ?: null,
                 'nature' => $request->nature,
                 'vocation' => $request->vocation,
-                'numero_FN' => $request->numero_FN,
-                'numero_requisition' => $request->numero_requisition,
-                'date_requisition' => $request->date_requisition,
-                'date_inscription' => $request->date_inscription,
-                'dep_vol' => $request->dep_vol,
+                'numero_FN' => $request->numero_FN ?: null,
+                'numero_requisition' => $request->numero_requisition ?: null,
+                'date_requisition' => $request->date_requisition ?: null,
+                'date_inscription' => $request->date_inscription ?: null,
+                'dep_vol' => $request->dep_vol ?: null,
+                'numero_dep_vol' => $request->numero_dep_vol ?: null,
                 'type_operation' => $request->type_operation,
                 'id_dossier' => $request->id_dossier,
                 'id_user' => $id_user,
                 'status' => true,
-            ]);
+            ];
 
-            // ✅ Création des demandeurs
-            foreach ($demandeurs as $demandeurData) {
+            Log::info('✅ Création propriété', $proprieteData);
+            $propriete = Propriete::create($proprieteData);
 
-                // 🧹 Étape importante : nettoyer les champs vides avant l’insertion
+            // ✅ FIX 5: Création des demandeurs avec logging détaillé
+            foreach ($demandeurs as $index => $demandeurData) {
+                Log::info("👤 Création demandeur " . ($index + 1), [
+                    'titre' => $demandeurData['titre_demandeur'] ?? 'MANQUANT',
+                    'nom' => $demandeurData['nom_demandeur'] ?? 'MANQUANT',
+                    'cin' => $demandeurData['cin'] ?? 'MANQUANT'
+                ]);
+
+                // Nettoyer toutes les valeurs vides
+                $cleanData = [];
                 foreach ($demandeurData as $key => $value) {
-                    if ($value === '') {
-                        $demandeurData[$key] = null;
-                    }
+                    $cleanData[$key] = ($value === '' || $value === null) ? null : $value;
                 }
 
-                // 🔹 Création du demandeur proprement
+                // ✅ FIX 6: Création avec données nettoyées et obligatoires explicites
                 $demandeur = Demandeur::create([
-                    'titre_demandeur' => $demandeurData['titre_demandeur'],
-                    'nom_demandeur' => $demandeurData['nom_demandeur'],
-                    'prenom_demandeur' => $demandeurData['prenom_demandeur'] ?? null,
-                    'date_naissance' => $demandeurData['date_naissance'],
-                    'lieu_naissance' => $demandeurData['lieu_naissance'] ?? null,
-                    'sexe' => $demandeurData['sexe'] ?? null,
-                    'occupation' => $demandeurData['occupation'] ?? null,
-                    'nom_pere' => $demandeurData['nom_pere'] ?? null,
-                    'nom_mere' => $demandeurData['nom_mere'] ?? null,
-                    'cin' => $demandeurData['cin'],
-                    'date_delivrance' => $demandeurData['date_delivrance'] ?? null,
-                    'lieu_delivrance' => $demandeurData['lieu_delivrance'] ?? null,
-                    'date_delivrance_duplicata' => $demandeurData['date_delivrance_duplicata'] ?? null,
-                    'lieu_delivrance_duplicata' => $demandeurData['lieu_delivrance_duplicata'] ?? null,
-                    'domiciliation' => $demandeurData['domiciliation'] ?? null,
-                    'nationalite' => $demandeurData['nationalite'] ?? 'Malagasy',
-                    'situation_familiale' => $demandeurData['situation_familiale'] ?? 'Non spécifiée',
-                    'regime_matrimoniale' => $demandeurData['regime_matrimoniale'] ?? 'Non spécifié',
-                    'date_mariage' => $demandeurData['date_mariage'] ?? null,
-                    'lieu_mariage' => $demandeurData['lieu_mariage'] ?? null,
-                    'marie_a' => $demandeurData['marie_a'] ?? null,
-                    'telephone' => $demandeurData['telephone'] ?? null,
+                    'titre_demandeur' => $cleanData['titre_demandeur'], // ✅ OBLIGATOIRE
+                    'nom_demandeur' => $cleanData['nom_demandeur'], // ✅ OBLIGATOIRE
+                    'prenom_demandeur' => $cleanData['prenom_demandeur'], // ✅ OBLIGATOIRE
+                    'date_naissance' => $cleanData['date_naissance'], // ✅ OBLIGATOIRE
+                    'cin' => $cleanData['cin'], // ✅ OBLIGATOIRE
+                    'lieu_naissance' => $cleanData['lieu_naissance'] ?? null,
+                    'sexe' => $cleanData['sexe'] ?? null,
+                    'occupation' => $cleanData['occupation'] ?? null,
+                    'nom_pere' => $cleanData['nom_pere'] ?? null,
+                    'nom_mere' => $cleanData['nom_mere'] ?? null,
+                    'date_delivrance' => $cleanData['date_delivrance'] ?? null,
+                    'lieu_delivrance' => $cleanData['lieu_delivrance'] ?? null,
+                    'date_delivrance_duplicata' => $cleanData['date_delivrance_duplicata'] ?? null,
+                    'lieu_delivrance_duplicata' => $cleanData['lieu_delivrance_duplicata'] ?? null,
+                    'domiciliation' => $cleanData['domiciliation'] ?? null,
+                    'nationalite' => $cleanData['nationalite'] ?? 'Malagasy',
+                    'situation_familiale' => $cleanData['situation_familiale'] ?? 'Non spécifiée',
+                    'regime_matrimoniale' => $cleanData['regime_matrimoniale'] ?? 'Non spécifié',
+                    'date_mariage' => $cleanData['date_mariage'] ?? null,
+                    'lieu_mariage' => $cleanData['lieu_mariage'] ?? null,
+                    'marie_a' => $cleanData['marie_a'] ?? null,
+                    'telephone' => $cleanData['telephone'] ?? null,
                     'id_user' => $id_user,
                 ]);
 
-                // 🔹 Liaisons intermédiaires
+                Log::info("✅ Demandeur créé", [
+                    'id' => $demandeur->id,
+                    'titre' => $demandeur->titre_demandeur,
+                    'nom' => $demandeur->nom_demandeur
+                ]);
+
+                // Liaisons intermédiaires
                 Contenir::create([
                     'id_demandeur' => $demandeur->id,
                     'id_dossier' => $request->id_dossier,
@@ -163,37 +197,62 @@ class DemandeurProprieteController extends Controller
 
             DB::commit();
             
+            Log::info('🎉 Création complète réussie', [
+                'propriete_id' => $propriete->id,
+                'demandeurs_count' => count($demandeurs)
+            ]);
+            
             return Redirect::route('dossiers.show', $request->id_dossier)
-                ->with('message', count($demandeurs) . ' demandeur(s) et propriété créés avec succès');
+                ->with('success', count($demandeurs) . ' demandeur(s) et propriété créés avec succès');
                 
         } catch (\Exception $e) {
             DB::rollBack();
+            
+            Log::error('❌ Erreur création', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return back()->withErrors(['error' => 'Erreur lors de la création : ' . $e->getMessage()]);
         }
     }
 
-
-    private function getBlockedActionMessage(Propriete $propriete, string $action): string
+    /**
+     * Vérifier si une propriété est archivée
+     */
+    private function isPropertyArchived(Propriete $propriete): bool
     {
-        return "Impossible d'effectuer l'action \"{$action}\" sur la propriété \"{$propriete->nom}\" car elle est archivée.";
+        $demandesActives = Demander::where('id_propriete', $propriete->id)
+            ->where('status', 'active')
+            ->count();
+            
+        $demandesArchivees = Demander::where('id_propriete', $propriete->id)
+            ->where('status', 'archive')
+            ->count();
+            
+        return $demandesArchivees > 0 && $demandesActives === 0;
     }
 
-
-    
+    /**
+     * Message bloqué pour propriété archivée
+     */
+    private function getBlockedActionMessage(Propriete $propriete, string $action): string
+    {
+        return "🔒 Impossible d'effectuer l'action '{$action}' : la propriété Lot {$propriete->lot} est archivée (acquise).";
+    }
 
     /**
-     * ✅ MODIFIÉ : Lier existant avec vérification
+     * LIER EXISTANT : Afficher le formulaire
      */
     public function linkExisting($id, $id_demandeur = null, $id_propriete = null)
     {
         $dossier = Dossier::with(['proprietes', 'demandeurs'])->findOrFail($id);
         
-        // ✅ Si une propriété est pré-sélectionnée, vérifier si elle est archivée
         if ($id_propriete) {
             $propriete = Propriete::findOrFail($id_propriete);
             if ($this->isPropertyArchived($propriete)) {
                 return Redirect::route('dossiers.show', $dossier->id)
-                    ->with('error', $this->getBlockedActionMessage($propriete, 'liaison de demandeur'));
+                    ->with('error', $this->getBlockedActionMessage($propriete, 'liaison'));
             }
         }
         
@@ -211,7 +270,7 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * 3. LIER EXISTANT : Rechercher le demandeur par CIN ou Nom
+     * LIER EXISTANT : Rechercher le demandeur
      */
     public function searchToLink(Request $request)
     {
@@ -232,24 +291,17 @@ class DemandeurProprieteController extends Controller
         
         $dossier = Dossier::with(['proprietes', 'demandeurs'])->findOrFail($request->id_dossier);
         
-        if (!$demandeur) {
-            return Inertia::render('DemandeursProprietes/LierExistant', [
-                'dossier' => $dossier,
-                'proprietes' => $dossier->proprietes,
-                'demandeur' => null,
-                'cin_search' => $request->cin,
-            ]);
-        }
-        
-        $existeInDossier = Contenir::where('id_demandeur', $demandeur->id)
-            ->where('id_dossier', $dossier->id)
-            ->exists();
-            
-        if (!$existeInDossier) {
-            Contenir::create([
-                'id_demandeur' => $demandeur->id,
-                'id_dossier' => $dossier->id,
-            ]);
+        if ($demandeur) {
+            $existeInDossier = Contenir::where('id_demandeur', $demandeur->id)
+                ->where('id_dossier', $dossier->id)
+                ->exists();
+                
+            if (!$existeInDossier) {
+                Contenir::create([
+                    'id_demandeur' => $demandeur->id,
+                    'id_dossier' => $dossier->id,
+                ]);
+            }
         }
         
         return Inertia::render('DemandeursProprietes/LierExistant', [
@@ -260,6 +312,9 @@ class DemandeurProprieteController extends Controller
         ]);
     }
 
+    /**
+     * LIER EXISTANT : Enregistrer la liaison
+     */
     public function storeLink(Request $request)
     {
         $request->validate([
@@ -273,30 +328,18 @@ class DemandeurProprieteController extends Controller
             $id_user = Auth::id();
             $propriete = Propriete::findOrFail($request->id_propriete);
             
-            // ✅ Bloquer si archivée
             if ($this->isPropertyArchived($propriete)) {
                 DB::rollBack();
-                return back()->with('error', $this->getBlockedActionMessage($propriete, 'liaison de demandeur'));
+                return back()->with('error', $this->getBlockedActionMessage($propriete, 'liaison'));
             }
-            
-            // ... reste du code (identique à storeToProperty) ...
             
             if ($request->mode === 'nouveau') {
                 $request->validate([
-                    'titre_demandeur' => 'required|string|max:12',
+                    'titre_demandeur' => 'required|string|max:15',
                     'nom_demandeur' => 'required|string|max:40',
+                    'prenom_demandeur' => 'required|string|max:50',
                     'date_naissance' => 'required|date|before:-18 years',
-                    'cin' => 'nullable|string|size:12|unique:demandeurs,cin',
-                    'prenom_demandeur' => 'nullable|string|max:50',
-                    'lieu_naissance' => 'nullable|string|max:100',
-                    'occupation' => 'nullable|string|max:30',
-                    'nom_mere' => 'nullable|string',
-                    'nom_pere' => 'nullable|string',
-                    'date_delivrance' => 'nullable|date|before:today',
-                    'lieu_delivrance' => 'nullable|string|max:40',
-                    'domiciliation' => 'nullable|string|max:60',
-                    'situation_familiale' => 'nullable|string|max:40',
-                    'nationalite' => 'nullable|string|max:40',
+                    'cin' => 'required|string|size:12|unique:demandeurs,cin',
                 ]);
                 
                 $demandeur = Demandeur::create([
@@ -360,7 +403,7 @@ class DemandeurProprieteController extends Controller
             DB::commit();
 
             return Redirect::route('dossiers.show', $propriete->id_dossier)
-                ->with('message', 'Demandeur lié à la propriété avec succès');
+                ->with('success', 'Demandeur lié à la propriété avec succès');
                 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -368,52 +411,18 @@ class DemandeurProprieteController extends Controller
         }
     }
 
-
     /**
-     *  Vérifier si une propriété est archivée
-     */
-    private function isPropertyArchived(Propriete $propriete): bool
-    {
-        $demandesActives = Demander::where('id_propriete', $propriete->id)
-            ->where('status', 'active')
-            ->count();
-            
-        $demandesArchivees = Demander::where('id_propriete', $propriete->id)
-            ->where('status', 'archive')
-            ->count();
-            
-        return $demandesArchivees > 0 && $demandesActives === 0;
-    }
-
-    /**
-     * ✅ Message d'erreur standardisé pour propriété archivée
-     */
-    private function getArchivedErrorMessage(Propriete $propriete): string
-    {
-        $demandes = Demander::where('id_propriete', $propriete->id)
-            ->where('status', 'archive')
-            ->with('demandeur')
-            ->get();
-        
-        $demandeurs = $demandes->pluck('demandeur.nom_demandeur')->toArray();
-        $demandeursStr = implode(', ', $demandeurs);
-        
-        return "⚠️ Cette propriété (Lot {$propriete->lot}) est archivée (acquise) par : {$demandeursStr}. Aucune action n'est possible. Veuillez la désarchiver d'abord.";
-    }
-
-    /**
-     * ✅ MODIFIÉ : Ajouter demandeur avec vérification archivage
+     * AJOUTER DEMANDEUR : Afficher le formulaire
      */
     public function addToProperty($id, $id_propriete = null)
     {
         $dossier = Dossier::with('proprietes')->findOrFail($id);
         
-        // ✅ Si une propriété est pré-sélectionnée, vérifier si elle est archivée
         if ($id_propriete) {
             $propriete = Propriete::findOrFail($id_propriete);
             if ($this->isPropertyArchived($propriete)) {
                 return Redirect::route('dossiers.show', $dossier->id)
-                    ->with('error', $this->getArchivedErrorMessage($propriete));
+                    ->with('error', $this->getBlockedActionMessage($propriete, 'ajout'));
             }
         }
         
@@ -424,6 +433,9 @@ class DemandeurProprieteController extends Controller
         ]);
     }
 
+    /**
+     * AJOUTER DEMANDEUR : Enregistrer
+     */
     public function storeToProperty(Request $request)
     {
         $request->validate([
@@ -437,14 +449,11 @@ class DemandeurProprieteController extends Controller
             $id_user = Auth::id();
             $propriete = Propriete::findOrFail($request->id_propriete);
             
-            // ✅ Vérifier si propriété archivée
             if ($this->isPropertyArchived($propriete)) {
                 DB::rollBack();
-                return back()->withErrors(['error' => $this->getArchivedErrorMessage($propriete)]);
+                return back()->withErrors(['error' => $this->getBlockedActionMessage($propriete, 'ajout')]);
             }
 
-            // ... reste du code inchangé ...
-            
             if ($request->mode === 'existant') {
                 $request->validate(['cin' => 'required|exists:demandeurs,cin']);
                 $demandeur = Demandeur::where('cin', $request->cin)->firstOrFail();
@@ -470,20 +479,11 @@ class DemandeurProprieteController extends Controller
                 
             } else {
                 $request->validate([
-                    'titre_demandeur' => 'required|string|max:12',
+                    'titre_demandeur' => 'required|string|max:15',
                     'nom_demandeur' => 'required|string|max:40',
+                    'prenom_demandeur' => 'required|string|max:50',
                     'date_naissance' => 'required|date|before:-18 years',
-                    'cin' => 'nullable|string|size:12|unique:demandeurs,cin',
-                    'prenom_demandeur' => 'nullable|string|max:50',
-                    'lieu_naissance' => 'nullable|string|max:100',
-                    'occupation' => 'nullable|string|max:30',
-                    'nom_mere' => 'nullable|string',
-                    'nom_pere' => 'nullable|string',
-                    'date_delivrance' => 'nullable|date|before:today',
-                    'lieu_delivrance' => 'nullable|string|max:40',
-                    'domiciliation' => 'nullable|string|max:60',
-                    'situation_familiale' => 'nullable|string|max:40',
-                    'nationalite' => 'nullable|string|max:40',
+                    'cin' => 'required|string|size:12|unique:demandeurs,cin',
                 ]);
                 
                 $demandeur = Demandeur::create([
@@ -534,7 +534,7 @@ class DemandeurProprieteController extends Controller
             DB::commit();
             
             return Redirect::route('dossiers.show', $propriete->id_dossier)
-                ->with('message', 'Demandeur ajouté à la propriété avec succès');
+                ->with('success', 'Demandeur ajouté à la propriété avec succès');
                 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -543,7 +543,7 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * ✅ MODIFIÉ : Dissocier avec vérification archivage
+     * DISSOCIER : Retirer un demandeur d'une propriété
      */
     public function dissociate(Request $request)
     {
@@ -557,13 +557,11 @@ class DemandeurProprieteController extends Controller
         try {
             $propriete = Propriete::findOrFail($request->id_propriete);
             
-            // ✅ Bloquer si archivée
             if ($this->isPropertyArchived($propriete)) {
                 DB::rollBack();
                 return back()->with('error', $this->getBlockedActionMessage($propriete, 'dissociation'));
             }
             
-            // Supprimer la liaison dans la table demander
             $deleted = Demander::where('id_demandeur', $request->id_demandeur)
                 ->where('id_propriete', $request->id_propriete)
                 ->delete();
@@ -572,24 +570,21 @@ class DemandeurProprieteController extends Controller
                 return back()->withErrors(['error' => 'Liaison introuvable']);
             }
 
-            // Vérifier s'il reste des demandeurs pour cette propriété
             $remainingDemandeurs = Demander::where('id_propriete', $request->id_propriete)
                 ->where('status', 'active')
                 ->count();
 
-            // Si plus aucun demandeur, mettre status à false
             if ($remainingDemandeurs === 0) {
                 Propriete::where('id', $request->id_propriete)->update(['status' => false]);
             }
 
             DB::commit();
             
-            return back()->with('success', 'Demandeur dissocié de la propriété avec succès');
+            return back()->with('success', 'Demandeur dissocié avec succès');
                 
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }
-
 }

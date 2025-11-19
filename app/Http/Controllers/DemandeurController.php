@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+
+
 
 class DemandeurController extends Controller
 {
@@ -56,61 +58,170 @@ class DemandeurController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-    {
-        $validateData = $request->validate([
-       
-            'titre_demandeur' => 'required|string|max:12',
-            'nom_demandeur' => 'required|string|max:40',
-            'prenom_demandeur' => 'nullable|string|max:50',
-            'date_naissance' => 'required|date|before:-18 years',
-            
-            // Champs nullable
-            'lieu_naissance' => 'nullable|string|max:100',
-            'sexe' => 'nullable',
-            'occupation' => 'nullable|string|max:30',
-            'nom_pere' => 'nullable|string',
-            'nom_mere' => 'nullable|string',
-            'cin' => 'required|string|max:15|unique:' . Demandeur::class,
-            'date_delivrance' => 'nullable|date|before:today',
-            'lieu_delivrance' => 'nullable|string|max:40',
-            'date_delivrance_duplicata' => 'nullable|date|before:today',
-            'lieu_delivrance_duplicata' => 'nullable|string|max:40',
-            'domiciliation' => 'nullable|string|max:60',
-            'situation_familiale' => 'nullable|string|max:40',
-            'regime_matrimoniale' => 'nullable|string|max:40',
-            'telephone' => 'nullable|string|max:10',
-            'date_mariage' => 'nullable|date|before:today',
-            'lieu_mariage' => 'nullable|string|max:40',
-            'marie_a' => 'nullable|string|max:40',
-            'nationalite' => 'nullable|string|max:40',
-            'id_dossier' => 'required|numeric|exists:dossiers,id',
-            'pieces.*' => 'nullable|file',
-        ], [
-            'titre_demandeur.required' => 'Le titre est obligatoire.',
-            'nom_demandeur.required' => 'Le nom est obligatoire.',
-            'date_naissance.required' => 'La date de naissance est obligatoire.',
-            'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
-            'cin.nullable' => 'Le numéro CIN est obligatoire.',
-            'cin.unique' => 'Le numéro CIN est déjà pris.',
-            'id_dossier.required' => 'Le dossier est obligatoire.',
+{
+    $validateData = $request->validate([
+        'titre_demandeur' => 'required|string|max:15', // ✅ Augmenté de 12 à 15
+        'nom_demandeur' => 'required|string|max:40',
+        'prenom_demandeur' => 'required|string|max:50', // ✅ Changé de nullable à required
+        'date_naissance' => 'required|date|before:-18 years',
+        'lieu_naissance' => 'nullable|string|max:100',
+        'sexe' => 'nullable|string|max:10',
+        'occupation' => 'nullable|string|max:30',
+        'nom_pere' => 'nullable|string',
+        'nom_mere' => 'nullable|string',
+        'cin' => 'required|string|size:12|unique:' . Demandeur::class, // ✅ size:12 au lieu de max:15
+        'date_delivrance' => 'nullable|date|before:today',
+        'lieu_delivrance' => 'nullable|string|max:40',
+        'date_delivrance_duplicata' => 'nullable|date|before:today',
+        'lieu_delivrance_duplicata' => 'nullable|string|max:40',
+        'domiciliation' => 'nullable|string|max:60',
+        'situation_familiale' => 'nullable|string|max:40',
+        'regime_matrimoniale' => 'nullable|string|max:40',
+        'telephone' => 'nullable|string|max:10',
+        'date_mariage' => 'nullable|date|before:today',
+        'lieu_mariage' => 'nullable|string|max:40',
+        'marie_a' => 'nullable|string|max:40',
+        'nationalite' => 'nullable|string|max:40',
+        'id_dossier' => 'required|numeric|exists:dossiers,id',
+        'pieces.*' => 'nullable|file',
+    ], [
+        'titre_demandeur.required' => 'Le titre de civilité est obligatoire.',
+        'titre_demandeur.max' => 'Le titre de civilité est trop long.',
+        'nom_demandeur.required' => 'Le nom est obligatoire.',
+        'prenom_demandeur.required' => 'Le prénom est obligatoire.',
+        'date_naissance.required' => 'La date de naissance est obligatoire.',
+        'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
+        'cin.required' => 'Le numéro CIN est obligatoire.',
+        'cin.size' => 'Le CIN doit contenir exactement 12 chiffres.',
+        'cin.unique' => 'Le numéro CIN est déjà utilisé.',
+        'id_dossier.required' => 'Le dossier est obligatoire.',
+    ]);
+
+    try {
+        $request->merge(['id_user' => Auth::id()]);
+        $demandeur = Demandeur::create(
+            $request->except(['_token', 'id_dossier']),
+        );
+        
+        Contenir::create([
+            'id_demandeur' => $demandeur->id,
+            'id_dossier' => $request->id_dossier,
         ]);
 
-        // Le reste du code reste identique
-        try {
-            $request->merge(['id_user' => Auth::user()->getAuthIdentifier()]);
-            $demandeur = Demandeur::create(
-                $request->except(['_token', 'id_dossier']),
-            );
-            $contenir = Contenir::create([
-                'id_demandeur' => $demandeur->id,
-                'id_dossier' => request()->id_dossier,
-            ]);
-
-            return redirect::route('dossiers.show', $request->id_dossier)->with('success', 'Demandeur ajouté avec succès');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Une erreur est survenue : ' . $e->getMessage());
-        }
+        return Redirect::route('dossiers.show', $request->id_dossier)
+            ->with('success', 'Demandeur ajouté avec succès');
+    } catch (\Exception $e) {
+        \Illuminate\Support\Facades\Log::error('Erreur création demandeur', [
+            'error' => $e->getMessage(),
+            'data' => $request->all()
+        ]);
+        return back()->with('error', 'Une erreur est survenue : ' . $e->getMessage());
     }
+}
+
+    /**
+     * ✅ NOUVEAU : Créer plusieurs demandeurs à la fois
+     */
+    public function storeMultiple(Request $request)
+{
+    // ✅ Décoder le JSON si nécessaire
+    $demandeurs = is_string($request->demandeurs) 
+        ? json_decode($request->demandeurs, true) 
+        : $request->demandeurs;
+
+    $validated = $request->validate([
+        'id_dossier' => 'required|exists:dossiers,id',
+    ]);
+
+    // Valider chaque demandeur
+    $validator = Validator::make(['demandeurs' => $demandeurs], [
+        'demandeurs' => 'required|array|min:1',
+        'demandeurs.*.titre_demandeur' => 'required|string|max:15', // ✅ 15 au lieu de 12
+        'demandeurs.*.nom_demandeur' => 'required|string|max:40',
+        'demandeurs.*.prenom_demandeur' => 'required|string|max:50', // ✅ required
+        'demandeurs.*.date_naissance' => 'required|date|before:-18 years',
+        'demandeurs.*.lieu_naissance' => 'nullable|string|max:100',
+        'demandeurs.*.sexe' => 'nullable|string|max:10',
+        'demandeurs.*.occupation' => 'nullable|string|max:30',
+        'demandeurs.*.nom_pere' => 'nullable|string',
+        'demandeurs.*.nom_mere' => 'nullable|string',
+        'demandeurs.*.cin' => 'required|string|size:12|unique:demandeurs,cin', // ✅ size:12
+        'demandeurs.*.date_delivrance' => 'nullable|date|before:today',
+        'demandeurs.*.lieu_delivrance' => 'nullable|string|max:40',
+        'demandeurs.*.date_delivrance_duplicata' => 'nullable|date|before:today',
+        'demandeurs.*.lieu_delivrance_duplicata' => 'nullable|string|max:40',
+        'demandeurs.*.domiciliation' => 'nullable|string|max:60',
+        'demandeurs.*.situation_familiale' => 'nullable|string|max:40',
+        'demandeurs.*.regime_matrimoniale' => 'nullable|string|max:40',
+        'demandeurs.*.telephone' => 'nullable|string|max:10',
+        'demandeurs.*.date_mariage' => 'nullable|date|before:today',
+        'demandeurs.*.lieu_mariage' => 'nullable|string|max:40',
+        'demandeurs.*.marie_a' => 'nullable|string|max:40',
+        'demandeurs.*.nationalite' => 'nullable|string|max:40',
+    ], [
+        'demandeurs.*.titre_demandeur.required' => 'Le titre de civilité est obligatoire (demandeur :position).',
+        'demandeurs.*.prenom_demandeur.required' => 'Le prénom est obligatoire (demandeur :position).',
+        'demandeurs.*.cin.size' => 'Le CIN doit contenir exactement 12 chiffres (demandeur :position).',
+        'demandeurs.*.cin.unique' => 'Le CIN :input est déjà utilisé.',
+        'demandeurs.*.date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
+    ]);
+
+    if ($validator->fails()) {
+        \Illuminate\Support\Facades\Log::warning('Validation échouée pour demandeurs multiples', [
+            'errors' => $validator->errors()->toArray(),
+            'data' => $demandeurs
+        ]);
+        return back()->withErrors($validator->errors());
+    }
+
+    DB::beginTransaction();
+
+    try {
+        $createdCount = 0;
+        
+        foreach ($demandeurs as $demandeurData) {
+            // ✅ Nettoyer les chaînes vides en null
+            foreach ($demandeurData as $key => $value) {
+                if ($value === '') {
+                    $demandeurData[$key] = null;
+                }
+            }
+            
+            $demandeurData['id_user'] = Auth::id();
+            
+            $demandeur = Demandeur::create($demandeurData);
+            
+            Contenir::create([
+                'id_demandeur' => $demandeur->id,
+                'id_dossier' => $validated['id_dossier'],
+            ]);
+            
+            $createdCount++;
+        }
+
+        DB::commit();
+
+        \Illuminate\Support\Facades\Log::info('Demandeurs multiples créés', [
+            'count' => $createdCount,
+            'dossier_id' => $validated['id_dossier'],
+            'user_id' => Auth::id()
+        ]);
+
+        return Redirect::route('dossiers.show', $validated['id_dossier'])
+            ->with('success', "{$createdCount} demandeur(s) créé(s) avec succès");
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        \Illuminate\Support\Facades\Log::error('Erreur création multiple demandeurs', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'data' => $demandeurs
+        ]);
+
+        return back()->withErrors(['error' => 'Erreur lors de la création: ' . $e->getMessage()]);
+    }
+}
     
     /**
      * Display the specified resource.
@@ -145,55 +256,62 @@ class DemandeurController extends Controller
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $id)
-    {
-        $existDemandeur = Demandeur::find($id);
-        if (!$existDemandeur) {
-            return Redirect::route('demandeurs.index')->with('error', 'Demandeur introuvable.');
-        }
-
-        $validateData = $request->validate([
-            'titre_demandeur' => 'required|string|max:12',
-            'nom_demandeur' => 'required|string|max:40',
-            'prenom_demandeur' => 'nullable|string|max:50',
-            'date_naissance' => 'required|date|before:-18 years',
-            'lieu_naissance' => 'nullable|string|max:100',
-            'sexe' => 'nullable',
-            'occupation' => 'nullable|string|max:30',
-            'nom_pere' => 'nullable|string',
-            'nom_mere' => 'nullable|string',
-            'cin' => ['nullable','numeric', Rule::unique(Demandeur::class)->ignore($id)],
-            'date_delivrance' => 'nullable|date|before:today',
-            'lieu_delivrance' => 'nullable|string|max:40',
-            'date_delivrance_duplicata' => 'nullable|date|before:today',
-            'lieu_delivrance_duplicata' => 'nullable|string|max:40',
-            'domiciliation' => 'nullable|string|max:60',
-            'situation_familiale' => 'nullable|string|max:40',
-            'regime_matrimoniale' => 'nullable|string|max:40',
-            'telephone' => 'nullable|string|max:10',
-            'date_mariage' => 'nullable|date|before:today',
-            'lieu_mariage' => 'nullable|string|max:40',
-            'marie_a' => 'nullable|string|max:40',
-            'nationalite' => 'nullable|string|max:40',
-            'pieces.*' => 'nullable|file',
-            'id_dossier' => 'required|exists:dossiers,id',
-        ], [
-            'titre_demandeur.required' => 'Le titre est obligatoire.',
-            'nom_demandeur.required' => 'Le nom est obligatoire.',
-            'date_naissance.required' => 'La date de naissance est obligatoire.',
-            'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
-            'cin.nullable' => 'Le numéro CIN est obligatoire.',
-            'cin.unique' => 'Le numéro CIN est déjà pris.',
-        ]);
-
-        try {
-            $existDemandeur->update(
-                collect($validateData)->except(['id_dossier'])->toArray()
-            );
-            return redirect::route('dossiers.show', $request->id_dossier)->with('success', 'Demandeur modifié avec succès');
-        } catch (\Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
-        }
+{
+    $existDemandeur = Demandeur::find($id);
+    if (!$existDemandeur) {
+        return Redirect::route('demandeurs.index')->with('error', 'Demandeur introuvable.');
     }
+
+    $validateData = $request->validate([
+        'titre_demandeur' => 'required|string|max:15', // ✅ 15 au lieu de 12
+        'nom_demandeur' => 'required|string|max:40',
+        'prenom_demandeur' => 'required|string|max:50', // ✅ required
+        'date_naissance' => 'required|date|before:-18 years',
+        'lieu_naissance' => 'nullable|string|max:100',
+        'sexe' => 'nullable|string|max:10',
+        'occupation' => 'nullable|string|max:30',
+        'nom_pere' => 'nullable|string',
+        'nom_mere' => 'nullable|string',
+        'cin' => ['required','string', 'size:12', Rule::unique(Demandeur::class)->ignore($id)], // ✅ size:12
+        'date_delivrance' => 'nullable|date|before:today',
+        'lieu_delivrance' => 'nullable|string|max:40',
+        'date_delivrance_duplicata' => 'nullable|date|before:today',
+        'lieu_delivrance_duplicata' => 'nullable|string|max:40',
+        'domiciliation' => 'nullable|string|max:60',
+        'situation_familiale' => 'nullable|string|max:40',
+        'regime_matrimoniale' => 'nullable|string|max:40',
+        'telephone' => 'nullable|string|max:10',
+        'date_mariage' => 'nullable|date|before:today',
+        'lieu_mariage' => 'nullable|string|max:40',
+        'marie_a' => 'nullable|string|max:40',
+        'nationalite' => 'nullable|string|max:40',
+        'pieces.*' => 'nullable|file',
+        'id_dossier' => 'required|exists:dossiers,id',
+    ], [
+        'titre_demandeur.required' => 'Le titre est obligatoire.',
+        'prenom_demandeur.required' => 'Le prénom est obligatoire.',
+        'nom_demandeur.required' => 'Le nom est obligatoire.',
+        'date_naissance.required' => 'La date de naissance est obligatoire.',
+        'date_naissance.before' => 'Le demandeur doit avoir au moins 18 ans.',
+        'cin.required' => 'Le numéro CIN est obligatoire.',
+        'cin.size' => 'Le CIN doit contenir exactement 12 chiffres.',
+        'cin.unique' => 'Le numéro CIN est déjà pris.',
+    ]);
+
+    try {
+        $existDemandeur->update(
+            collect($validateData)->except(['id_dossier'])->toArray()
+        );
+        return Redirect::route('dossiers.show', $request->id_dossier)
+            ->with('success', 'Demandeur modifié avec succès');
+    } catch (\Exception $e) {
+        \Illuminate\Support\Facades\Log::error('Erreur modification demandeur', [
+            'demandeur_id' => $id,
+            'error' => $e->getMessage()
+        ]);
+        return back()->withErrors(['message' => $e->getMessage()]);
+    }
+}
     
     public function exist($id)
     {
@@ -214,9 +332,11 @@ class DemandeurController extends Controller
         $contenir = Contenir::where('id_demandeur', $demandeur->id)
             ->where('id_dossier', $dossier->id)
             ->exists();
+            
         if($contenir) {
-            return to_route('dossiers.demandeurs', $dossier->id)->with('message', 'Le demandeur existe déjà dans le dossier');
-        }else{
+            return to_route('dossiers.demandeurs', $dossier->id)
+                ->with('message', 'Le demandeur existe déjà dans le dossier');
+        } else {
             return Inertia::render('demandeurs/createExist', [
                 'demandeur' => $demandeur,
                 'dossier' => $dossier,
@@ -226,11 +346,12 @@ class DemandeurController extends Controller
     
     public function storeExist(Request $request)
     {
-        $contenir = Contenir::create(
+        Contenir::create(
             $request->only(['id_dossier', 'id_demandeur'])
         );
 
-        return to_route('dossiers.demandeurs', $request->id_dossier)->with('message', 'Demandeur existant bien ajouté!');
+        return to_route('dossiers.demandeurs', $request->id_dossier)
+            ->with('message', 'Demandeur existant bien ajouté!');
     }
     
     /**
@@ -239,14 +360,14 @@ class DemandeurController extends Controller
     public function destroy($id_dossier, $id_demandeur)
     {
         try {
-            Log::info('Tentative de retirer du dossier', [
+            \Illuminate\Support\Facades\Log::info('Tentative de retirer du dossier', [
                 'id_dossier' => $id_dossier,
                 'id_demandeur' => $id_demandeur
             ]);
 
             DB::beginTransaction();
 
-            // ✅ Vérifier si le demandeur a des propriétés DANS CE DOSSIER (actives OU archivées)
+            // Vérifier si le demandeur a des propriétés DANS CE DOSSIER
             $proprietesDansDossier = Demander::where('id_demandeur', (int)$id_demandeur)
                 ->whereHas('propriete', function($q) use ($id_dossier) {
                     $q->where('id_dossier', $id_dossier);
@@ -261,7 +382,7 @@ class DemandeurController extends Controller
                 $actives = $proprietesDansDossier->where('status', 'active')->count();
                 $archivees = $proprietesDansDossier->where('status', 'archive')->count();
                 
-                $message = "❌ Impossible de retirer ce demandeur du dossier. Il est associé à {$proprietesDansDossier->count()} propriété(s) dans ce dossier : Lot(s) {$lotsStr}.";
+                $message = "❌ Impossible de retirer ce demandeur. Il est associé à {$proprietesDansDossier->count()} propriété(s) : Lot(s) {$lotsStr}.";
                 
                 if ($actives > 0) {
                     $message .= " ({$actives} active(s))";
@@ -270,14 +391,11 @@ class DemandeurController extends Controller
                     $message .= " ({$archivees} archivée(s))";
                 }
                 
-                $message .= ". Veuillez d'abord dissocier le demandeur de toutes ces propriétés.";
+                $message .= ". Veuillez d'abord dissocier le demandeur.";
                 
-                Log::warning('Impossible de retirer du dossier - propriétés liées', [
+                \Illuminate\Support\Facades\Log::warning('Impossible de retirer - propriétés liées', [
                     'demandeur_id' => $id_demandeur,
                     'proprietes_count' => $proprietesDansDossier->count(),
-                    'actives' => $actives,
-                    'archivees' => $archivees,
-                    'lots' => $lots
                 ]);
 
                 DB::rollBack();
@@ -292,18 +410,13 @@ class DemandeurController extends Controller
                 ->first();
 
             if (!$contenir) {
-                Log::warning('Relation contenir introuvable');
+                \Illuminate\Support\Facades\Log::warning('Relation contenir introuvable');
                 DB::rollBack();
                 return redirect()->route('dossiers.show', $id_dossier)
                     ->with('error', 'Demandeur introuvable dans ce dossier.');
             }
             
-            $deleted = $contenir->delete();
-            
-            Log::info('Demandeur retiré du dossier', [
-                'deleted' => $deleted,
-                'contenir_id' => $contenir->id
-            ]);
+            $contenir->delete();
 
             DB::commit();
             
@@ -312,13 +425,12 @@ class DemandeurController extends Controller
                 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur lors de la suppression', [
+            \Illuminate\Support\Facades\Log::error('Erreur lors de la suppression', [
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
             ]);
             
             return redirect()->route('dossiers.show', $id_dossier)
-                ->with('error', 'Erreur lors de la suppression : ' . $e->getMessage());
+                ->with('error', 'Erreur : ' . $e->getMessage());
         }
     }
     
@@ -328,9 +440,8 @@ class DemandeurController extends Controller
     public function destroyDefinitive($id_demandeur)
     {
         try {
-            Log::info('Tentative de suppression définitive', [
+            \Illuminate\Support\Facades\Log::info('Tentative de suppression définitive', [
                 'id_demandeur' => $id_demandeur,
-                'type' => gettype($id_demandeur)
             ]);
 
             DB::beginTransaction();
@@ -339,17 +450,16 @@ class DemandeurController extends Controller
             
             if (!$demandeur) {
                 DB::rollBack();
-                Log::warning('Demandeur introuvable');
+                \Illuminate\Support\Facades\Log::warning('Demandeur introuvable');
                 return back()->with('error', 'Demandeur introuvable.');
             }
             
-            // ✅ Vérifier TOUTES les propriétés liées DANS TOUS LES DOSSIERS (actives ET archivées)
+            // Vérifier TOUTES les propriétés liées
             $proprietesToutes = Demander::where('id_demandeur', (int)$id_demandeur)
                 ->with(['propriete', 'propriete.dossier'])
                 ->get();
             
             if ($proprietesToutes->count() > 0) {
-                // Grouper par dossier
                 $parDossier = [];
                 foreach ($proprietesToutes as $demande) {
                     $dossierNom = $demande->propriete->dossier->nom_dossier ?? 'Inconnu';
@@ -364,55 +474,28 @@ class DemandeurController extends Controller
                     }
                 }
                 
-                $message = "❌ Impossible de supprimer définitivement ce demandeur. Il est associé à des propriétés dans " . count($parDossier) . " dossier(s) :\n\n";
+                $message = "❌ Impossible de supprimer. Associé à des propriétés dans " . count($parDossier) . " dossier(s). Dissociez d'abord.";
                 
-                foreach ($parDossier as $dossier => $lots) {
-                    $message .= "📁 {$dossier} :\n";
-                    if (!empty($lots['actives'])) {
-                        $message .= "  • Propriétés actives : Lot(s) " . implode(', ', $lots['actives']) . "\n";
-                    }
-                    if (!empty($lots['archivees'])) {
-                        $message .= "  • Propriétés archivées : Lot(s) " . implode(', ', $lots['archivees']) . "\n";
-                    }
-                }
-                
-                $message .= "\nVeuillez d'abord dissocier le demandeur de TOUTES ces propriétés.";
-                
-                Log::warning('Suppression définitive impossible - propriétés liées', [
-                    'demandeur_id' => $id_demandeur,
-                    'proprietes_count' => $proprietesToutes->count(),
-                    'dossiers_count' => count($parDossier),
-                    'par_dossier' => $parDossier
-                ]);
-
                 DB::rollBack();
                 return back()->with('error', $message);
             }
             
-            // Compter les relations contenir
-            $contenir_count = Contenir::where('id_demandeur', (int)$id_demandeur)->count();
-            Log::info('Relations contenir trouvées', ['count' => $contenir_count]);
-            
-            // Supprimer toutes les relations dans la table contenir
-            $deleted_contenir = Contenir::where('id_demandeur', (int)$id_demandeur)->delete();
-            Log::info('Relations contenir supprimées', ['count' => $deleted_contenir]);
+            // Supprimer les relations contenir
+            Contenir::where('id_demandeur', (int)$id_demandeur)->delete();
             
             // Supprimer le demandeur
-            $deleted_demandeur = $demandeur->delete();
-            Log::info('Demandeur supprimé', ['result' => $deleted_demandeur]);
+            $demandeur->delete();
             
             DB::commit();
             
-            return back()->with('success', 'Demandeur supprimé définitivement avec succès.');
+            return back()->with('success', 'Demandeur supprimé définitivement.');
             
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur lors de la suppression définitive', [
+            \Illuminate\Support\Facades\Log::error('Erreur suppression définitive', [
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
             ]);
-            return back()->with('error', 'Erreur lors de la suppression : ' . $e->getMessage());
+            return back()->with('error', 'Erreur : ' . $e->getMessage());
         }
     }
-
 }

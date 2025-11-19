@@ -17,6 +17,7 @@ class User extends Authenticatable
     const ROLE_SUPER_ADMIN = 'super_admin';
     const ROLE_ADMIN_DISTRICT = 'admin_district';
     const ROLE_USER_DISTRICT = 'user_district';
+    const ROLE_CENTRAL_USER = 'central_user'; // ✅ NOUVEAU RÔLE
     const ROLE_USER = 'user';
 
     protected $fillable = [
@@ -56,13 +57,11 @@ class User extends Authenticatable
         return $this->hasMany(UserPermission::class, 'id_user');
     }
 
-    // ✅ AJOUT : Relation avec ActivityLog
     public function activityLogs(): HasMany
     {
         return $this->hasMany(ActivityLog::class, 'id_user');
     }
 
-    // Relations avec les entités créées
     public function dossiers(): HasMany
     {
         return $this->hasMany(Dossier::class, 'id_user');
@@ -95,7 +94,12 @@ class User extends Authenticatable
         return $this->role === self::ROLE_USER_DISTRICT && $this->status;
     }
 
-    // ✅ AJOUT : Méthode isAdmin() pour faciliter les vérifications
+    // ✅ NOUVEAU : Vérifier si c'est un utilisateur central
+    public function isCentralUser(): bool
+    {
+        return $this->role === self::ROLE_CENTRAL_USER && $this->status;
+    }
+
     public function isAdmin(): bool
     {
         return $this->isSuperAdmin() || $this->isAdminDistrict();
@@ -109,51 +113,47 @@ class User extends Authenticatable
         ]) && $this->id_district !== null;
     }
 
+    // ✅ MODIFIÉ : Les central_user peuvent aussi accéder à tous les districts
     public function canAccessAllDistricts(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isSuperAdmin() || $this->isCentralUser();
     }
 
     // ============ PERMISSIONS ============
     
-    /**
-     * Vérifier si l'utilisateur peut accéder à un district spécifique
-     */
     public function canAccessDistrict(?int $districtId): bool
     {
         if (!$districtId) {
             return false;
         }
 
-        if ($this->isSuperAdmin()) {
+        // Super admin et central user peuvent accéder à tous les districts
+        if ($this->canAccessAllDistricts()) {
             return true;
         }
         
         return $this->id_district === $districtId;
     }
 
-    /**
-     * Vérifier si l'utilisateur peut accéder à un dossier
-     */
     public function canAccessDossier(Dossier $dossier): bool
     {
-        if ($this->isSuperAdmin()) {
+        // Super admin et central user peuvent accéder à tous les dossiers
+        if ($this->canAccessAllDistricts()) {
             return true;
         }
         
         return $this->id_district === $dossier->id_district;
     }
 
-    /**
-     * Vérifier les permissions CRUD
-     */
+    // ✅ MODIFIÉ : Central user peut créer dans tous les districts
     public function canCreate(?string $resource = null): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        if ($this->isSuperAdmin() || $this->isAdminDistrict()) {
+        // Super admin, admin district et central user peuvent créer
+        if ($this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser()) {
             return true;
         }
         
@@ -165,13 +165,15 @@ class User extends Authenticatable
         return false;
     }
 
+    // ✅ MODIFIÉ : Central user peut modifier dans tous les districts
     public function canUpdate(?string $resource = null): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        if ($this->isSuperAdmin() || $this->isAdminDistrict()) {
+        // Super admin, admin district et central user peuvent modifier
+        if ($this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser()) {
             return true;
         }
         
@@ -179,6 +181,7 @@ class User extends Authenticatable
         return $this->isUserDistrict() && $this->id_district !== null;
     }
 
+    // ✅ Central user NE PEUT PAS supprimer (réservé aux admins)
     public function canDelete(?string $resource = null): bool
     {
         if (!$this->status) {
@@ -189,29 +192,32 @@ class User extends Authenticatable
         return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
+    // ✅ MODIFIÉ : Central user peut archiver
     public function canArchive(): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        // Tous sauf user simple peuvent archiver
         return in_array($this->role, [
             self::ROLE_SUPER_ADMIN,
             self::ROLE_ADMIN_DISTRICT,
             self::ROLE_USER_DISTRICT,
+            self::ROLE_CENTRAL_USER, // ✅ AJOUTÉ
         ]);
     }
 
+    // ✅ MODIFIÉ : Central user peut exporter
     public function canExportData(): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        return $this->isSuperAdmin() || $this->isAdminDistrict();
+        return $this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser();
     }
 
+    // ✅ Central user NE PEUT PAS gérer les utilisateurs
     public function canManageUsers(): bool
     {
         if (!$this->status) {
@@ -221,6 +227,7 @@ class User extends Authenticatable
         return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
+    // ✅ Central user NE PEUT PAS configurer les prix
     public function canConfigurePrices(): bool
     {
         if (!$this->status) {
@@ -262,6 +269,12 @@ class User extends Authenticatable
         return $query->where('role', self::ROLE_USER_DISTRICT);
     }
 
+    // ✅ NOUVEAU : Scope pour les utilisateurs centraux
+    public function scopeCentralUsers(Builder $query): Builder
+    {
+        return $query->where('role', self::ROLE_CENTRAL_USER);
+    }
+
     public function scopeDistrictUsers(Builder $query): Builder
     {
         return $query->whereIn('role', [
@@ -272,26 +285,22 @@ class User extends Authenticatable
 
     // ============ ACCESSEURS (ATTRIBUTES) ============
     
-    /**
-     * Obtenir le nom du rôle formaté
-     */
     public function getRoleNameAttribute(): string
     {
         return match($this->role) {
             self::ROLE_SUPER_ADMIN => 'Super Administrateur',
             self::ROLE_ADMIN_DISTRICT => 'Administrateur District',
             self::ROLE_USER_DISTRICT => 'Utilisateur District',
+            self::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
             self::ROLE_USER => 'Utilisateur',
             default => 'Utilisateur',
         };
     }
 
-    /**
-     * Obtenir la localisation de l'utilisateur
-     */
     public function getLocationAttribute(): string
     {
-        if ($this->isSuperAdmin()) {
+        // Super admin et central user ont accès à tous les districts
+        if ($this->isSuperAdmin() || $this->isCentralUser()) {
             return 'Tous les districts';
         }
         
@@ -311,17 +320,11 @@ class User extends Authenticatable
         );
     }
 
-    /**
-     * Obtenir le badge de statut
-     */
     public function getStatusBadgeAttribute(): string
     {
         return $this->status ? 'Actif' : 'Inactif';
     }
 
-    /**
-     * Obtenir la couleur du badge
-     */
     public function getStatusColorAttribute(): string
     {
         return $this->status ? 'success' : 'danger';
@@ -329,9 +332,6 @@ class User extends Authenticatable
 
     // ============ PERMISSIONS PERSONNALISÉES ============
     
-    /**
-     * Vérifier si l'utilisateur a une permission spécifique
-     */
     public function hasPermission(string $permission): bool
     {
         // Super admin a toutes les permissions
@@ -339,32 +339,22 @@ class User extends Authenticatable
             return true;
         }
         
-        // Vérifier dans la table permissions
         return $this->permissions()
             ->where('permission', $permission)
             ->where('granted', true)
             ->exists();
     }
 
-    /**
-     * Accorder une permission
-     */
     public function grantPermission(string $permission): void
     {
         UserPermission::grant($this->id, $permission);
     }
 
-    /**
-     * Révoquer une permission
-     */
     public function revokePermission(string $permission): void
     {
         UserPermission::revoke($this->id, $permission);
     }
 
-    /**
-     * Obtenir toutes les permissions de l'utilisateur
-     */
     public function getPermissionsList(): array
     {
         if ($this->isSuperAdmin()) {
@@ -374,11 +364,8 @@ class User extends Authenticatable
         return UserPermission::getUserPermissions($this->id);
     }
 
-    // ============ LOGGING (UserAccessLog - ancien système) ============
+    // ============ LOGGING ============
     
-    /**
-     * Log d'accès (ancien système - à conserver pour compatibilité)
-     */
     public function logAccess(string $action, string $resourceType, ?int $resourceId = null): void
     {
         UserAccessLog::create([
@@ -391,9 +378,6 @@ class User extends Authenticatable
         ]);
     }
 
-    /**
-     * Obtenir les logs récents de l'utilisateur (ancien système)
-     */
     public function getRecentLogs(int $limit = 10)
     {
         return $this->accessLogs()
@@ -402,11 +386,6 @@ class User extends Authenticatable
             ->get();
     }
 
-    // ✅ AJOUT : Méthodes pour ActivityLog (nouveau système)
-    
-    /**
-     * Obtenir les logs d'activité récents
-     */
     public function getRecentActivityLogs(int $limit = 50)
     {
         return $this->activityLogs()
@@ -416,9 +395,6 @@ class User extends Authenticatable
             ->get();
     }
 
-    /**
-     * Obtenir les statistiques d'activité
-     */
     public function getActivityStats(): array
     {
         return [
@@ -437,58 +413,42 @@ class User extends Authenticatable
 
     // ============ MÉTHODES UTILITAIRES ============
     
-    /**
-     * Vérifier si le compte est valide pour connexion
-     */
     public function canLogin(): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        // Vérifier que les users district ont bien un district assigné
+        // Les users district doivent avoir un district assigné
         if (in_array($this->role, [self::ROLE_ADMIN_DISTRICT, self::ROLE_USER_DISTRICT])) {
             return $this->id_district !== null;
         }
 
+        // Central user et super admin n'ont pas besoin de district
         return true;
     }
 
-    /**
-     * Obtenir les statistiques de l'utilisateur
-     */
     public function getStats(): array
     {
-        $stats = [
+        return [
             'dossiers_created' => $this->dossiers()->count(),
             'proprietes_created' => $this->proprietes()->count(),
             'demandeurs_created' => $this->demandeurs()->count(),
             'last_access' => $this->accessLogs()->latest()->first()?->created_at,
             'total_actions' => $this->accessLogs()->count(),
         ];
-
-        return $stats;
     }
 
-    /**
-     * Désactiver l'utilisateur
-     */
     public function deactivate(): bool
     {
         return $this->update(['status' => false]);
     }
 
-    /**
-     * Activer l'utilisateur
-     */
     public function activate(): bool
     {
         return $this->update(['status' => true]);
     }
 
-    /**
-     * Toggle du statut
-     */
     public function toggleStatus(): bool
     {
         return $this->update(['status' => !$this->status]);
@@ -496,13 +456,11 @@ class User extends Authenticatable
 
     // ============ VALIDATION HELPERS ============
     
-    /**
-     * Vérifier la cohérence role/district
-     */
+    // ✅ MODIFIÉ : Central user ne doit pas avoir de district
     public function hasValidRoleDistrictCombination(): bool
     {
-        // Super admin ne doit pas avoir de district
-        if ($this->role === self::ROLE_SUPER_ADMIN) {
+        // Super admin et central user ne doivent pas avoir de district
+        if (in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_CENTRAL_USER])) {
             return $this->id_district === null;
         }
 
@@ -514,13 +472,11 @@ class User extends Authenticatable
         return true;
     }
 
-    /**
-     * Obtenir les rôles disponibles selon le rôle de l'utilisateur
-     */
     public static function getAvailableRoles(?User $forUser = null): array
     {
         $allRoles = [
             self::ROLE_SUPER_ADMIN => 'Super Administrateur',
+            self::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
             self::ROLE_ADMIN_DISTRICT => 'Administrateur District',
             self::ROLE_USER_DISTRICT => 'Utilisateur District',
             self::ROLE_USER => 'Utilisateur',

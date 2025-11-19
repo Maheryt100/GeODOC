@@ -36,15 +36,16 @@ class DistrictAccessMiddleware
                 ->with('error', 'Votre compte a été désactivé. Contactez un administrateur.');
         }
 
-        // ✅ Vérifier si l'utilisateur a un district (sauf super admin)
-        if (!$user->isSuperAdmin() && !$user->id_district) {
+        // ✅ CORRIGÉ : Vérifier si l'utilisateur a un district 
+        // (sauf super_admin ET central_user qui ont accès à tous les districts)
+        if (!$user->canAccessAllDistricts() && !$user->id_district) {
             Auth::logout();
             return redirect()->route('login')
                 ->with('error', 'Aucun district assigné à votre compte. Contactez un administrateur.');
         }
 
-        // Super admin a accès à tout
-        if ($user->isSuperAdmin()) {
+        // Super admin et central user ont accès à tout
+        if ($user->canAccessAllDistricts()) {
             return $next($request);
         }
 

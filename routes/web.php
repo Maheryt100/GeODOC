@@ -100,7 +100,7 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     });
 
 
-    // ============ PROPRIÉTÉS ============
+   // ============ PROPRIÉTÉS ============
     // ✅ Ajouter le middleware check.dossier.closed pour empêcher les modifications
     Route::prefix('proprietes')->name('proprietes.')->group(function () {
         Route::get('/dossier/{id_dossier}', [ProprieteController::class, 'index'])
@@ -110,6 +110,9 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         Route::middleware(['district.access:create', 'check.dossier.closed:modify'])->group(function () {
             Route::get('/create/{id}', [ProprieteController::class, 'create'])->name('create');
             Route::post('/', [ProprieteController::class, 'store'])->name('store');
+            
+            // ✅ NOUVELLE ROUTE : Créer plusieurs propriétés à la fois
+            Route::post('/store-multiple', [ProprieteController::class, 'storeMultiple'])->name('store-multiple');
         });
         
         Route::get('/{id}', [ProprieteController::class, 'show'])->name('show');
@@ -129,7 +132,6 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         });
     });
 
-
     // ============ DEMANDEURS ============
     // ✅ Ajouter le middleware check.dossier.closed pour empêcher les modifications
     Route::prefix('demandeurs')->name('demandeurs.')->group(function () {
@@ -140,6 +142,10 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         Route::middleware(['district.access:create', 'check.dossier.closed:modify'])->group(function () {
             Route::get('/create/{id}', [DemandeurController::class, 'create'])->name('create');
             Route::post('/', [DemandeurController::class, 'store'])->name('store');
+            
+            // ✅ NOUVELLE ROUTE : Créer plusieurs demandeurs à la fois
+            Route::post('/store-multiple', [DemandeurController::class, 'storeMultiple'])->name('store-multiple');
+            
             Route::get('/exist/{id}', [DemandeurController::class, 'exist'])->name('exist');
             Route::post('/search-cin', [DemandeurController::class, 'searchCin'])->name('searchCin');
             Route::post('/store-exist', [DemandeurController::class, 'storeExist'])->name('storeExist');
@@ -155,8 +161,6 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             Route::delete('/{id_demandeur}/definitive', [DemandeurController::class, 'destroyDefinitive'])->name('destroyDefinitive');
         });
     });
-
-
     // ============ DEMANDES (DOCUMENTS) ============
     Route::prefix('demandes')->name('demandes.')->group(function () {
         Route::get('/dossier/{dossierId}', [DemandeController::class, 'index'])

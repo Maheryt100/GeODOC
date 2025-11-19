@@ -1,4 +1,4 @@
-// this is users/Create.tsx 
+// users/Create.tsx - AVEC SUPPORT CENTRAL_USER
 import { useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import AppSidebarLayout from '@/layouts/app/app-sidebar-layout';
@@ -72,7 +72,9 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
         ? regions.find(r => r.id.toString() === selectedRegion)?.districts || []
         : [];
 
+    // ✅ MODIFIÉ : central_user ne nécessite pas de district
     const requiresDistrict = data.role === 'admin_district' || data.role === 'user_district';
+    const noDistrictNeeded = data.role === 'super_admin' || data.role === 'central_user';
 
     const handleProvinceChange = (value: string) => {
         setSelectedProvince(value);
@@ -100,7 +102,8 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
 
     const handleRoleChange = (value: string) => {
         setData('role', value);
-        if (value === 'super_admin') {
+        // ✅ MODIFIÉ : super_admin ET central_user ne doivent pas avoir de district
+        if (value === 'super_admin' || value === 'central_user') {
             setData({
                 ...data,
                 role: value,
@@ -170,7 +173,7 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                     </Alert>
                 )}
 
-                <div onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit}>
                     <div className="grid gap-6 md:grid-cols-2">
                         {/* Informations de base */}
                         <Card className="md:col-span-2">
@@ -303,13 +306,16 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertDescription>
                                             {data.role === 'super_admin' && (
-                                                <span>Accès complet à tous les districts et fonctionnalités</span>
+                                                <span>Accès complet à tous les districts et fonctionnalités administratives</span>
+                                            )}
+                                            {data.role === 'central_user' && (
+                                                <span>Peut créer, modifier et consulter dans <strong>tous les districts</strong>, sans permissions d'administration</span>
                                             )}
                                             {data.role === 'admin_district' && (
-                                                <span>Gestion complète du district assigné</span>
+                                                <span>Gestion complète du district assigné (utilisateurs, prix, etc.)</span>
                                             )}
                                             {data.role === 'user_district' && (
-                                                <span>Saisie et consultation pour le district assigné</span>
+                                                <span>Saisie et consultation uniquement pour le district assigné</span>
                                             )}
                                         </AlertDescription>
                                     </Alert>
@@ -335,18 +341,19 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                             <CardHeader>
                                 <CardTitle>Affectation géographique</CardTitle>
                                 <CardDescription>
-                                    {data.role === 'super_admin'
-                                        ? 'Les super admins ont accès à tous les districts'
+                                    {noDistrictNeeded
+                                        ? 'Ce rôle a accès à tous les districts'
                                         : 'Sélectionner le district de l\'utilisateur'
                                     }
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {data.role === 'super_admin' ? (
+                                {noDistrictNeeded ? (
                                     <Alert>
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertDescription>
-                                            Aucune affectation géographique requise pour ce rôle
+                                            Aucune affectation géographique requise pour ce rôle. 
+                                            L'utilisateur aura accès à tous les districts.
                                         </AlertDescription>
                                     </Alert>
                                 ) : (
@@ -356,13 +363,12 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                             <Select 
                                                 value={selectedProvince} 
                                                 onValueChange={handleProvinceChange}
-                                                disabled={data.role === 'super_admin'}
+                                                disabled={noDistrictNeeded}
                                             >
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Sélectionner une province" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {/* ❌ NE PAS mettre : <SelectItem value="">Sélectionner...</SelectItem> */}
                                                     {locations.map((province) => (
                                                         <SelectItem key={province.id} value={province.id.toString()}>
                                                             {province.nom_province}
@@ -377,13 +383,12 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                             <Select 
                                                 value={selectedRegion} 
                                                 onValueChange={handleRegionChange}
-                                                disabled={!selectedProvince || data.role === 'super_admin'}
+                                                disabled={!selectedProvince || noDistrictNeeded}
                                             >
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Sélectionner une région" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                 
                                                     {regions.map((region) => (
                                                         <SelectItem key={region.id} value={region.id.toString()}>
                                                             {region.nom_region}
@@ -398,13 +403,12 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                                             <Select 
                                                 value={data.id_district} 
                                                 onValueChange={handleDistrictChange}
-                                                disabled={!selectedRegion || data.role === 'super_admin'}
+                                                disabled={!selectedRegion || noDistrictNeeded}
                                             >
                                                 <SelectTrigger className={errors.id_district ? 'border-destructive' : ''}>
                                                     <SelectValue placeholder="Sélectionner un district" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                 
                                                     {districts.map((district) => (
                                                         <SelectItem key={district.id} value={district.id.toString()}>
                                                             {district.nom_district}
@@ -442,13 +446,12 @@ export default function UserCreateEdit({ locations, roles, currentUserDistrict, 
                         <Button 
                             type="submit" 
                             disabled={processing}
-                            onClick={handleSubmit}
                         >
                             <Save className="mr-2 h-4 w-4" />
                             {processing ? 'Enregistrement...' : isEdit ? 'Mettre à jour' : 'Créer'}
                         </Button>
                     </div>
-                </div>
+                </form>
             </div>
         </AppSidebarLayout>
     );

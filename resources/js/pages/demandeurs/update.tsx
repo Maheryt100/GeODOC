@@ -1,494 +1,185 @@
-// this is demandeurs/uptdate.tsx
+// pages/demandeurs/update.tsx
+// Page de modification de demandeur - Réutilise DemandeurCreate.tsx
+
+import { useState } from 'react';
+import { Head, usePage, useForm } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
-import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
-import { toast, Toaster } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Save } from 'lucide-react';
-import { BreadcrumbItem, Demandeur, Dossier, SharedData } from '@/types';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { ChevronDown } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast, Toaster } from 'sonner';
+import { ArrowLeft, Save, AlertTriangle } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import type { BreadcrumbItem, Dossier, Demandeur } from '@/types';
 
-export default function Update({ demandeur }: { demandeur: Demandeur }) {
-    const { flash } = usePage<SharedData>().props;
-    const { dossier } = usePage<{ dossier: Dossier }>().props;
+import DemandeurCreate, { DemandeurFormData } from '@/pages/demandeurs/create';
 
-    const { data, setData, put, errors, processing } = useForm({
-        titre_demandeur: demandeur.titre_demandeur ?? '',
-        nom_demandeur: demandeur.nom_demandeur ?? '',
-        prenom_demandeur: demandeur.prenom_demandeur ?? '',
-        date_naissance: demandeur.date_naissance ?? '',
-        lieu_naissance: demandeur.lieu_naissance ?? '',
-        sexe: demandeur.sexe ?? '',
-        occupation: demandeur.occupation ?? '',
-        nom_pere: demandeur.nom_pere ?? '',
-        nom_mere: demandeur.nom_mere ?? '',
-        cin: demandeur.cin ?? '',
-        date_delivrance: demandeur.date_delivrance ?? '',
-        lieu_delivrance: demandeur.lieu_delivrance ?? '',
-        date_delivrance_duplicata: demandeur.date_delivrance_duplicata ?? '',
-        lieu_delivrance_duplicata: demandeur.lieu_delivrance_duplicata ?? '',
-        domiciliation: demandeur.domiciliation ?? '',
-        nationalite: demandeur.nationalite ?? 'Malagasy',
-        situation_familiale: demandeur.situation_familiale ?? '',
-        regime_matrimoniale: demandeur.regime_matrimoniale ?? '',
-        date_mariage: demandeur.date_mariage ?? '',
-        lieu_mariage: demandeur.lieu_mariage ?? '',
-        marie_a: demandeur.marie_a ?? '',
-        telephone: demandeur.telephone ?? '',
-        id_dossier: dossier.id,
+interface PageProps {
+    demandeur: Demandeur;
+    dossier: Dossier;
+    [key: string]: any;
+}
+
+export default function DemandeurUpdate() {
+    const { demandeur, dossier } = usePage<PageProps>().props;
+    const [processing, setProcessing] = useState(false);
+
+     const { data, setData, put, errors } = useForm<DemandeurFormData>({
+        titre_demandeur: demandeur?.titre_demandeur || '',
+        nom_demandeur: demandeur?.nom_demandeur || '',
+        prenom_demandeur: demandeur?.prenom_demandeur || '',
+        date_naissance: demandeur?.date_naissance || '',
+        lieu_naissance: demandeur?.lieu_naissance || '',
+        sexe: demandeur?.sexe || '',
+        occupation: demandeur?.occupation || '',
+        nom_pere: demandeur?.nom_pere || '',
+        nom_mere: demandeur?.nom_mere || '',
+        cin: demandeur?.cin || '',
+        date_delivrance: demandeur?.date_delivrance || '',
+        lieu_delivrance: demandeur?.lieu_delivrance || '',
+        date_delivrance_duplicata: demandeur?.date_delivrance_duplicata || '',
+        lieu_delivrance_duplicata: demandeur?.lieu_delivrance_duplicata || '',
+        domiciliation: demandeur?.domiciliation || '',
+        situation_familiale: demandeur?.situation_familiale || '',
+        regime_matrimoniale: demandeur?.regime_matrimoniale || '',
+        date_mariage: demandeur?.date_mariage || '',
+        lieu_mariage: demandeur?.lieu_mariage || '',
+        marie_a: demandeur?.marie_a || '',
+        telephone: demandeur?.telephone || '',
+        nationalite: demandeur?.nationalite || 'Malagasy',
+        id_dossier: dossier?.id || 0, // ✅ AJOUT : inclure l'ID du dossier
     });
 
-    const handleTitre = (value: string) => {
-        setData({
-            ...data,
-            titre_demandeur: value,
-            sexe: value === 'Monsieur' ? 'Homme' : 'Femme',
-        });
-    };
-
-    useEffect(() => {
-        if (flash && flash.message) {
-            toast.error(String(flash.message));
-        }
-    }, [flash]);
-
-    useEffect(() => {
-        if (errors && errors.cin) {
-            toast.error(String(errors.cin));
-        }
-    }, [errors]);
-
-    useEffect(() => {
-        if (data.situation_familiale !== 'Marié(e)') {
-            setData({
-                ...data,
-                marie_a: '',
-                date_mariage: '',
-                lieu_mariage: '',
-            });
-        }
-    }, [data.situation_familiale]);
+    const isClosed = dossier?.is_closed === true;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation des champs obligatoires
-        if (!data.titre_demandeur) {
+        // Validation de base
+        if (!data.titre_demandeur?.trim()) {
             toast.error('Le titre de civilité est obligatoire');
             return;
         }
-        if (!data.nom_demandeur) {
+        if (!data.nom_demandeur?.trim()) {
             toast.error('Le nom est obligatoire');
+            return;
+        }
+        if (!data.prenom_demandeur?.trim()) {
+            toast.error('Le prénom est obligatoire');
             return;
         }
         if (!data.date_naissance) {
             toast.error('La date de naissance est obligatoire');
             return;
         }
-        if (!data.lieu_naissance) {
-            toast.error('Le lieu de naissance est obligatoire');
-            return;
-        }
-        if (!data.occupation) {
-            toast.error("L'occupation est obligatoire");
-            return;
-        }
-        if (!data.nom_mere) {
-            toast.error('Le nom de la mère est obligatoire');
-            return;
-        }
         if (!data.cin) {
             toast.error('Le CIN est obligatoire');
             return;
         }
-        const cinIsValid = /^\d{12}$/.test(data.cin);
-        if (!cinIsValid) {
+        if (!/^\d{12}$/.test(data.cin)) {
             toast.error('Le CIN doit contenir exactement 12 chiffres');
             return;
         }
-        if (!data.date_delivrance) {
-            toast.error('La date de délivrance du CIN est obligatoire');
-            return;
-        }
-        if (!data.lieu_delivrance) {
-            toast.error('Le lieu de délivrance du CIN est obligatoire');
-            return;
-        }
-        if (!data.domiciliation) {
-            toast.error('La domiciliation est obligatoire');
-            return;
-        }
-        if (!data.situation_familiale) {
-            toast.error('La situation familiale est obligatoire');
-            return;
-        }
-        if (!data.nationalite) {
-            toast.error('La nationalité est obligatoire');
-            return;
-        }
+
+        setProcessing(true);
 
         put(route('demandeurs.update', demandeur.id), {
             onError: (errors) => {
-                const messages = Object.values(errors).flat();
-                toast.error('Erreur de validation', {
-                    description: messages.join('\n'),
-                });
+                console.error('Erreurs de validation:', errors);
+                const errorMessages = Object.entries(errors)
+                    .map(([field, message]) => `${field}: ${message}`)
+                    .join('\n');
+                toast.error('Erreur de validation', { description: errorMessages });
+                setProcessing(false);
             },
             onSuccess: () => {
                 toast.success('Demandeur modifié avec succès !');
-            },
+            }
         });
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: dossier.nom_dossier,
-            href: '#',
-        },
-        {
-            title: (
-                <DropdownMenu>
-                    <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1">
-                        Demandeurs
-                        <ChevronDown className="h-3.5 w-3.5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.demandeurs', dossier.id)}>Demandeurs</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href={route('dossiers.proprietes', dossier.id)}>Proprietes</Link>
-                        </DropdownMenuItem>
-                       <DropdownMenuItem asChild>
-                            <Link href={route('demandes.index', dossier.id)}>Liste document</Link>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            ),
-            href: route('dossiers.proprietes', dossier.id),
-        },
-        {
-            title: 'Modification',
-            href: '#',
-        },
+        { title: 'Dossiers', href: route('dossiers') },
+        { title: dossier.nom_dossier, href: route('dossiers.show', dossier.id) },
+        { title: `Modifier ${demandeur.titre_demandeur} ${demandeur.nom_demandeur}`, href: '#' }
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Modification Demandeur" />
+            <Head title={`Modifier ${demandeur.titre_demandeur} ${demandeur.nom_demandeur}`} />
             <Toaster position="top-right" richColors />
 
-            <div className="container mx-auto p-6 max-w-6xl">
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold">Modifier Demandeur</h1>
-                    <p className="text-muted-foreground">Dossier: {dossier.nom_dossier}</p>
+            <div className="container mx-auto p-6 max-w-5xl">
+                {/* Header */}
+                <div className="mb-8">
+                    <Button asChild variant="ghost" size="sm" className="mb-4">
+                        <Link href={route('dossiers.show', dossier.id)}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Retour au dossier
+                        </Link>
+                    </Button>
+                    
+                    <h1 className="text-3xl font-bold">
+                        Modifier {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                    </h1>
+                    <p className="text-muted-foreground mt-2">
+                        Dossier: {dossier.nom_dossier}
+                    </p>
                 </div>
 
+                {/* Alerte */}
+                {isClosed && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                            Ce dossier est fermé. Aucune modification n'est possible.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Formulaire */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Informations du Demandeur</CardTitle>
+                        <CardTitle>Informations du demandeur</CardTitle>
                         <CardDescription>
-                            Tous les champs marqués d'un astérisque (*) sont obligatoires
+                            Modifiez les informations ci-dessous et cliquez sur "Enregistrer les modifications"
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Ligne 1: Titre, Nom, Prénom */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label className="text-red-500">Titre de civilité *</Label>
-                                    <Select
-                                        value={data.titre_demandeur}
-                                        onValueChange={handleTitre}
-                                        required
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Sélectionner" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Monsieur">Monsieur</SelectItem>
-                                            <SelectItem value="Madame">Madame</SelectItem>
-                                            <SelectItem value="Mademoiselle">Mademoiselle</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Nom *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.nom_demandeur}
-                                        onChange={(e) => setData('nom_demandeur', e.target.value)}
-                                        placeholder="RAKOTO"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Prénom</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.prenom_demandeur}
-                                        onChange={(e) => setData('prenom_demandeur', e.target.value)}
-                                        placeholder="Jean"
-                                    />
-                                </div>
-                            </div>
+                        <form onSubmit={handleSubmit} className="space-y-8">
+                            <DemandeurCreate
+                                data={data}
+                                onChange={(field, value) => setData(field, value)}
+                                index={0}
+                                showRemoveButton={false}
+                            />
 
-                            {/* Ligne 2: Date naissance, Lieu naissance, Nom père, Nom mère */}
-                            <div className="grid gap-4 md:grid-cols-4">
-                                <div>
-                                    <Label className="text-red-500">Date de naissance *</Label>
-                                    <Input
-                                        type="date"
-                                        value={data.date_naissance}
-                                        onChange={(e) => setData('date_naissance', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Lieu de naissance *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.lieu_naissance}
-                                        onChange={(e) => setData('lieu_naissance', e.target.value)}
-                                        placeholder="Antananarivo"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Nom complet Père</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.nom_pere}
-                                        onChange={(e) => setData('nom_pere', e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Nom complet Mère *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.nom_mere}
-                                        onChange={(e) => setData('nom_mere', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            {/* CIN */}
-                            <div className="w-1/2">
-                                <Label className="text-red-500">CIN *</Label>
-                                <InputOTP
-                                    maxLength={12}
-                                    minLength={12}
-                                    value={data.cin}
-                                    onChange={(value) => setData('cin', value)}
-                                    required
-                                >
-                                    <InputOTPGroup>
-                                        <InputOTPSlot index={0} />
-                                        <InputOTPSlot index={1} />
-                                        <InputOTPSlot index={2} />
-                                    </InputOTPGroup>
-                                    <InputOTPSeparator />
-                                    <InputOTPGroup>
-                                        <InputOTPSlot index={3} />
-                                        <InputOTPSlot index={4} />
-                                        <InputOTPSlot index={5} />
-                                    </InputOTPGroup>
-                                    <InputOTPSeparator />
-                                    <InputOTPGroup>
-                                        <InputOTPSlot index={6} />
-                                        <InputOTPSlot index={7} />
-                                        <InputOTPSlot index={8} />
-                                    </InputOTPGroup>
-                                    <InputOTPSeparator />
-                                    <InputOTPGroup>
-                                        <InputOTPSlot index={9} />
-                                        <InputOTPSlot index={10} />
-                                        <InputOTPSlot index={11} />
-                                    </InputOTPGroup>
-                                </InputOTP>
-                                {errors && errors.cin && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.cin}</p>
-                                )}
-                            </div>
-
-                            {/* Délivrance CIN */}
-                            <div className="grid gap-4 md:grid-cols-4">
-                                <div>
-                                    <Label className="text-red-500">Date Délivrance *</Label>
-                                    <Input
-                                        type="date"
-                                        value={data.date_delivrance}
-                                        onChange={(e) => setData('date_delivrance', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Lieu Délivrance *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.lieu_delivrance}
-                                        onChange={(e) => setData('lieu_delivrance', e.target.value)}
-                                        placeholder="Antananarivo"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Date Délivrance Duplicata</Label>
-                                    <Input
-                                        type="date"
-                                        value={data.date_delivrance_duplicata}
-                                        onChange={(e) => setData('date_delivrance_duplicata', e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Lieu Délivrance Duplicata</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.lieu_delivrance_duplicata}
-                                        onChange={(e) => setData('lieu_delivrance_duplicata', e.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Occupation, Domiciliation, Téléphone */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label className="text-red-500">Occupation *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.occupation}
-                                        onChange={(e) => setData('occupation', e.target.value)}
-                                        placeholder="Agriculteur"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Domiciliation *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.domiciliation}
-                                        onChange={(e) => setData('domiciliation', e.target.value)}
-                                        placeholder="Lot II A 45 Ambohimanarina"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Téléphone</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.telephone}
-                                        onChange={(e) => setData('telephone', e.target.value)}
-                                        placeholder="0340000000"
-                                        maxLength={10}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Situation familiale, Régime, Nationalité */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label className="text-red-500">Situation Familiale *</Label>
-                                    <Select
-                                        value={data.situation_familiale}
-                                        onValueChange={(value) => setData('situation_familiale', value)}
-                                        required
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Sélectionner" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Non spécifiée">Non spécifiée</SelectItem>
-                                            <SelectItem value="Célibataire">Célibataire</SelectItem>
-                                            <SelectItem value="Marié(e)">Marié(e)</SelectItem>
-                                            <SelectItem value="Veuf/Veuve">Veuf/Veuve</SelectItem>
-                                            <SelectItem value="Divorcé(e)">Divorcé(e)</SelectItem>
-                                        </SelectContent>
-
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Régime matrimonial</Label>
-                                    <Select
-                                        value={data.regime_matrimoniale}
-                                        onValueChange={(value) => setData('regime_matrimoniale', value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Sélectionner" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Non spécifié">Non spécifié</SelectItem>
-                                            <SelectItem value="zara-mira">Zara-Mira</SelectItem>
-                                            <SelectItem value="kitay telo an-dalana">Kitay telo an-dalana</SelectItem>
-                                            <SelectItem value="Séparations des biens">Séparations des biens</SelectItem>
-                                        </SelectContent>
-
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label className="text-red-500">Nationalité *</Label>
-                                    <Input
-                                        type="text"
-                                        value={data.nationalite}
-                                        onChange={(e) => setData('nationalite', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Infos mariage si marié */}
-                            {data.situation_familiale === 'Marié(e)' && (
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div>
-                                        <Label>Marié(e) à</Label>
-                                        <Input
-                                            type="text"
-                                            value={data.marie_a}
-                                            onChange={(e) => setData('marie_a', e.target.value)}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Date de Mariage</Label>
-                                        <Input
-                                            type="date"
-                                            value={data.date_mariage}
-                                            onChange={(e) => setData('date_mariage', e.target.value)}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Lieu de Mariage</Label>
-                                        <Input
-                                            type="text"
-                                            value={data.lieu_mariage}
-                                            onChange={(e) => setData('lieu_mariage', e.target.value)}
-                                        />
-                                    </div>
-                                </div>
+                            {/* Messages d'erreur globaux */}
+                            {Object.keys(errors).length > 0 && (
+                                <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertDescription>
+                                        Veuillez corriger les erreurs ci-dessus
+                                    </AlertDescription>
+                                </Alert>
                             )}
 
-                            {/* Boutons de soumission */}
-                            <div className="flex gap-4 justify-end">
+                            {/* Actions */}
+                            <div className="flex gap-4 justify-end pt-6 border-t">
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => router.visit(route('dossiers.demandeurs', dossier.id))}
+                                    onClick={() => window.history.back()}
+                                    disabled={processing}
                                 >
                                     Annuler
                                 </Button>
-                                <Button type="submit" disabled={processing}>
+                                <Button
+                                    type="submit"
+                                    disabled={processing || isClosed}
+                                >
                                     <Save className="mr-2 h-4 w-4" />
-                                    {processing ? 'Enregistrement...' : 'Modifier'}
+                                    {processing ? 'Enregistrement...' : 'Enregistrer les modifications'}
                                 </Button>
                             </div>
                         </form>

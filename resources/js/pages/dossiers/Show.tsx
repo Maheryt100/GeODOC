@@ -1,14 +1,14 @@
-// this is dossier/Show.tsx
+// pages/dossiers/Show.tsx (refactorisé)
+// Importe les listes depuis proprietes/index.tsx et demandeurs/index.tsx
+
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
-    LandPlot, Pencil, Trash, Ellipsis, List, UserPlus, Link2, 
-    AlertCircle, Eye, MapPin, Calendar, Building2, FileOutput, 
-    Archive, ArchiveRestore, Unlink, Lock, LockOpen, AlertTriangle 
+    LandPlot, Pencil, Lock, LockOpen, FileOutput, 
+    MapPin, Calendar, Building2, Unlink 
 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
@@ -19,6 +19,10 @@ import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '
 import { CloseDossierDialog } from '@/components/CloseDossierDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+// ✅ Import des composants de liste
+import DemandeursIndex from '@/pages/demandeurs/index';
+import ProprietesIndex from '@/pages/proprietes/index';
+
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
 }
@@ -28,7 +32,7 @@ interface PageProps {
         demandeurs: Demandeur[];
         proprietes: Propriete[];
     };
-    [key: string]: unknown;
+    [key: string]: any;
 }
 
 export default function Show() {
@@ -41,9 +45,6 @@ export default function Show() {
     const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-    const [currentDemandeurPage, setCurrentDemandeurPage] = useState(1);
-    const [currentProprietePage, setCurrentProprietePage] = useState(1);
-    const itemsPerPage = 10;
 
     useEffect(() => {
         if (flash?.message) toast.info(flash.message);
@@ -51,6 +52,7 @@ export default function Show() {
         if (flash?.error) toast.error(flash.error);
     }, [flash?.message, flash?.success, flash?.error]);
 
+    // ========== HANDLERS ==========
     const handleDeleteDemandeur = (id: number) => {
         setItemToDelete({ type: 'demandeur', id });
         setDeleteType('dossier');
@@ -71,21 +73,14 @@ export default function Show() {
                 {
                     preserveScroll: true,
                     onSuccess: () => {
-                        toast.success('Demandeur retiré du dossier avec succès');
+                        toast.success('Demandeur retiré du dossier');
                         setDeleteDialogOpen(false);
                         setItemToDelete(null);
-                        setIsDeleting(false);
                     },
                     onError: (errors) => {
-                        console.error('Erreurs:', errors);
-                        toast.error('Erreur lors de la suppression', { 
-                            description: Object.values(errors).join('\n') 
-                        });
-                        setIsDeleting(false);
+                        toast.error('Erreur', { description: Object.values(errors).join('\n') });
                     },
-                    onFinish: () => {
-                        setIsDeleting(false);
-                    }
+                    onFinish: () => setIsDeleting(false)
                 }
             );
         } else {
@@ -94,21 +89,14 @@ export default function Show() {
                 {
                     preserveScroll: true,
                     onSuccess: () => {
-                        toast.success('Demandeur supprimé définitivement avec succès');
+                        toast.success('Demandeur supprimé définitivement');
                         setDeleteDialogOpen(false);
                         setItemToDelete(null);
-                        setIsDeleting(false);
                     },
                     onError: (errors) => {
-                        console.error('Erreurs:', errors);
-                        toast.error('Erreur lors de la suppression', { 
-                            description: Object.values(errors).join('\n') 
-                        });
-                        setIsDeleting(false);
+                        toast.error('Erreur', { description: Object.values(errors).join('\n') });
                     },
-                    onFinish: () => {
-                        setIsDeleting(false);
-                    }
+                    onFinish: () => setIsDeleting(false)
                 }
             );
         }
@@ -118,30 +106,30 @@ export default function Show() {
         if (confirm('Voulez-vous vraiment supprimer cette propriété ?')) {
             router.delete(route('proprietes.destroy', id), {
                 preserveScroll: true,
-                onSuccess: () => toast.success('Propriété supprimée avec succès'),
+                onSuccess: () => toast.success('Propriété supprimée'),
                 onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
             });
         }
     };
 
     const handleDissociate = (demandeurId: number, proprieteId: number, demandeurNom: string) => {
-        if (confirm(`Êtes-vous sûr de vouloir dissocier ${demandeurNom} de cette propriété ?`)) {
+        if (confirm(`Dissocier ${demandeurNom} de cette propriété ?`)) {
             router.post(route('demandeur-propriete.dissociate'), {
                 id_demandeur: demandeurId,
                 id_propriete: proprieteId,
             }, {
                 preserveScroll: true,
-                onSuccess: () => toast.success('Demandeur dissocié de la propriété'),
+                onSuccess: () => toast.success('Demandeur dissocié'),
                 onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
             });
         }
     };
 
     const handleArchivePropriete = (id: number) => {
-        if (confirm('Archiver cette propriété ? (La propriété sera marquée comme acquise)')) {
+        if (confirm('Archiver cette propriété (acquise) ?')) {
             router.post(route('proprietes.archive'), { id }, {
                 preserveScroll: true,
-                onSuccess: () => toast.success('Propriété archivée (acquise)'),
+                onSuccess: () => toast.success('Propriété archivée'),
                 onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
             });
         }
@@ -157,6 +145,7 @@ export default function Show() {
         }
     };
 
+    // ========== HELPERS ==========
     const getAllDemandeurs = (): DemandeurWithProperty[] => {
         const demandeursMap = new Map<number, DemandeurWithProperty>();
         
@@ -188,27 +177,8 @@ export default function Show() {
         return Array.from(demandeursMap.values());
     };
 
-    const getAcquiredLotsForDemandeur = (demandeurId: number): string[] => {
-        const lots: string[] = [];
-        
-        proprietes.forEach(prop => {
-            if (prop.is_archived === true) {
-                const isLinked = prop.demandeurs?.some((d: any) => d.id === demandeurId);
-                if (isLinked) {
-                    lots.push(prop.lot);
-                }
-            }
-        });
-        
-        return lots;
-    };
-
     const allDemandeurs = getAllDemandeurs();
     const proprietes = dossier.proprietes || [];
-
-    const allProprietesArchived = proprietes.length > 0 && proprietes.every(p => 
-        p.demandeurs && p.demandeurs.every((d: any) => d.status === 'archive')
-    );
 
     const isPropertyIncomplete = (prop: Propriete): boolean => {
         return !prop.titre || !prop.contenance || !prop.proprietaire || !prop.nature || !prop.vocation || !prop.situation;
@@ -217,64 +187,6 @@ export default function Show() {
     const isDemandeurIncomplete = (dem: Demandeur): boolean => {
         return !dem.date_naissance || !dem.lieu_naissance || !dem.date_delivrance || 
                !dem.lieu_delivrance || !dem.domiciliation || !dem.occupation || !dem.nom_mere;
-    };
-
-    const hasLinkedDemandeurs = (prop: Propriete): boolean => {
-        return prop.demandeurs !== undefined && prop.demandeurs.length > 0;
-    };
-
-    const isPropertyArchived = (prop: Propriete): boolean => {
-        return prop.is_archived === true;
-    };
-
-    const paginateDemandeurs = () => {
-        const startIndex = (currentDemandeurPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        return allDemandeurs.slice(startIndex, endIndex);
-    };
-
-    const paginateProprietes = () => {
-        const startIndex = (currentProprietePage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        return proprietes.slice(startIndex, endIndex);
-    };
-
-    const totalDemandeurPages = Math.ceil(allDemandeurs.length / itemsPerPage);
-    const totalProprietePages = Math.ceil(proprietes.length / itemsPerPage);
-
-    const Pagination = ({ currentPage, totalPages, onPageChange }: { currentPage: number, totalPages: number, onPageChange: (page: number) => void }) => {
-        if (totalPages <= 1) return null;
-
-        return (
-            <div className="flex justify-center items-center gap-2 mt-4">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                >
-                    Précédent
-                </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                        key={page}
-                        variant={currentPage === page ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => onPageChange(page)}
-                    >
-                        {page}
-                    </Button>
-                ))}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                >
-                    Suivant
-                </Button>
-            </div>
-        );
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -288,33 +200,28 @@ export default function Show() {
             <Toaster position="top-right" richColors />
 
             <div className="flex flex-col gap-6 p-6">
-                {/* ✅ NOUVEAU : Alerte si dossier fermé */}
+                {/* Alerte si dossier fermé */}
                 {dossier.is_closed && (
                     <Alert variant="destructive" className="border-orange-500 bg-orange-50 dark:bg-orange-950/20">
                         <Lock className="h-4 w-4" />
                         <AlertTitle>Dossier fermé</AlertTitle>
                         <AlertDescription className="space-y-2">
                             <p>
-                                Ce dossier a été fermé le{' '}
-                                <strong>{new Date(dossier.date_fermeture!).toLocaleDateString('fr-FR')}</strong>
-                                {dossier.closedBy && (
-                                    <>
-                                        {' '}par <strong>{dossier.closedBy.name}</strong>
-                                    </>
-                                )}
+                                Fermé le <strong>{new Date(dossier.date_fermeture!).toLocaleDateString('fr-FR')}</strong>
+                                {dossier.closedBy && <> par <strong>{dossier.closedBy.name}</strong></>}
                             </p>
                             {dossier.motif_fermeture && (
                                 <p className="text-sm italic">Motif : {dossier.motif_fermeture}</p>
                             )}
                             <p className="text-sm">
-                                Aucune modification n'est possible. Seuls les administrateurs peuvent rouvrir ce dossier.
+                                Aucune modification possible. Seuls les administrateurs peuvent rouvrir ce dossier.
                             </p>
                         </AlertDescription>
                     </Alert>
                 )}
 
                 {/* Section Informations du Dossier */}
-                <Card className={`border-2 ${allProprietesArchived ? 'bg-gray-50 dark:bg-gray-900/50' : ''}`}>
+                <Card className="border-2">
                     <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
@@ -322,7 +229,6 @@ export default function Show() {
                                     <CardTitle className="text-3xl font-bold text-blue-900 dark:text-blue-100">
                                         {dossier.nom_dossier}
                                     </CardTitle>
-                                    {/* ✅ NOUVEAU : Badge de statut */}
                                     {dossier.is_closed ? (
                                         <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
                                             <Lock className="mr-1 h-3 w-3" />
@@ -337,7 +243,6 @@ export default function Show() {
                                 </div>
                             </div>
                             <div className="flex gap-2 flex-wrap">
-                                {/* ✅ NOUVEAU : Bouton Fermer/Rouvrir */}
                                 {dossier.can_close && (
                                     <Button
                                         variant={dossier.is_closed ? "default" : "destructive"}
@@ -356,13 +261,12 @@ export default function Show() {
                                         ) : (
                                             <>
                                                 <Lock className="mr-2 h-4 w-4" />
-                                                Fermer le dossier
+                                                Fermer
                                             </>
                                         )}
                                     </Button>
                                 )}
 
-                                {/* Bouton Modifier - désactivé si fermé et pas admin */}
                                 {dossier.can_modify && (
                                     <Button asChild variant="outline" size="sm" disabled={dossier.is_closed && !dossier.can_close}>
                                         <Link href={route('dossiers.edit', dossier.id)}>
@@ -372,12 +276,11 @@ export default function Show() {
                                     </Button>
                                 )}
                                 
-                                {/* Bouton Nouveau Lot - désactivé si fermé */}
                                 {!dossier.is_closed && (
                                     <Button asChild variant="default" size="sm">
                                         <Link href={route('nouveau-lot.create', dossier.id)}>
                                             <LandPlot className="mr-2 h-4 w-4" />
-                                            Nouvel entrée
+                                            Nouvelle entrée
                                         </Link>
                                     </Button>
                                 )}
@@ -425,20 +328,11 @@ export default function Show() {
                             </div>
                         </div>
                         <div className="flex gap-4 mt-6 pt-4 border-t">
-                            <Badge variant="secondary" className="text-sm">
-                                {allDemandeurs.length} Demandeur{allDemandeurs.length > 1 ? 's' : ''}
-                            </Badge>
-                            <Badge variant="secondary" className="text-sm">
-                                {proprietes.length} Propriété{proprietes.length > 1 ? 's' : ''}
-                            </Badge>
-                            
-                            {/* ✅ NOUVEAU : Afficher les dates d'ouverture/fermeture */}
-                            <Badge variant="outline" className="text-sm">
-                                Ouvert le {new Date(dossier.date_ouverture).toLocaleDateString('fr-FR')}
-                            </Badge>
-                            
+                            <Badge variant="secondary">{allDemandeurs.length} Demandeur{allDemandeurs.length > 1 ? 's' : ''}</Badge>
+                            <Badge variant="secondary">{proprietes.length} Propriété{proprietes.length > 1 ? 's' : ''}</Badge>
+                            <Badge variant="outline">Ouvert le {new Date(dossier.date_ouverture).toLocaleDateString('fr-FR')}</Badge>
                             {dossier.is_closed && dossier.date_fermeture && (
-                                <Badge variant="outline" className="text-sm bg-orange-50 text-orange-700 border-orange-300">
+                                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300">
                                     <Lock className="mr-1 h-3 w-3" />
                                     Fermé le {new Date(dossier.date_fermeture).toLocaleDateString('fr-FR')}
                                 </Badge>
@@ -447,783 +341,124 @@ export default function Show() {
                     </CardContent>
                 </Card>
 
-                {/* Section Demandeurs */}
-                <Card>
-                    <CardHeader>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div>
-                                <CardTitle>Demandeurs</CardTitle>
-                                <CardDescription>
-                                    Liste des demandeurs du dossier ({allDemandeurs.length})
-                                    <span className="ml-2 text-xs block mt-2">
-                                        <span className="inline-flex items-center gap-1">
-                                            <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded"></span>
-                                            <span>Données incomplètes</span>
-                                        </span>
-                                        <span className="inline-flex items-center gap-1 ml-3">
-                                            <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded"></span>
-                                            <span>Sans propriété</span>
-                                        </span>
-                                    </span>
-                                </CardDescription>
-                            </div>
-                            {/* Désactiver le bouton si fermé */}
-                            {proprietes.length > 0 && !dossier.is_closed && (
-                                <Button asChild size="sm">
-                                    <Link href={route('ajouter-demandeur.create', dossier.id)}>
-                                        <UserPlus className="mr-2 h-4 w-4" />
-                                        Ajouter un demandeur à un lot
-                                    </Link>
-                                </Button>
-                            )}
-                         
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="border-b bg-muted/50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Nom complet</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">CIN</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Domiciliation</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Situation</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Téléphone</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Statut</th>
-                                        <th className="px-4 py-3 w-[50px]"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {allDemandeurs.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} className="text-center text-muted-foreground py-8">
-                                                Aucun demandeur enregistré
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        paginateDemandeurs().map((demandeur) => {
-                                            const isIncomplete = isDemandeurIncomplete(demandeur);
-                                            const acquiredLots = getAcquiredLotsForDemandeur(demandeur.id);
-                                            const hasAcquiredProperty = acquiredLots.length > 0;
-                                            
-                                            const rowClass = isIncomplete 
-                                                ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer' 
-                                                : demandeur.hasProperty
-                                                    ? 'border-b hover:bg-muted/50 cursor-pointer'
-                                                    : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
-                                            
-                                            return (
-                                                <tr key={demandeur.id} className={rowClass} onClick={() => setSelectedDemandeur(demandeur)}>
-                                                    <td className="px-4 py-3 text-sm font-medium">
-                                                        <div className="flex items-center gap-2">
-                                                            {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
-                                                            {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
-                                                            {hasAcquiredProperty && (
-                                                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
-                                                                    <Archive className="mr-1 h-3 w-3" />
-                                                                    Lot(s) acquis: {acquiredLots.join(', ')}
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-sm font-mono">{demandeur.cin}</td>
-                                                    <td className="px-4 py-3 text-sm">{demandeur.domiciliation || '-'}</td>
-                                                    <td className="px-4 py-3 text-sm">{demandeur.situation_familiale || '-'}</td>
-                                                    <td className="px-4 py-3 text-sm">{demandeur.telephone || '-'}</td>
-                                                    <td className="px-4 py-3 text-sm">
-                                                        <Badge variant={demandeur.hasProperty ? "default" : "secondary"} className="text-xs">
-                                                            {demandeur.hasProperty ? "Avec propriété" : "Sans propriété"}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon">
-                                                                    <Ellipsis className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem onClick={() => setSelectedDemandeur(demandeur)}>
-                                                                    <Eye className="mr-2 h-4 w-4" />
-                                                                    Voir détails
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem asChild>
-                                                                    <Link
-                                                                        href={route('demandeurs.edit', {
-                                                                            id_dossier: dossier.id,
-                                                                            id_demandeur: demandeur.id
-                                                                        })}
-                                                                        className="flex items-center"
-                                                                    >
-                                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                                        Modifier
-                                                                    </Link>
-                                                                </DropdownMenuItem>
-                                                                {proprietes.length > 0 && (
-                                                                    <DropdownMenuItem asChild>
-                                                                        <Link
-                                                                            href={route('lier-demandeur.create', {
-                                                                                id: dossier.id,
-                                                                                id_demandeur: demandeur.id
-                                                                            })}
-                                                                            className="flex items-center"
-                                                                        >
-                                                                            <Link2 className="mr-2 h-4 w-4" />
-                                                                            Lier à une propriété
-                                                                        </Link>
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuItem
-                                                                    className="text-red-500"
-                                                                    onClick={() => handleDeleteDemandeur(demandeur.id)}
-                                                                >
-                                                                    <Trash className="mr-2 h-4 w-4" />
-                                                                    Supprimer
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination
-                            currentPage={currentDemandeurPage}
-                            totalPages={totalDemandeurPages}
-                            onPageChange={setCurrentDemandeurPage}
-                        />
-                    </CardContent>
-                </Card>
+                {/* ✅ Utilisation des composants importés */}
+                <DemandeursIndex
+                    demandeurs={allDemandeurs}
+                    dossier={dossier}
+                    proprietes={proprietes}
+                    onSelectDemandeur={setSelectedDemandeur}
+                    onDeleteDemandeur={handleDeleteDemandeur}
+                    isDemandeurIncomplete={isDemandeurIncomplete}
+                />
 
-                {/* Section Propriétés */}
-                <Card>
-                    <CardHeader>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div>
-                                <CardTitle>Propriétés</CardTitle>
-                                <CardDescription>
-                                    Liste des propriétés du dossier ({proprietes.length})
-                                    {dossier.is_closed && (
-                                        <span className="block mt-1 text-orange-600 dark:text-orange-400 flex items-center gap-1">
-                                            <AlertTriangle className="h-3 w-3" />
-                                            Aucune modification possible (dossier fermé)
-                                        </span>
-                                    )}
-                                </CardDescription>
-                            </div>
-                            
-                            {/* ✅ Désactiver le bouton si fermé */}
-                            {allDemandeurs.length > 0 && !dossier.is_closed && (
-                                <Button asChild size="sm">
-                                    <Link href={route('lier-demandeur.create', dossier.id)}>
-                                        <Link2 className="mr-2 h-4 w-4" />
-                                        Lier un demandeur à un lot
-                                    </Link>
-                                </Button>
-                            )}
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="border-b bg-muted/50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Lot</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Titre</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Contenance</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Propriétaire</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Nature</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Statut</th>
-                                        <th className="px-4 py-3 w-[50px]"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {proprietes.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} className="text-center text-muted-foreground py-8">
-                                                Aucune propriété enregistrée
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        paginateProprietes().map((propriete) => {
-                                            const isIncomplete = isPropertyIncomplete(propriete);
-                                            const hasDemandeurs = hasLinkedDemandeurs(propriete);
-                                            const isArchived = propriete.is_archived === true;
-                                            
-                                            const rowClass = isArchived
-                                                ? 'border-b hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-50/80 dark:bg-gray-900/50 cursor-pointer'
-                                                : isIncomplete 
-                                                    ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer'
-                                                    : hasDemandeurs
-                                                        ? 'border-b hover:bg-muted/50 cursor-pointer'
-                                                        : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
-                                            
-                                            return (
-                                                <tr key={propriete.id} className={rowClass} onClick={() => setSelectedPropriete(propriete)}>
-                                                    <td className="px-4 py-3 text-sm font-medium">
-                                                        <div className="flex items-center gap-2">
-                                                            {propriete.lot}
-                                                            {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
-                                                            {isArchived && <Archive className="h-4 w-4 text-gray-500" />}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-sm">{propriete.titre ? `TNº${propriete.titre}` : '-'}</td>
-                                                    <td className="px-4 py-3 text-sm">{propriete.contenance ? `${propriete.contenance} m²` : '-'}</td>
-                                                    <td className="px-4 py-3 text-sm">{propriete.proprietaire || '-'}</td>
-                                                    <td className="px-4 py-3 text-sm capitalize">{propriete.nature || '-'}</td>
-                                                    <td className="px-4 py-3 text-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <Badge variant={hasDemandeurs ? "default" : "secondary"} className="text-xs">
-                                                                {hasDemandeurs ? "Avec demandeur" : "Sans demandeur"}
-                                                            </Badge>
-                                                            {isArchived && (
-                                                                <Badge variant="outline" className="text-xs bg-gray-100 text-gray-700 border-gray-300">
-                                                                    Acquise
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon">
-                                                                    <Ellipsis className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem onClick={() => setSelectedPropriete(propriete)}>
-                                                                    <Eye className="mr-2 h-4 w-4" />
-                                                                    Voir détails
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem asChild>
-                                                                    <Link
-                                                                        href={route('proprietes.edit', propriete.id)}
-                                                                        className="flex items-center"
-                                                                    >
-                                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                                        Modifier
-                                                                    </Link>
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem asChild>
-                                                                    <Link
-                                                                        href={route('ajouter-demandeur.create', {
-                                                                            id: dossier.id,
-                                                                            id_propriete: propriete.id
-                                                                        })}
-                                                                        className="flex items-center"
-                                                                    >
-                                                                        <UserPlus className="mr-2 h-4 w-4" />
-                                                                        Ajouter un demandeur
-                                                                    </Link>
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuSeparator />
-                                                                {isArchived ? (
-                                                                    <DropdownMenuItem
-                                                                        className="text-blue-600"
-                                                                        onClick={() => handleUnarchivePropriete(propriete.id)}
-                                                                    >
-                                                                        <ArchiveRestore className="mr-2 h-4 w-4" />
-                                                                        Désarchiver
-                                                                    </DropdownMenuItem>
-                                                                ) : (
-                                                                    <DropdownMenuItem
-                                                                        className="text-green-600"
-                                                                        onClick={() => handleArchivePropriete(propriete.id)}
-                                                                    >
-                                                                        <Archive className="mr-2 h-4 w-4" />
-                                                                        Archiver (acquise)
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                <DropdownMenuItem
-                                                                    className="text-red-500"
-                                                                    onClick={() => handleDeletePropriete(propriete.id)}
-                                                                >
-                                                                    <Trash className="mr-2 h-4 w-4" />
-                                                                    Supprimer
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination
-                            currentPage={currentProprietePage}
-                            totalPages={totalProprietePages}
-                            onPageChange={setCurrentProprietePage}
-                        />
-                    </CardContent>
-                </Card>
+                <ProprietesIndex
+                    proprietes={proprietes}
+                    dossier={dossier}
+                    demandeurs={allDemandeurs}
+                    onSelectPropriete={setSelectedPropriete}
+                    onDeletePropriete={handleDeletePropriete}
+                    onArchivePropriete={handleArchivePropriete}
+                    onUnarchivePropriete={handleUnarchivePropriete}
+                    isPropertyIncomplete={isPropertyIncomplete}
+                />
             </div>
 
-
-            {/* ✅ NOUVEAU : Dialog de fermeture/réouverture */}
+            {/* Dialog fermeture/réouverture */}
             <CloseDossierDialog
                 dossier={{
-                ...dossier,
-                date_fermeture: dossier.date_fermeture ?? undefined,
-                // répète avec d'autres champs si besoin : date_ouverture, is_closed, can_close...
-            }}
+                    ...dossier,
+                    date_fermeture: dossier.date_fermeture ?? undefined,
+                }}
                 open={closeDialogOpen}
                 onOpenChange={setCloseDialogOpen}
             />
 
-            {/* Dialog Demandeur */}
+            {/* Dialog Demandeur détails (simplifié) */}
             <Dialog open={!!selectedDemandeur} onOpenChange={() => setSelectedDemandeur(null)}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl">
-                            Détails du demandeur
-                        </DialogTitle>
+                        <DialogTitle>Détails du demandeur</DialogTitle>
                     </DialogHeader>
                     {selectedDemandeur && (
-                        <div className="space-y-6">
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4 rounded-lg">
-                                <h3 className="text-xl font-bold text-blue-900 dark:text-blue-100">
-                                    {selectedDemandeur.titre_demandeur} {selectedDemandeur.nom_demandeur} {selectedDemandeur.prenom_demandeur}
-                                </h3>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <Badge variant={selectedDemandeur.hasProperty ? "default" : "secondary"}>
-                                        {selectedDemandeur.hasProperty ? "Associé à une propriété" : "Non associé"}
-                                    </Badge>
-                                    {isDemandeurIncomplete(selectedDemandeur) && (
-                                        <Badge variant="destructive" className="text-xs">
-                                            <AlertCircle className="mr-1 h-3 w-3" />
-                                            Données incomplètes
-                                        </Badge>
-                                    )}
-                                </div>
+                        <div className="space-y-4">
+                            <p className="text-xl font-bold">
+                                {selectedDemandeur.titre_demandeur} {selectedDemandeur.nom_demandeur} {selectedDemandeur.prenom_demandeur}
+                            </p>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div><strong>CIN:</strong> {selectedDemandeur.cin}</div>
+                                <div><strong>Téléphone:</strong> {selectedDemandeur.telephone || '-'}</div>
+                                <div><strong>Domiciliation:</strong> {selectedDemandeur.domiciliation || '-'}</div>
+                                <div><strong>Occupation:</strong> {selectedDemandeur.occupation || '-'}</div>
                             </div>
-
-                            {(() => {
-                                const proprietesAssociees = proprietes.filter(prop => 
-                                    prop.demandeurs?.some((d: any) => d.id === selectedDemandeur.id)
-                                );
-                                
-                                if (proprietesAssociees.length > 0) {
-                                    return (
-                                        <div className="border-t pt-4">
-                                            <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                                <LandPlot className="h-5 w-5 text-green-600" />
-                                                Propriétés associées ({proprietesAssociees.length})
-                                            </h4>
-                                            <div className="space-y-2">
-                                                {proprietesAssociees.map((prop) => {
-                                                    const isArchived = isPropertyArchived(prop);
-                                                    return (
-                                                        <div 
-                                                            key={prop.id} 
-                                                            className={`p-3 rounded-lg border cursor-pointer hover:border-primary transition ${
-                                                                isArchived 
-                                                                    ? 'bg-gray-100 dark:bg-gray-800 border-gray-300' 
-                                                                    : 'bg-white dark:bg-gray-900 border-gray-200'
-                                                            }`}
-                                                            onClick={() => {
-                                                                setSelectedDemandeur(null);
-                                                                setSelectedPropriete(prop);
-                                                            }}
-                                                        >
-                                                            <div className="flex items-start justify-between">
-                                                                <div className="flex-1">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <p className="font-semibold">Lot {prop.lot}</p>
-                                                                        {isArchived && (
-                                                                            <Badge variant="outline" className="text-xs bg-gray-200 text-gray-800 border-gray-400">
-                                                                                <Archive className="mr-1 h-3 w-3" />
-                                                                                ACQUISE
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="grid grid-cols-2 gap-x-4 mt-2 text-sm text-muted-foreground">
-                                                                        <p><strong>Titre:</strong> {prop.titre ? `TNº${prop.titre}` : 'Non renseigné'}</p>
-                                                                        <p><strong>Contenance:</strong> {prop.contenance ? `${prop.contenance}m²` : '-'}</p>
-                                                                        <p><strong>Nature:</strong> {prop.nature || '-'}</p>
-                                                                        <p><strong>Vocation:</strong> {prop.vocation || '-'}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedDemandeur(null);
-                                                                        setSelectedPropriete(prop);
-                                                                    }}
-                                                                >
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">CIN</p>
-                                    <p className="font-medium font-mono">{selectedDemandeur.cin}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Sexe</p>
-                                    <p className="font-medium">{selectedDemandeur.sexe}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Date de naissance</p>
-                                    <p className="font-medium">{selectedDemandeur.date_naissance ? new Date(selectedDemandeur.date_naissance).toLocaleDateString('fr-FR') : '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Lieu de naissance</p>
-                                    <p className="font-medium">{selectedDemandeur.lieu_naissance || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Nationalité</p>
-                                    <p className="font-medium">{selectedDemandeur.nationalite || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Occupation</p>
-                                    <p className="font-medium">{selectedDemandeur.occupation || '-'}</p>
-                                </div>
-                            </div>
-
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Informations CIN</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Date de délivrance</p>
-                                        <p className="font-medium">{selectedDemandeur.date_delivrance ? new Date(selectedDemandeur.date_delivrance).toLocaleDateString('fr-FR') : '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Lieu de délivrance</p>
-                                        <p className="font-medium">{selectedDemandeur.lieu_delivrance || '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Informations familiales</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Nom du père</p>
-                                        <p className="font-medium">{selectedDemandeur.nom_pere || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Nom de la mère</p>
-                                        <p className="font-medium">{selectedDemandeur.nom_mere || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Situation familiale</p>
-                                        <p className="font-medium">{selectedDemandeur.situation_familiale || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Régime matrimonial</p>
-                                        <p className="font-medium">{selectedDemandeur.regime_matrimoniale || '-'}</p>
-                                    </div>
-                                    {selectedDemandeur.marie_a && (
-                                        <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Marié(e) à</p>
-                                            <p className="font-medium">{selectedDemandeur.marie_a}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Contact</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Domiciliation</p>
-                                        <p className="font-medium">{selectedDemandeur.domiciliation || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Téléphone</p>
-                                        <p className="font-medium">{selectedDemandeur.telephone || '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-4 border-t">
-                                <Button asChild variant="outline">
-                                    <Link href={route('demandeurs.edit', { 
-                                        id_dossier: dossier.id, 
-                                        id_demandeur: selectedDemandeur.id 
-                                    })}>
-                                        <Pencil className="mr-2 h-4 w-4" />
-                                        Modifier
-                                    </Link>
-                                </Button>
-                                <Button variant="outline" onClick={() => setSelectedDemandeur(null)}>
-                                    Fermer
-                                </Button>
-                            </div>
+                            <Button onClick={() => setSelectedDemandeur(null)}>Fermer</Button>
                         </div>
                     )}
                 </DialogContent>
             </Dialog>
 
-            {/* Dialog Propriété */}
+            {/* Dialog Propriété détails (simplifié) */}
             <Dialog open={!!selectedPropriete} onOpenChange={() => setSelectedPropriete(null)}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl">
-                            Détails de la propriété
-                        </DialogTitle>
+                        <DialogTitle>Détails de la propriété</DialogTitle>
                     </DialogHeader>
                     {selectedPropriete && (
-                        <div className="space-y-6">
-                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 p-4 rounded-lg">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-green-900 dark:text-green-100">
-                                            Lot {selectedPropriete.lot}
-                                        </h3>
-                                        {selectedPropriete.titre && (
-                                            <p className="text-green-700 dark:text-green-300 mt-1">Titre Nº{selectedPropriete.titre}</p>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <Badge variant="outline" className="capitalize">
-                                            {selectedPropriete.type_operation === 'morcellement' ? 'Morcellement' : 'Immatriculation'}
-                                        </Badge>
-                                        {isPropertyArchived(selectedPropriete) && (
-                                            <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
-                                                <Archive className="mr-1 h-3 w-3" />
-                                                Acquise
-                                            </Badge>
-                                        )}
-                                        {isPropertyIncomplete(selectedPropriete) && (
-                                            <Badge variant="destructive" className="text-xs">
-                                                <AlertCircle className="mr-1 h-3 w-3" />
-                                                Données incomplètes
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
+                        <div className="space-y-4">
+                            <p className="text-xl font-bold">Lot {selectedPropriete.lot}</p>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div><strong>Titre:</strong> {selectedPropriete.titre ? `TNº${selectedPropriete.titre}` : '-'}</div>
+                                <div><strong>Contenance:</strong> {selectedPropriete.contenance}m²</div>
+                                <div><strong>Nature:</strong> {selectedPropriete.nature}</div>
+                                <div><strong>Vocation:</strong> {selectedPropriete.vocation}</div>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Propriétaire</p>
-                                    <p className="font-medium">{selectedPropriete.proprietaire || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Contenance</p>
-                                    <p className="font-medium">{selectedPropriete.contenance ? `${selectedPropriete.contenance} m²` : '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Nature</p>
-                                    <p className="font-medium capitalize">{selectedPropriete.nature || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Vocation</p>
-                                    <p className="font-medium">{selectedPropriete.vocation || '-'}</p>
-                                </div>
-                            </div>
-
-                            {selectedPropriete.type_operation === 'morcellement' && (
-                                <div className="border-t pt-4">
-                                    <h4 className="font-semibold mb-3">Informations du morcellement</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Propriété mère</p>
-                                            <p className="font-medium">{selectedPropriete.propriete_mere || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Titre mère</p>
-                                            <p className="font-medium">{selectedPropriete.titre_mere || '-'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Informations cadastrales</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Numéro FN</p>
-                                        <p className="font-medium font-mono">{selectedPropriete.numero_FN || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Dep/Vol</p>
-                                        <p className="font-medium">{selectedPropriete.dep_vol || '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Réquisition</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Numéro de réquisition</p>
-                                        <p className="font-medium font-mono">{selectedPropriete.numero_requisition || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Date de réquisition</p>
-                                        <p className="font-medium">{selectedPropriete.date_requisition ? new Date(selectedPropriete.date_requisition).toLocaleDateString('fr-FR') : '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Date d'inscription</p>
-                                        <p className="font-medium">{selectedPropriete.date_inscription ? new Date(selectedPropriete.date_inscription).toLocaleDateString('fr-FR') : '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="border-t pt-4">
-                                <h4 className="font-semibold mb-3">Autres informations</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Situation</p>
-                                        <p className="font-medium">{selectedPropriete.situation || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Charge</p>
-                                        <p className="font-medium">{selectedPropriete.charge || '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
                             {selectedPropriete.demandeurs && selectedPropriete.demandeurs.length > 0 && (
-                                <div className="border-t pt-4">
-                                    <h4 className="font-semibold mb-3">Demandeurs associés ({selectedPropriete.demandeurs.length})</h4>
-                                    <div className="space-y-2">
-                                        {selectedPropriete.demandeurs.map((dem) => (
-                                            <div key={dem.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <div>
-                                                    <p className="font-medium dark:text-gray-100">{dem.titre_demandeur} {dem.nom_demandeur} {dem.prenom_demandeur}</p>
-                                                    <p className="text-sm text-muted-foreground">CIN: {dem.cin}</p>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            setSelectedPropriete(null);
-                                                            setSelectedDemandeur({ ...dem, hasProperty: true });
-                                                        }}
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-red-500 hover:text-red-700"
-                                                        onClick={() => handleDissociate(dem.id, selectedPropriete.id, `${dem.nom_demandeur} ${dem.prenom_demandeur}`)}
-                                                    >
-                                                        <Unlink className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                <div>
+                                    <h4 className="font-semibold mb-2">Demandeurs associés:</h4>
+                                    {selectedPropriete.demandeurs.map((dem) => (
+                                        <div key={dem.id} className="flex justify-between items-center p-2 bg-muted rounded mb-2">
+                                            <span>{dem.nom_demandeur} {dem.prenom_demandeur}</span>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleDissociate(dem.id, selectedPropriete.id, dem.nom_demandeur)}
+                                            >
+                                                <Unlink className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-
-                            <div className="flex justify-end gap-2 pt-4 border-t">
-                                <Button asChild variant="outline">
-                                    <Link href={route('proprietes.edit', selectedPropriete.id)}>
-                                        <Pencil className="mr-2 h-4 w-4" />
-                                        Modifier
-                                    </Link>
-                                </Button>
-                                {isPropertyArchived(selectedPropriete) ? (
-                                    <Button 
-                                        variant="outline" 
-                                        className="text-blue-600"
-                                        onClick={() => {
-                                            handleUnarchivePropriete(selectedPropriete.id);
-                                            setSelectedPropriete(null);
-                                        }}
-                                    >
-                                        <ArchiveRestore className="mr-2 h-4 w-4" />
-                                        Désarchiver
-                                    </Button>
-                                ) : (
-                                    <Button 
-                                        variant="outline" 
-                                        className="text-green-600"
-                                        onClick={() => {
-                                            handleArchivePropriete(selectedPropriete.id);
-                                            setSelectedPropriete(null);
-                                        }}
-                                    >
-                                        <Archive className="mr-2 h-4 w-4" />
-                                        Archiver
-                                    </Button>
-                                )}
-                                <Button variant="outline" onClick={() => setSelectedPropriete(null)}>
-                                    Fermer
-                                </Button>
-                            </div>
+                            <Button onClick={() => setSelectedPropriete(null)}>Fermer</Button>
                         </div>
                     )}
                 </DialogContent>
             </Dialog>
 
-            {/* AlertDialog pour suppression demandeur */}
+            {/* AlertDialog suppression demandeur */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Supprimer le demandeur</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Choisissez le type de suppression :
-                        </AlertDialogDescription>
+                        <AlertDialogDescription>Choisissez le type de suppression</AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="space-y-4 py-4">
                         <div 
-                            className={`p-4 border-2 rounded-lg cursor-pointer transition ${
-                                deleteType === 'dossier' ? 'border-primary bg-primary/5' : 'border-border'
+                            className={`p-4 border-2 rounded-lg cursor-pointer ${
+                                deleteType === 'dossier' ? 'border-primary bg-primary/5' : ''
                             }`}
                             onClick={() => setDeleteType('dossier')}
                         >
-                            <div className="flex items-start gap-3">
-                                <input 
-                                    type="radio" 
-                                    checked={deleteType === 'dossier'} 
-                                    onChange={() => setDeleteType('dossier')}
-                                    className="mt-1"
-                                />
-                                <div>
-                                    <p className="font-semibold">Retirer du dossier uniquement</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Le demandeur sera retiré de ce dossier mais restera dans la base de données.
-                                        Il pourra être réutilisé dans d'autres dossiers.
-                                    </p>
-                                </div>
-                            </div>
+                            <input type="radio" checked={deleteType === 'dossier'} onChange={() => setDeleteType('dossier')} className="mr-3" />
+                            <strong>Retirer du dossier uniquement</strong>
                         </div>
                         <div 
-                            className={`p-4 border-2 rounded-lg cursor-pointer transition ${
-                                deleteType === 'definitif' ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : 'border-border'
+                            className={`p-4 border-2 rounded-lg cursor-pointer ${
+                                deleteType === 'definitif' ? 'border-red-500 bg-red-50' : ''
                             }`}
                             onClick={() => setDeleteType('definitif')}
                         >
-                            <div className="flex items-start gap-3">
-                                <input 
-                                    type="radio" 
-                                    checked={deleteType === 'definitif'} 
-                                    onChange={() => setDeleteType('definitif')}
-                                    className="mt-1"
-                                />
-                                <div>
-                                    <p className="font-semibold text-red-600 dark:text-red-400">Supprimer définitivement</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        ⚠️ Le demandeur sera supprimé de tous les dossiers et de toutes les propriétés.
-                                        Cette action est irréversible.
-                                    </p>
-                                </div>
-                            </div>
+                            <input type="radio" checked={deleteType === 'definitif'} onChange={() => setDeleteType('definitif')} className="mr-3" />
+                            <strong className="text-red-600">Supprimer définitivement</strong>
                         </div>
                     </div>
                     <AlertDialogFooter>
@@ -1231,9 +466,9 @@ export default function Show() {
                         <AlertDialogAction
                             onClick={confirmDeleteDemandeur}
                             disabled={isDeleting}
-                            className={deleteType === 'definitif' ? 'bg-red-600 hover:bg-red-700' : ''}
+                            className={deleteType === 'definitif' ? 'bg-red-600' : ''}
                         >
-                            {isDeleting ? 'Suppression...' : deleteType === 'dossier' ? 'Retirer du dossier' : 'Supprimer définitivement'}
+                            {isDeleting ? 'Suppression...' : deleteType === 'dossier' ? 'Retirer' : 'Supprimer'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
