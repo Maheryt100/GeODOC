@@ -5,7 +5,6 @@ namespace App\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class UploadService
 {
@@ -96,172 +95,9 @@ class UploadService
     public static function generateSecureFileName(string $originalName): string
     {
         $extension = pathinfo($originalName, PATHINFO_EXTENSION);
-        $baseNameSecure = Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
+        $baseNameSecure = \Illuminate\Support\Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
         
-        return $baseNameSecure . '_' . Str::uuid() . '.' . $extension;
-    }
-
-    /**
-     * Compresser une image si nécessaire
-     */
-    public static function optimizeImage(UploadedFile $file, string $destinationPath): bool
-    {
-        $extension = strtolower($file->getClientOriginalExtension());
-        
-        if (!in_array($extension, self::ALLOWED_IMAGES)) {
-            return false;
-        }
-
-        try {
-            $image = match($extension) {
-                'jpg', 'jpeg' => imagecreatefromjpeg($file->getRealPath()),
-                'png' => imagecreatefrompng($file->getRealPath()),
-                'gif' => imagecreatefromgif($file->getRealPath()),
-                'webp' => imagecreatefromwebp($file->getRealPath()),
-                default => false,
-            };
-
-            if (!$image) {
-                return false;
-            }
-
-            // Redimensionner si trop grande (max 2000px)
-            $width = imagesx($image);
-            $height = imagesy($image);
-            $maxDimension = 2000;
-
-            if ($width > $maxDimension || $height > $maxDimension) {
-                $ratio = min($maxDimension / $width, $maxDimension / $height);
-                $newWidth = (int)($width * $ratio);
-                $newHeight = (int)($height * $ratio);
-
-                $resized = imagecreatetruecolor($newWidth, $newHeight);
-                
-                // Préserver la transparence pour PNG
-                if ($extension === 'png') {
-                    imagealphablending($resized, false);
-                    imagesavealpha($resized, true);
-                }
-                
-                imagecopyresampled(
-                    $resized, $image,
-                    0, 0, 0, 0,
-                    $newWidth, $newHeight,
-                    $width, $height
-                );
-                
-                $image = $resized;
-            }
-
-            // Sauvegarder avec compression
-            $fullPath = Storage::disk('public')->path($destinationPath);
-            $dir = dirname($fullPath);
-            
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-
-            $saved = match($extension) {
-                'jpg', 'jpeg' => imagejpeg($image, $fullPath, 85),
-                'png' => imagepng($image, $fullPath, 8),
-                'gif' => imagegif($image, $fullPath),
-                'webp' => imagewebp($image, $fullPath, 85),
-                default => false,
-            };
-
-            imagedestroy($image);
-            
-            return $saved;
-            
-        } catch (\Exception $e) {
-            Log::error('Erreur optimisation image', [
-                'error' => $e->getMessage(),
-                'file' => $file->getClientOriginalName()
-            ]);
-            return false;
-        }
-    }
-
-    /**
-     * Créer un thumbnail pour une image
-     */
-    public static function createThumbnail(
-        string $sourcePath,
-        string $thumbnailPath,
-        int $maxWidth = 200,
-        int $maxHeight = 200
-    ): bool {
-        try {
-            $fullSourcePath = Storage::disk('public')->path($sourcePath);
-            
-            if (!file_exists($fullSourcePath)) {
-                return false;
-            }
-
-            $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
-            
-            $image = match($extension) {
-                'jpg', 'jpeg' => imagecreatefromjpeg($fullSourcePath),
-                'png' => imagecreatefrompng($fullSourcePath),
-                'gif' => imagecreatefromgif($fullSourcePath),
-                'webp' => imagecreatefromwebp($fullSourcePath),
-                default => false,
-            };
-
-            if (!$image) {
-                return false;
-            }
-
-            $width = imagesx($image);
-            $height = imagesy($image);
-            
-            // Calculer les nouvelles dimensions
-            $ratio = min($maxWidth / $width, $maxHeight / $height);
-            $newWidth = (int)($width * $ratio);
-            $newHeight = (int)($height * $ratio);
-
-            $thumbnail = imagecreatetruecolor($newWidth, $newHeight);
-            
-            // Préserver la transparence
-            if ($extension === 'png') {
-                imagealphablending($thumbnail, false);
-                imagesavealpha($thumbnail, true);
-            }
-            
-            imagecopyresampled(
-                $thumbnail, $image,
-                0, 0, 0, 0,
-                $newWidth, $newHeight,
-                $width, $height
-            );
-
-            $fullThumbnailPath = Storage::disk('public')->path($thumbnailPath);
-            $dir = dirname($fullThumbnailPath);
-            
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-
-            $saved = match($extension) {
-                'jpg', 'jpeg' => imagejpeg($thumbnail, $fullThumbnailPath, 85),
-                'png' => imagepng($thumbnail, $fullThumbnailPath, 8),
-                'gif' => imagegif($thumbnail, $fullThumbnailPath),
-                'webp' => imagewebp($thumbnail, $fullThumbnailPath, 85),
-                default => false,
-            };
-
-            imagedestroy($image);
-            imagedestroy($thumbnail);
-            
-            return $saved;
-            
-        } catch (\Exception $e) {
-            Log::error('Erreur création thumbnail', [
-                'error' => $e->getMessage(),
-                'source' => $sourcePath
-            ]);
-            return false;
-        }
+        return $baseNameSecure . '_' . \Illuminate\Support\Str::uuid() . '.' . $extension;
     }
 
     /**
@@ -277,15 +113,21 @@ class UploadService
             foreach ($files as $file) {
                 // Vérifier si le fichier est référencé dans la base
                 $nomFichier = basename($file);
-                $exists = \App\Models\PieceJointe::where('nom_fichier', $nomFichier)->exists();
                 
-                if (!$exists) {
-                    Storage::disk('public')->delete($file);
-                    $deleted++;
+                if (class_exists(\App\Models\PieceJointe::class)) {
+                    $exists = \App\Models\PieceJointe::where('nom_fichier', $nomFichier)
+                        ->orWhere('chemin', $file)
+                        ->exists();
+                    
+                    if (!$exists) {
+                        Storage::disk('public')->delete($file);
+                        $deleted++;
+                        Log::info('Fichier orphelin supprimé', ['file' => $file]);
+                    }
                 }
             }
             
-            Log::info("Nettoyage fichiers orphelins", ['deleted' => $deleted]);
+            Log::info("Nettoyage fichiers orphelins terminé", ['deleted' => $deleted]);
             
         } catch (\Exception $e) {
             Log::error('Erreur nettoyage fichiers', ['error' => $e->getMessage()]);

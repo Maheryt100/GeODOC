@@ -99,7 +99,7 @@ class Propriete extends Model
         }
 
         if ($this->numero_dep_vol) {
-            return "{$this->dep_vol}:{$this->numero_dep_vol}";
+            return "{$this->dep_vol} n°{$this->numero_dep_vol}";
         }
 
         return $this->dep_vol;

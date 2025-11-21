@@ -325,7 +325,7 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
                 ->middleware('district.access:create')
                 ->name('upload');
             
-            // Lister
+            // Lister (avec filtres)
             Route::get('/', [PieceJointeController::class, 'index'])
                 ->name('index');
             
@@ -333,9 +333,14 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             Route::get('/{id}/download', [PieceJointeController::class, 'download'])
                 ->name('download');
             
-            // Visualiser
+            // Visualiser (inline)
             Route::get('/{id}/view', [PieceJointeController::class, 'view'])
                 ->name('view');
+            
+            // Mettre à jour les métadonnées
+            Route::put('/{id}', [PieceJointeController::class, 'update'])
+                ->middleware('district.access:update')
+                ->name('update');
             
             // Supprimer
             Route::delete('/{id}', [PieceJointeController::class, 'destroy'])

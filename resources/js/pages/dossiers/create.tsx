@@ -39,11 +39,7 @@ export default function Create() {
                     mode="create"
                 />
             </div>
-            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
-                <p className="text-sm text-blue-700 dark:text-blue-400">
-                    Les pièces jointes pourront être ajoutées après la création du dossier
-                </p>
-            </div>
+            
         </AppLayout>
     );
 }

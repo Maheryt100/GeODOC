@@ -8,9 +8,18 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
+
+/**
+ * @property int $id
+ * @property string $nom_original
+ * ...
+ */
+
 class PieceJointe extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'pieces_jointes';
 
     protected $fillable = [
         'attachable_type',
@@ -76,7 +85,10 @@ class PieceJointe extends Model
      */
     public function getUrlAttribute(): string
     {
-        return route('pieces-jointes.download', $this->id);
+        if (!$this->exists || !$this->getKey()) {
+            return '#';
+        }
+        return route('pieces-jointes.download', ['id' => $this->getKey()]);
     }
 
     /**
@@ -84,7 +96,7 @@ class PieceJointe extends Model
      */
     public function getTailleFormateeAttribute(): string
     {
-        $bytes = $this->taille;
+        $bytes = (int)$this->taille;
         
         if ($bytes >= 1073741824) {
             return number_format($bytes / 1073741824, 2) . ' GB';
@@ -102,7 +114,9 @@ class PieceJointe extends Model
      */
     public function getIconeAttribute(): string
     {
-        return match(strtolower($this->extension)) {
+        $ext = strtolower($this->extension ?? '');
+        
+        return match($ext) {
             'pdf' => 'file-text',
             'doc', 'docx' => 'file-text',
             'xls', 'xlsx' => 'file-spreadsheet',
@@ -117,9 +131,9 @@ class PieceJointe extends Model
     /**
      * Vérifier si le fichier existe physiquement
      */
-    public function exists(): bool
+    public function fileExists(): bool
     {
-        return Storage::disk('public')->exists($this->chemin);
+        return Storage::disk('public')->exists($this->chemin ?? '');
     }
 
     /**
@@ -127,6 +141,9 @@ class PieceJointe extends Model
      */
     public function getFullPath(): string
     {
+        if (!$this->chemin) {
+            return '';
+        }
         return Storage::disk('public')->path($this->chemin);
     }
 
@@ -135,7 +152,10 @@ class PieceJointe extends Model
      */
     public function getPublicUrl(): string
     {
-        return Storage::disk('public')->url($this->chemin);
+        if (!$this->chemin) {
+            return '';
+        }
+        return asset('storage/' . $this->chemin);
     }
 
     /**
@@ -145,7 +165,7 @@ class PieceJointe extends Model
     {
         return $this->update([
             'is_verified' => true,
-            'verified_by' => $userId,
+            'verified_by' => $userId ?? auth()->id(),
             'verified_at' => now(),
         ]);
     }
@@ -167,7 +187,8 @@ class PieceJointe extends Model
      */
     public function isImage(): bool
     {
-        return in_array(strtolower($this->extension), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
+        $ext = strtolower($this->extension ?? '');
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
     }
 
     /**
@@ -175,7 +196,7 @@ class PieceJointe extends Model
      */
     public function isPdf(): bool
     {
-        return strtolower($this->extension) === 'pdf';
+        return strtolower($this->extension ?? '') === 'pdf';
     }
 
     /**
@@ -183,11 +204,48 @@ class PieceJointe extends Model
      */
     public function deleteFile(): bool
     {
-        if ($this->exists()) {
-            Storage::disk('public')->delete($this->chemin);
+        try {
+            if ($this->fileExists()) {
+                Storage::disk('public')->delete($this->chemin);
+            }
+            
+            return (bool)$this->delete();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Erreur suppression fichier', [
+                'piece_id' => $this->getKey(),
+                'chemin' => $this->chemin,
+                'error' => $e->getMessage()
+            ]);
+            
+            return false;
         }
-        
-        return $this->delete();
+    }
+
+    // ============ SCOPES ============
+
+    public function scopeVerified($query)
+    {
+        return $query->where('is_verified', true);
+    }
+
+    public function scopeNotVerified($query)
+    {
+        return $query->where('is_verified', false);
+    }
+
+    public function scopeByType($query, string $type)
+    {
+        return $query->where('type_document', $type);
+    }
+
+    public function scopeByUser($query, int $userId)
+    {
+        return $query->where('id_user', $userId);
+    }
+
+    public function scopeByDistrict($query, int $districtId)
+    {
+        return $query->where('id_district', $districtId);
     }
 
     // ============ BOOT ============
@@ -198,8 +256,15 @@ class PieceJointe extends Model
 
         // Supprimer le fichier physique lors de la suppression définitive
         static::forceDeleting(function (PieceJointe $piece) {
-            if ($piece->exists()) {
-                Storage::disk('public')->delete($piece->chemin);
+            try {
+                if ($piece->fileExists()) {
+                    Storage::disk('public')->delete($piece->chemin);
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Erreur suppression fichier lors du forceDelete', [
+                    'piece_id' => $piece->getKey(),
+                    'error' => $e->getMessage()
+                ]);
             }
         });
     }

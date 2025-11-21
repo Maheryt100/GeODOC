@@ -30,17 +30,35 @@ interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
 }
 
+// ✅ Interface unifiée et complète
 interface PageProps {
     dossier: Dossier & {
         demandeurs: Demandeur[];
         proprietes: Propriete[];
+        pieces_jointes_count?: number;
+    };
+    permissions?: {
+        canEdit: boolean;
+        canDelete: boolean;
+        canClose: boolean;
+        canArchive: boolean;
+        canExport: boolean;
     };
     [key: string]: any;
 }
 
 export default function Show() {
-    const { dossier } = usePage<PageProps>().props;
+    const { dossier, permissions } = usePage<PageProps>().props;
     const { flash } = usePage<SharedData>().props;
+
+    const userPermissions = permissions || {
+        canEdit: true,
+        canDelete: true,
+        canClose: true,
+        canArchive: true,
+        canExport: true,
+    };
+    
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteType, setDeleteType] = useState<'dossier' | 'definitif'>('dossier');
     const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
@@ -125,19 +143,6 @@ export default function Show() {
             router.delete(route('proprietes.destroy', id), {
                 preserveScroll: true,
                 onSuccess: () => toast.success('Propriété supprimée'),
-                onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
-            });
-        }
-    };
-
-    const handleDissociate = (demandeurId: number, proprieteId: number, demandeurNom: string) => {
-        if (confirm(`Dissocier ${demandeurNom} de cette propriété ?`)) {
-            router.post(route('association.dissociate'), {
-                id_demandeur: demandeurId,
-                id_propriete: proprieteId,
-            }, {
-                preserveScroll: true,
-                onSuccess: () => toast.success('Demandeur dissocié'),
                 onError: (errors) => toast.error('Erreur', { description: Object.values(errors).join('\n') })
             });
         }
@@ -381,6 +386,23 @@ export default function Show() {
                     onLinkDemandeur={handleLinkDemandeur}
                     isPropertyIncomplete={isPropertyIncomplete}
                 />
+                
+                {/* ✅ Section Pièces Jointes améliorée - À la fin */}
+                <div className="mt-6">
+                    <AttachmentsSection
+                        attachableType="Dossier"
+                        attachableId={dossier.id}
+                        title="Documents du Dossier"
+                        canUpload={userPermissions.canEdit && !dossier.is_closed}
+                        canDelete={userPermissions.canDelete && !dossier.is_closed}
+                        canVerify={userPermissions.canClose}
+                        initialCount={dossier.pieces_jointes_count || 0}
+                        // ✅ NOUVEAU: Passer les demandeurs et propriétés pour la liaison
+                        demandeurs={allDemandeurs}
+                        proprietes={proprietes}
+                        showRelated={true}
+                    />
+                </div>
             </div>
 
             {/* ✅ Dialogues d'association */}
@@ -453,19 +475,6 @@ export default function Show() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-            {/* Section Pièces Jointes */}
-        <div className="mt-6">
-            <AttachmentsSection
-                attachableType="Dossier"
-                attachableId={dossier.id}
-                title="Documents du Dossier"
-                typeDocument="Document administratif"
-                canUpload={permissions.canEdit && !dossier.is_closed}
-                canDelete={permissions.canDelete && !dossier.is_closed}
-                canVerify={permissions.canClose}
-                initialCount={dossier.pieces_jointes_count || 0}
-            />
-        </div>
         </AppLayout>
     );
 }
