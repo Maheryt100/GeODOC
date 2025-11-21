@@ -21,6 +21,7 @@ interface ProprietesIndexProps {
     onSelectPropriete?: (propriete: Propriete) => void;
     onArchivePropriete: (id: number) => void;
     onUnarchivePropriete: (id: number) => void;
+    onLinkDemandeur?: (propriete: Propriete) => void;
     isPropertyIncomplete: (prop: Propriete) => boolean;
 }
 
@@ -32,7 +33,8 @@ export default function ProprietesIndex({
     onSelectPropriete,
     onArchivePropriete,
     onUnarchivePropriete,
-    isPropertyIncomplete
+    isPropertyIncomplete,
+    onLinkDemandeur
 }: ProprietesIndexProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -121,6 +123,17 @@ export default function ProprietesIndex({
                             <CardTitle>Propriétés</CardTitle>
                             <CardDescription>
                                 Liste des propriétés du dossier ({proprietes.length})
+                       
+                                <span className="ml-2 text-xs block mt-2">
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded"></span>
+                                        <span>Données incomplètes</span>
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 ml-3">
+                                        <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded"></span>
+                                        <span>Sans demandeur</span>
+                                    </span>
+                                </span>
                                 {dossier.is_closed && (
                                     <span className="block mt-1 text-orange-600 dark:text-orange-400 flex items-center gap-1">
                                         <AlertTriangle className="h-3 w-3" />
@@ -130,14 +143,7 @@ export default function ProprietesIndex({
                             </CardDescription>
                         </div>
                         
-                        {demandeurs.length > 0 && !dossier.is_closed && (
-                            <Button asChild size="sm">
-                                <Link href={route('lier-demandeur.create', dossier.id)}>
-                                    <Link2 className="mr-2 h-4 w-4" />
-                                    Lier un demandeur à un lot
-                                </Link>
-                            </Button>
-                        )}
+                       
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -218,52 +224,48 @@ export default function ProprietesIndex({
                                                                 <Eye className="mr-2 h-4 w-4" />
                                                                 Voir détails
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild>
-                                                                <Link
-                                                                    href={route('proprietes.edit', propriete.id)}
-                                                                    className="flex items-center"
-                                                                >
-                                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                                    Modifier
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild>
-                                                                <Link
-                                                                    href={route('ajouter-demandeur.create', {
-                                                                        id: dossier.id,
-                                                                        id_propriete: propriete.id
-                                                                    })}
-                                                                    className="flex items-center"
-                                                                >
-                                                                    <UserPlus className="mr-2 h-4 w-4" />
-                                                                    Ajouter un demandeur
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            {isArchived ? (
-                                                                <DropdownMenuItem
-                                                                    className="text-blue-600"
-                                                                    onClick={() => onUnarchivePropriete(propriete.id)}
-                                                                >
-                                                                    <ArchiveRestore className="mr-2 h-4 w-4" />
-                                                                    Désarchiver
-                                                                </DropdownMenuItem>
-                                                            ) : (
-                                                                <DropdownMenuItem
-                                                                    className="text-green-600"
-                                                                    onClick={() => onArchivePropriete(propriete.id)}
-                                                                >
-                                                                    <Archive className="mr-2 h-4 w-4" />
-                                                                    Archiver (acquise)
-                                                                </DropdownMenuItem>
+                                                            {!dossier.is_closed && (
+                                                                <>
+                                                                    <DropdownMenuItem asChild>
+                                                                        <Link
+                                                                            href={route('proprietes.edit', propriete.id)}
+                                                                            className="flex items-center"
+                                                                        >
+                                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                                            Modifier
+                                                                        </Link>
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => onLinkDemandeur?.(propriete)}>
+                                                                        <Link2 className="mr-2 h-4 w-4" />
+                                                                        Lier un demandeur
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    {isArchived ? (
+                                                                        <DropdownMenuItem
+                                                                            className="text-blue-600"
+                                                                            onClick={() => onUnarchivePropriete(propriete.id)}
+                                                                        >
+                                                                            <ArchiveRestore className="mr-2 h-4 w-4" />
+                                                                            Désarchiver
+                                                                        </DropdownMenuItem>
+                                                                    ) : (
+                                                                        <DropdownMenuItem
+                                                                            className="text-green-600"
+                                                                            onClick={() => onArchivePropriete(propriete.id)}
+                                                                        >
+                                                                            <Archive className="mr-2 h-4 w-4" />
+                                                                            Archiver (acquise)
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    <DropdownMenuItem
+                                                                        className="text-red-500"
+                                                                        onClick={() => onDeletePropriete(propriete.id)}
+                                                                    >
+                                                                        <Trash className="mr-2 h-4 w-4" />
+                                                                        Supprimer
+                                                                    </DropdownMenuItem>
+                                                                </>
                                                             )}
-                                                            <DropdownMenuItem
-                                                                className="text-red-500"
-                                                                onClick={() => onDeletePropriete(propriete.id)}
-                                                            >
-                                                                <Trash className="mr-2 h-4 w-4" />
-                                                                Supprimer
-                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </td>

@@ -31,49 +31,40 @@ class DemandeurProprieteController extends Controller
 
     /**
      * 1. NOUVEAU LOT : Enregistrer le nouveau lot (propriété + demandeurs)
-     * ✅ CORRECTION MAJEURE : Nettoyage des données et validation stricte
+     * CORRECTION MAJEURE : Nettoyage des données et validation stricte
      */
     public function store(Request $request)
     {
-        // ✅ FIX 1: Décoder et nettoyer les demandeurs JSON
+        // Décoder les demandeurs JSON
         $demandeurs = json_decode($request->demandeurs_json, true);
         
         if (!$demandeurs || !is_array($demandeurs) || count($demandeurs) === 0) {
             return back()->withErrors(['demandeurs' => 'Au moins un demandeur est requis']);
         }
 
-        Log::info('📥 Données reçues', [
+        Log::info('Nouveau lot - données reçues', [
             'propriete' => $request->except('demandeurs_json'),
             'demandeurs_count' => count($demandeurs),
-            'premier_demandeur' => $demandeurs[0] ?? null
         ]);
         
-        // ✅ FIX 2: Validation stricte de la propriété
+        // Validation de la propriété
         $request->validate([
             'lot' => 'required|string|max:15',
             'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
             'vocation' => 'required|in:Edilitaire,Agricole,Forestière,Touristique',
             'type_operation' => 'required|in:morcellement,immatriculation',
             'id_dossier' => 'required|numeric|exists:dossiers,id',
-        ], [
-            'lot.required' => 'Le numéro de lot est obligatoire',
-            'nature.required' => 'La nature est obligatoire',
-            'vocation.required' => 'La vocation est obligatoire',
-            'type_operation.required' => 'Le type d\'opération est obligatoire',
         ]);
         
-        // ✅ FIX 3: Validation détaillée de chaque demandeur
+        // Validation des demandeurs
         foreach ($demandeurs as $index => $demandeur) {
             $num = $index + 1;
             
             // Nettoyer les valeurs vides
-            $demandeur = array_map(function($value) {
-                return $value === '' ? null : $value;
-            }, $demandeur);
+            $demandeur = array_map(fn($v) => $v === '' ? null : $v, $demandeur);
             
             if (empty($demandeur['titre_demandeur'])) {
-                Log::error("❌ Demandeur $num: titre manquant", ['data' => $demandeur]);
-                return back()->withErrors(['demandeurs' => "Demandeur $num: Le titre de civilité est obligatoire"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le titre est obligatoire"]);
             }
             if (empty($demandeur['nom_demandeur'])) {
                 return back()->withErrors(['demandeurs' => "Demandeur $num: Le nom est obligatoire"]);
@@ -88,15 +79,18 @@ class DemandeurProprieteController extends Controller
                 return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN est obligatoire"]);
             }
             if (!preg_match('/^\d{12}$/', $demandeur['cin'])) {
-                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN doit contenir exactement 12 chiffres (actuellement: " . strlen($demandeur['cin']) . " caractères)"]);
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN doit contenir 12 chiffres"]);
             }
             
-            // Vérifier l'unicité du CIN
-            if (Demandeur::where('cin', $demandeur['cin'])->exists()) {
-                return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN {$demandeur['cin']} existe déjà"]);
+            // Vérifier les doublons de CIN DANS LA REQUÊTE ACTUELLE
+            $cinDuplicates = array_filter($demandeurs, fn($d, $idx) => 
+                $idx !== $index && ($d['cin'] ?? '') === $demandeur['cin']
+            , ARRAY_FILTER_USE_BOTH);
+            
+            if (count($cinDuplicates) > 0) {
+                return back()->withErrors(['demandeurs' => "Demandeur $num: Ce CIN est utilisé plusieurs fois dans le formulaire"]);
             }
             
-            // Mettre à jour le tableau nettoyé
             $demandeurs[$index] = $demandeur;
         }
 
@@ -105,7 +99,7 @@ class DemandeurProprieteController extends Controller
         try {
             $id_user = Auth::id();
             
-            // ✅ FIX 4: Créer la propriété avec nettoyage des valeurs vides
+            // Créer la propriété
             $proprieteData = [
                 'lot' => $request->lot,
                 'propriete_mere' => $request->propriete_mere ?: null,
@@ -129,94 +123,148 @@ class DemandeurProprieteController extends Controller
                 'status' => true,
             ];
 
-            Log::info('✅ Création propriété', $proprieteData);
+            Log::info('Création propriété', $proprieteData);
             $propriete = Propriete::create($proprieteData);
 
-            // ✅ FIX 5: Création des demandeurs avec logging détaillé
+            // Traiter chaque demandeur (créer OU mettre à jour)
+            $demandeursTraites = [];
+            
             foreach ($demandeurs as $index => $demandeurData) {
-                Log::info("👤 Création demandeur " . ($index + 1), [
-                    'titre' => $demandeurData['titre_demandeur'] ?? 'MANQUANT',
-                    'nom' => $demandeurData['nom_demandeur'] ?? 'MANQUANT',
-                    'cin' => $demandeurData['cin'] ?? 'MANQUANT'
+                $num = $index + 1;
+                Log::info("👤 Traitement demandeur $num", [
+                    'cin' => $demandeurData['cin'],
+                    'nom' => $demandeurData['nom_demandeur'],
                 ]);
 
-                // Nettoyer toutes les valeurs vides
-                $cleanData = [];
-                foreach ($demandeurData as $key => $value) {
-                    $cleanData[$key] = ($value === '' || $value === null) ? null : $value;
+                // Nettoyer les données
+                $cleanData = array_map(fn($v) => ($v === '' || $v === null) ? null : $v, $demandeurData);
+
+                // CORRECTION MAJEURE : Vérifier si le demandeur existe déjà
+                $demandeurExistant = Demandeur::where('cin', $cleanData['cin'])->first();
+                
+                if ($demandeurExistant) {
+                    // METTRE À JOUR les informations si modifiées
+                    Log::info("Demandeur existant trouvé, mise à jour", [
+                        'id' => $demandeurExistant->id,
+                        'cin' => $demandeurExistant->cin
+                    ]);
+                    
+                    $demandeurExistant->update([
+                        'titre_demandeur' => $cleanData['titre_demandeur'],
+                        'nom_demandeur' => $cleanData['nom_demandeur'],
+                        'prenom_demandeur' => $cleanData['prenom_demandeur'],
+                        'date_naissance' => $cleanData['date_naissance'],
+                        'lieu_naissance' => $cleanData['lieu_naissance'] ?? $demandeurExistant->lieu_naissance,
+                        'sexe' => $cleanData['sexe'] ?? $demandeurExistant->sexe,
+                        'occupation' => $cleanData['occupation'] ?? $demandeurExistant->occupation,
+                        'nom_pere' => $cleanData['nom_pere'] ?? $demandeurExistant->nom_pere,
+                        'nom_mere' => $cleanData['nom_mere'] ?? $demandeurExistant->nom_mere,
+                        'date_delivrance' => $cleanData['date_delivrance'] ?? $demandeurExistant->date_delivrance,
+                        'lieu_delivrance' => $cleanData['lieu_delivrance'] ?? $demandeurExistant->lieu_delivrance,
+                        'date_delivrance_duplicata' => $cleanData['date_delivrance_duplicata'] ?? $demandeurExistant->date_delivrance_duplicata,
+                        'lieu_delivrance_duplicata' => $cleanData['lieu_delivrance_duplicata'] ?? $demandeurExistant->lieu_delivrance_duplicata,
+                        'domiciliation' => $cleanData['domiciliation'] ?? $demandeurExistant->domiciliation,
+                        'nationalite' => $cleanData['nationalite'] ?? $demandeurExistant->nationalite,
+                        'situation_familiale' => $cleanData['situation_familiale'] ?? $demandeurExistant->situation_familiale,
+                        'regime_matrimoniale' => $cleanData['regime_matrimoniale'] ?? $demandeurExistant->regime_matrimoniale,
+                        'date_mariage' => $cleanData['date_mariage'] ?? $demandeurExistant->date_mariage,
+                        'lieu_mariage' => $cleanData['lieu_mariage'] ?? $demandeurExistant->lieu_mariage,
+                        'marie_a' => $cleanData['marie_a'] ?? $demandeurExistant->marie_a,
+                        'telephone' => $cleanData['telephone'] ?? $demandeurExistant->telephone,
+                    ]);
+                    
+                    $demandeur = $demandeurExistant;
+                    
+                } else {
+                    // CRÉER un nouveau demandeur
+                    Log::info("Création nouveau demandeur", [
+                        'cin' => $cleanData['cin'],
+                        'nom' => $cleanData['nom_demandeur']
+                    ]);
+                    
+                    $demandeur = Demandeur::create([
+                        'titre_demandeur' => $cleanData['titre_demandeur'],
+                        'nom_demandeur' => $cleanData['nom_demandeur'],
+                        'prenom_demandeur' => $cleanData['prenom_demandeur'],
+                        'date_naissance' => $cleanData['date_naissance'],
+                        'cin' => $cleanData['cin'],
+                        'lieu_naissance' => $cleanData['lieu_naissance'],
+                        'sexe' => $cleanData['sexe'],
+                        'occupation' => $cleanData['occupation'],
+                        'nom_pere' => $cleanData['nom_pere'],
+                        'nom_mere' => $cleanData['nom_mere'],
+                        'date_delivrance' => $cleanData['date_delivrance'],
+                        'lieu_delivrance' => $cleanData['lieu_delivrance'],
+                        'date_delivrance_duplicata' => $cleanData['date_delivrance_duplicata'],
+                        'lieu_delivrance_duplicata' => $cleanData['lieu_delivrance_duplicata'],
+                        'domiciliation' => $cleanData['domiciliation'],
+                        'nationalite' => $cleanData['nationalite'] ?? 'Malagasy',
+                        'situation_familiale' => $cleanData['situation_familiale'] ?? 'Non spécifiée',
+                        'regime_matrimoniale' => $cleanData['regime_matrimoniale'] ?? 'Non spécifié',
+                        'date_mariage' => $cleanData['date_mariage'],
+                        'lieu_mariage' => $cleanData['lieu_mariage'],
+                        'marie_a' => $cleanData['marie_a'],
+                        'telephone' => $cleanData['telephone'],
+                        'id_user' => $id_user,
+                    ]);
                 }
 
-                // ✅ FIX 6: Création avec données nettoyées et obligatoires explicites
-                $demandeur = Demandeur::create([
-                    'titre_demandeur' => $cleanData['titre_demandeur'], // ✅ OBLIGATOIRE
-                    'nom_demandeur' => $cleanData['nom_demandeur'], // ✅ OBLIGATOIRE
-                    'prenom_demandeur' => $cleanData['prenom_demandeur'], // ✅ OBLIGATOIRE
-                    'date_naissance' => $cleanData['date_naissance'], // ✅ OBLIGATOIRE
-                    'cin' => $cleanData['cin'], // ✅ OBLIGATOIRE
-                    'lieu_naissance' => $cleanData['lieu_naissance'] ?? null,
-                    'sexe' => $cleanData['sexe'] ?? null,
-                    'occupation' => $cleanData['occupation'] ?? null,
-                    'nom_pere' => $cleanData['nom_pere'] ?? null,
-                    'nom_mere' => $cleanData['nom_mere'] ?? null,
-                    'date_delivrance' => $cleanData['date_delivrance'] ?? null,
-                    'lieu_delivrance' => $cleanData['lieu_delivrance'] ?? null,
-                    'date_delivrance_duplicata' => $cleanData['date_delivrance_duplicata'] ?? null,
-                    'lieu_delivrance_duplicata' => $cleanData['lieu_delivrance_duplicata'] ?? null,
-                    'domiciliation' => $cleanData['domiciliation'] ?? null,
-                    'nationalite' => $cleanData['nationalite'] ?? 'Malagasy',
-                    'situation_familiale' => $cleanData['situation_familiale'] ?? 'Non spécifiée',
-                    'regime_matrimoniale' => $cleanData['regime_matrimoniale'] ?? 'Non spécifié',
-                    'date_mariage' => $cleanData['date_mariage'] ?? null,
-                    'lieu_mariage' => $cleanData['lieu_mariage'] ?? null,
-                    'marie_a' => $cleanData['marie_a'] ?? null,
-                    'telephone' => $cleanData['telephone'] ?? null,
-                    'id_user' => $id_user,
-                ]);
-
-                Log::info("✅ Demandeur créé", [
+                Log::info("Demandeur traité", [
                     'id' => $demandeur->id,
-                    'titre' => $demandeur->titre_demandeur,
-                    'nom' => $demandeur->nom_demandeur
+                    'action' => $demandeurExistant ? 'mis à jour' : 'créé'
                 ]);
 
-                // Liaisons intermédiaires
-                Contenir::create([
+                //  Ajouter au dossier (si pas déjà présent)
+                Contenir::firstOrCreate([
                     'id_demandeur' => $demandeur->id,
                     'id_dossier' => $request->id_dossier,
                 ]);
 
-                Demander::create([
-                    'id_demandeur' => $demandeur->id,
-                    'id_propriete' => $propriete->id,
-                    'id_user' => $id_user,
-                    'status' => 'active',
-                    'status_consort' => count($demandeurs) > 1,
-                    'total_prix' => 0,
-                ]);
+                //  Lier à la propriété (vérifier les doublons)
+                $liaisonExistante = Demander::where('id_demandeur', $demandeur->id)
+                    ->where('id_propriete', $propriete->id)
+                    ->exists();
+                
+                if (!$liaisonExistante) {
+                    Demander::create([
+                        'id_demandeur' => $demandeur->id,
+                        'id_propriete' => $propriete->id,
+                        'id_user' => $id_user,
+                        'status' => 'active',
+                        'status_consort' => count($demandeurs) > 1,
+                        'total_prix' => 0,
+                    ]);
+                }
+                
+                $demandeursTraites[] = $demandeur->nom_demandeur;
             }
 
             DB::commit();
             
             Log::info('🎉 Création complète réussie', [
                 'propriete_id' => $propriete->id,
-                'demandeurs_count' => count($demandeurs)
+                'demandeurs_count' => count($demandeursTraites),
+                'demandeurs' => $demandeursTraites
             ]);
             
+            $message = count($demandeurs) > 1 
+                ? count($demandeurs) . ' demandeurs liés à la propriété avec succès'
+                : 'Demandeur et propriété créés avec succès';
+            
             return Redirect::route('dossiers.show', $request->id_dossier)
-                ->with('success', count($demandeurs) . ' demandeur(s) et propriété créés avec succès');
+                ->with('success', $message);
                 
         } catch (\Exception $e) {
             DB::rollBack();
-            
-            Log::error('❌ Erreur création', [
+        
+            Log::error('Erreur création', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
             
-            return back()->withErrors(['error' => 'Erreur lors de la création : ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }
-
     /**
      * Vérifier si une propriété est archivée
      */
@@ -238,7 +286,7 @@ class DemandeurProprieteController extends Controller
      */
     private function getBlockedActionMessage(Propriete $propriete, string $action): string
     {
-        return "🔒 Impossible d'effectuer l'action '{$action}' : la propriété Lot {$propriete->lot} est archivée (acquise).";
+        return " Impossible d'effectuer l'action '{$action}' : la propriété Lot {$propriete->lot} est archivée (acquise).";
     }
 
     /**

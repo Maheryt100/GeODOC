@@ -2,15 +2,115 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Contenir;
 use App\Models\Demander;
 use App\Models\Demandeur;
 use App\Models\Propriete;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class AssociationController extends Controller
 {
+    /**
+     * ✅ NOUVELLE ROUTE UNIFIÉE : Lier un demandeur à une propriété
+     * Remplace les anciennes routes complexes
+     */
+    public function link(Request $request)
+    {
+        $validated = $request->validate([
+            'id_demandeur' => 'required|exists:demandeurs,id',
+            'id_propriete' => 'required|exists:proprietes,id',
+            'id_dossier' => 'required|exists:dossiers,id',
+        ]);
+
+        DB::beginTransaction();
+        
+        try {
+            $demandeur = Demandeur::findOrFail($validated['id_demandeur']);
+            $propriete = Propriete::findOrFail($validated['id_propriete']);
+            
+            // Vérifier que la propriété appartient au dossier
+            if ($propriete->id_dossier != $validated['id_dossier']) {
+                DB::rollBack();
+                return back()->withErrors(['error' => 'La propriété n\'appartient pas à ce dossier']);
+            }
+            
+            // Vérifier que la propriété n'est pas archivée
+            $isArchived = Demander::where('id_propriete', $propriete->id)
+                ->where('status', 'archive')
+                ->exists();
+                
+            if ($isArchived) {
+                DB::rollBack();
+                return back()->withErrors(['error' => 'Cette propriété est archivée (acquise)']);
+            }
+            
+            // Vérifier que l'association n'existe pas déjà
+            $existingLink = Demander::where('id_demandeur', $validated['id_demandeur'])
+                ->where('id_propriete', $validated['id_propriete'])
+                ->exists();
+                
+            if ($existingLink) {
+                DB::rollBack();
+                return back()->withErrors(['error' => 'Ce demandeur est déjà lié à cette propriété']);
+            }
+            
+            // Vérifier que le demandeur est dans le dossier
+            $demandeInDossier = Contenir::where('id_demandeur', $validated['id_demandeur'])
+                ->where('id_dossier', $validated['id_dossier'])
+                ->exists();
+                
+            if (!$demandeInDossier) {
+                // Ajouter le demandeur au dossier s'il n'y est pas
+                Contenir::create([
+                    'id_demandeur' => $validated['id_demandeur'],
+                    'id_dossier' => $validated['id_dossier'],
+                ]);
+            }
+            
+            // Compter les demandeurs existants pour définir status_consort
+            $demandeursCount = Demander::where('id_propriete', $validated['id_propriete'])
+                ->where('status', 'active')
+                ->count();
+            
+            // Créer l'association
+            Demander::create([
+                'id_demandeur' => $validated['id_demandeur'],
+                'id_propriete' => $validated['id_propriete'],
+                'id_user' => Auth::id(),
+                'status' => 'active',
+                'status_consort' => $demandeursCount > 0,
+                'total_prix' => 0,
+            ]);
+            
+            // Mettre à jour le statut de la propriété
+            $propriete->update(['status' => true]);
+            
+            DB::commit();
+            
+            Log::info('Association créée', [
+                'demandeur_id' => $validated['id_demandeur'],
+                'propriete_id' => $validated['id_propriete'],
+                'user_id' => Auth::id()
+            ]);
+            
+            return back()->with('success', 'Association créée avec succès');
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur création association', [
+                'data' => $validated,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->withErrors(['error' => 'Erreur lors de la création : ' . $e->getMessage()]);
+        }
+    }
+
     /**
      * Obtenir les propriétés associées à un demandeur
      */
@@ -131,19 +231,13 @@ class AssociationController extends Controller
 
             if (!$demander) {
                 DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Association introuvable ou déjà archivée'
-                ], 404);
+                return back()->withErrors(['error' => 'Association introuvable ou déjà archivée']);
             }
 
             // Vérifier si la propriété est archivée (acquise)
             if ($demander->status === 'archive') {
                 DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Impossible de dissocier : cette propriété a été acquise par ce demandeur'
-                ], 422);
+                return back()->withErrors(['error' => 'Impossible de dissocier : cette propriété a été acquise par ce demandeur']);
             }
 
             // Supprimer l'association
@@ -166,10 +260,7 @@ class AssociationController extends Controller
                 'id_propriete' => $validated['id_propriete']
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Association supprimée avec succès'
-            ]);
+            return back()->with('success', 'Association supprimée avec succès');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -180,10 +271,7 @@ class AssociationController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la dissociation'
-            ], 500);
+            return back()->withErrors(['error' => 'Erreur lors de la dissociation']);
         }
     }
 }

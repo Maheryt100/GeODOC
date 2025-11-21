@@ -37,7 +37,7 @@ class DossierController extends Controller
         $query = Dossier::withCount(['demandeurs', 'proprietes'])
             ->with(['closedBy:id,name']);
 
-        // ✅ CRITIQUE : Appliquer le filtre de district
+        // CRITIQUE : Appliquer le filtre de district
         $query = $this->applyDistrictFilter($query);
 
         // Filtrer par statut
@@ -51,7 +51,7 @@ class DossierController extends Controller
 
         $dossiers = $query->orderBy('date_descente_debut', 'desc')->get();
         
-        // ✅ CRITIQUE : Utiliser les méthodes sécurisées du trait
+        // CRITIQUE : Utiliser les méthodes sécurisées du trait
         return Inertia::render('dossiers/index', [
             'dossiers' => $dossiers->map(function($dossier) use ($user) {
                 return array_merge($dossier->toArray(), [
@@ -60,7 +60,7 @@ class DossierController extends Controller
                 ]);
             }),
             'districtInfo' => [
-                'nom' => $this->getUserDistrictName($user), // ✅ Méthode NULL-safe
+                'nom' => $this->getUserDistrictName($user), //Méthode NULL-safe
                 'can_see_all' => $user->canAccessAllDistricts(),
             ],
             'userRole' => $user->role_name,
@@ -81,7 +81,7 @@ class DossierController extends Controller
         /** @var User $user */
         $user = Auth::user();
         
-        // ✅ CRITIQUE : Utiliser la méthode du trait
+        // CRITIQUE : Utiliser la méthode du trait
         $districts = $this->getAvailableDistricts($user);
 
         return Inertia::render('dossiers/create', [
@@ -103,18 +103,19 @@ class DossierController extends Controller
 
         $validated = $request->validate([
             'nom_dossier' => 'required|string|max:100',
-            'type_commune' => 'required|string',
+            'type_commune' => 'required|string|in:Commune Urbaine,Commune Rurale',
             'commune' => 'required|string|max:70',
             'fokontany' => 'required|string|max:70',
             'circonscription' => 'required|string|max:50',
             'date_descente_debut' => 'required|date',
             'date_descente_fin' => 'required|date|after_or_equal:date_descente_debut',
+            'date_ouverture' => 'required|date', // Plus de restriction entre les dates
             'id_district' => 'required|numeric|exists:districts,id',
-            'date_ouverture' => 'nullable|date',
+            'numero_ouverture' => 'nullable|string|max:50|unique:dossiers,numero_ouverture',
         ]);
         
         try {
-            // ✅ CRITIQUE : Vérification avec canAccessAllDistricts
+            //  CRITIQUE : Vérification avec canAccessAllDistricts
             if (!$user->canAccessAllDistricts() && $validated['id_district'] != $user->id_district) {
                 return back()->withErrors([
                     'error' => 'Vous ne pouvez créer des dossiers que dans votre district.'
@@ -151,19 +152,41 @@ class DossierController extends Controller
         /** @var User $user */
         $user = Auth::user();
         
+        // $dossier = Dossier::with([
+        //     'demandeurs',
+        //     'closedBy:id,name,email',
+        //     'proprietes' => function ($query) {
+        //         $query->with([
+        //             'demandeurs',
+        //             'demandes' => function ($q) {
+        //                 $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix')
+        //                   ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
+        //             }
+        //         ]);
+        //     }
+        // ])->findOrFail($id);
+
         $dossier = Dossier::with([
             'demandeurs',
             'closedBy:id,name,email',
+            'piecesJointes' => function($q) {
+                $q->orderBy('created_at', 'desc')->limit(50);
+            },
             'proprietes' => function ($query) {
                 $query->with([
                     'demandeurs',
+                    'piecesJointes' => function($q) {
+                        $q->orderBy('created_at', 'desc')->limit(20);
+                    },
                     'demandes' => function ($q) {
                         $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix')
-                          ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
+                        ->with('demandeur:id,nom_demandeur,prenom_demandeur,cin');
                     }
                 ]);
             }
         ])->findOrFail($id);
+        
+        $dossier->pieces_jointes_count = $dossier->piecesJointes->count();
 
         if (!$user->canAccessDossier($dossier)) {
             abort(403, 'Accès refusé à ce dossier');
@@ -206,7 +229,7 @@ class DossierController extends Controller
     /**
      * Édition
      */
-    public function edit($id)
+   public function edit($id)
     {
         $this->authorizeDistrictAccess('update');
         
@@ -222,11 +245,24 @@ class DossierController extends Controller
         
         $this->authorizeDistrictAccess('update', $dossier);
         
-        // ✅ CRITIQUE : Utiliser la méthode du trait
         $districts = $this->getAvailableDistricts($user);
         
+        // ✅ Formater les dates pour les inputs HTML
+        $dossierData = $dossier->toArray();
+        
+        // Formater les dates au format Y-m-d
+        if (isset($dossierData['date_descente_debut'])) {
+            $dossierData['date_descente_debut'] = \Carbon\Carbon::parse($dossierData['date_descente_debut'])->format('Y-m-d');
+        }
+        if (isset($dossierData['date_descente_fin'])) {
+            $dossierData['date_descente_fin'] = \Carbon\Carbon::parse($dossierData['date_descente_fin'])->format('Y-m-d');
+        }
+        if (isset($dossierData['date_ouverture'])) {
+            $dossierData['date_ouverture'] = \Carbon\Carbon::parse($dossierData['date_ouverture'])->format('Y-m-d');
+        }
+        
         return Inertia::render('dossiers/update', [
-            'dossier' => $dossier,
+            'dossier' => $dossierData,
             'districts' => $districts,
             'canChangeDistrict' => $user->canAccessAllDistricts(),
         ]);
@@ -253,17 +289,18 @@ class DossierController extends Controller
 
         $validated = $request->validate([
             'nom_dossier' => 'required|string|max:255',
-            'type_commune' => 'required|string',
+            'type_commune' => 'required|string|in:Commune Urbaine,Commune Rurale',
             'commune' => 'required|string|max:255',
             'fokontany' => 'required|string|max:255',
             'date_descente_debut' => 'required|date',
             'date_descente_fin' => 'required|date|after_or_equal:date_descente_debut',
+            'date_ouverture' => 'required|date', 
             'circonscription' => 'required|string|max:255',
             'id_district' => 'required|exists:districts,id',
-            'date_ouverture' => 'nullable|date',
+            'numero_ouverture' => 'nullable|string|max:50|unique:dossiers,numero_ouverture,' . $id,
         ]);
 
-        // ✅ CRITIQUE : Vérification avec canAccessAllDistricts
+        // CRITIQUE : Vérification avec canAccessAllDistricts
         if (!$user->canAccessAllDistricts() && $validated['id_district'] != $dossier->id_district) {
             return back()->withErrors([
                 'error' => 'Vous ne pouvez pas changer le district du dossier.'
@@ -418,7 +455,7 @@ class DossierController extends Controller
     }
 
     /**
-     * ✅ Vérifier si un utilisateur peut fermer/rouvrir un dossier
+     *  Vérifier si un utilisateur peut fermer/rouvrir un dossier
      */
     private function canCloseDossier(Dossier $dossier, User $user): bool
     {
@@ -434,7 +471,7 @@ class DossierController extends Controller
     }
 
     /**
-     * ✅ Vérifier si un dossier peut être modifié
+     *  Vérifier si un dossier peut être modifié
      */
     private function canModifyDossier(Dossier $dossier, User $user): bool
     {
@@ -450,7 +487,7 @@ class DossierController extends Controller
     }
 
     /**
-     * ✅ Statistiques du district
+     *  Statistiques du district
      */
     private function getDistrictStatsLocal(): array
     {
@@ -459,7 +496,7 @@ class DossierController extends Controller
 
         $query = Dossier::query();
 
-        // ✅ CRITIQUE : Filtrer correctement
+        //  CRITIQUE : Filtrer correctement
         if (!$user->canAccessAllDistricts()) {
             $query->where('id_district', $user->id_district);
         }

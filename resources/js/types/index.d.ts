@@ -41,7 +41,7 @@ export interface SharedData {
     [key: string]: unknown;
 }
 
-// ✅ MODIFIÉ : Ajout du type UserRole
+// MODIFIÉ : Ajout du type UserRole
 export type UserRole = 'super_admin' | 'central_user' | 'admin_district' | 'user_district' | 'user';
 
 export interface User {
@@ -49,7 +49,7 @@ export interface User {
     id: number;
     name: string;
     email: string;
-    role: UserRole; // ✅ Type plus strict
+    role: UserRole; //  Type plus strict
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;
@@ -122,6 +122,7 @@ export interface Dossier {
     proprietes?: Propriete[];
     created_at: string;
     updated_at: string;
+    
 }
 
 export interface Demandeur {

@@ -121,6 +121,8 @@ class ActivityLog extends Model
     const ACTION_VIEW = 'view'; // ✅ AJOUTÉ
     const ACTION_CLOSE = 'close'; // ✅ NOUVEAU
     const ACTION_REOPEN = 'reopen'; // ✅ NOUVEAU
+    const ACTION_UPLOAD = 'upload'; // ✅ NOUVEAU
+    const ACTION_VERIFY = 'verify'; // ✅ NOUVEAU
     
     // Types d'entités
     const ENTITY_DOCUMENT = 'document';
@@ -130,6 +132,7 @@ class ActivityLog extends Model
     const ENTITY_USER = 'user';
     const ENTITY_AUTH = 'auth';
     const ENTITY_DISTRICT = 'district';
+    const ENTITY_PIECE_JOINTE = 'piece_jointe'; // ✅ NOUVEAU
     
     // Types de documents
     const DOC_RECU = 'recu';
@@ -166,6 +169,53 @@ class ActivityLog extends Model
             'user_agent' => request()->userAgent(),
         ]);
     }
+
+    /**
+     * ✅ NOUVEAU : Logger un upload de pièce jointe
+     */
+    public static function logPieceJointeUpload(
+        int $pieceJointeId,
+        string $nomFichier,
+        int $taille,
+        string $attachableType,
+        int $attachableId,
+        int $districtId,
+        ?string $typeDocument = null
+    ): self {
+        return self::logActivity(
+            self::ACTION_UPLOAD,
+            self::ENTITY_PIECE_JOINTE,
+            $pieceJointeId,
+            [
+                'nom_fichier' => $nomFichier,
+                'taille' => $taille,
+                'type_document' => $typeDocument,
+                'attachable_type' => $attachableType,
+                'attachable_id' => $attachableId,
+                'id_district' => $districtId,
+            ]
+        );
+    }
+
+    /**
+     * ✅ NOUVEAU : Logger une vérification de document
+     */
+    public static function logPieceJointeVerification(
+        int $pieceJointeId,
+        string $nomFichier,
+        int $districtId
+    ): self {
+        return self::logActivity(
+            self::ACTION_VERIFY,
+            self::ENTITY_PIECE_JOINTE,
+            $pieceJointeId,
+            [
+                'nom_fichier' => $nomFichier,
+                'id_district' => $districtId,
+            ]
+        );
+    }
+
 
     /**
      * ✅ NOUVEAU : Logger une fermeture de dossier
@@ -270,6 +320,8 @@ class ActivityLog extends Model
             self::ACTION_VIEW => 'Consultation',
             self::ACTION_CLOSE => 'Fermeture', // ✅ NOUVEAU
             self::ACTION_REOPEN => 'Réouverture', // ✅ NOUVEAU
+            self::ACTION_UPLOAD => 'Upload', // ✅ NOUVEAU
+            self::ACTION_VERIFY => 'Vérification', // ✅ NOUVEAU
             default => ucfirst($this->action),
         };
     }
@@ -287,6 +339,7 @@ class ActivityLog extends Model
             self::ENTITY_USER => 'Utilisateur',
             self::ENTITY_AUTH => 'Authentification',
             self::ENTITY_DISTRICT => 'District',
+            self::ENTITY_PIECE_JOINTE => 'Pièce jointe', // ✅ NOUVEAU
             default => ucfirst($this->entity_type),
         };
     }
@@ -336,6 +389,8 @@ class ActivityLog extends Model
             self::ACTION_VIEW => 'slate',
             self::ACTION_LOGIN => 'cyan',
             self::ACTION_LOGOUT => 'gray',
+            self::ACTION_UPLOAD => 'teal', // ✅ NOUVEAU
+            self::ACTION_VERIFY => 'emerald', // ✅ NOUVEAU
             default => 'gray',
         };
     }
@@ -359,6 +414,8 @@ class ActivityLog extends Model
             self::ACTION_VIEW => 'eye',
             self::ACTION_LOGIN => 'log-in',
             self::ACTION_LOGOUT => 'log-out',
+            self::ACTION_UPLOAD => 'upload', // ✅ NOUVEAU
+            self::ACTION_VERIFY => 'check-circle', // ✅ NOUVEAU
             default => 'activity',
         };
     }
@@ -408,6 +465,9 @@ class ActivityLog extends Model
                 ->count(),
             'dossiers_reopened' => $query->where('action', self::ACTION_REOPEN)
                 ->where('entity_type', self::ENTITY_DOSSIER)
+                ->count(),
+            'pieces_jointes_uploaded' => $query->where('action', self::ACTION_UPLOAD)
+                ->where('entity_type', self::ENTITY_PIECE_JOINTE)
                 ->count(),
         ];
     }

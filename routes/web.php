@@ -14,6 +14,7 @@ use App\Http\Controllers\AssociationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\StatController;
+use App\Http\Controllers\PieceJointeController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\PasswordController;
 use Illuminate\Support\Facades\Route;
@@ -185,38 +186,77 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         });
     });
 
-    // ============ ASSOCIATIONS DEMANDEUR-PROPRIÉTÉ ============
+    // ============ ASSOCIATIONS DEMANDEUR-PROPRIÉTÉ - NOUVELLES ROUTES UNIFIÉES ============
     // ✅ Ajouter le middleware check.dossier.closed
+    Route::middleware(['auth', 'district.scope', 'district.access:create', 'check.dossier.closed:modify'])->group(function () {
+        // ✅ NOUVELLE ROUTE UNIFIÉE : Lier un demandeur à une propriété
+        // Usage : association.link (POST)
+        // Remplace les anciennes routes complexes de liaison
+        Route::post('/association/link', [AssociationController::class, 'link'])
+            ->name('association.link');
+    });
+
+    // ✅ Dissocier un demandeur d'une propriété
+    Route::middleware(['auth', 'district.scope', 'district.access:delete', 'check.dossier.closed:modify'])->group(function () {
+        Route::post('/association/dissociate', [AssociationController::class, 'dissociate'])
+            ->name('association.dissociate');
+    });
+
+    // ============ API ENDPOINTS - POUR RÉCUPÉRER LES DONNÉES ============
+    Route::middleware(['auth', 'district.scope'])->group(function () {
+        Route::prefix('api')->name('api.')->group(function () {
+            // ✅ Obtenir les propriétés associées à un demandeur
+            Route::get('/demandeur/{id_demandeur}/proprietes', [AssociationController::class, 'getDemandeurProprietes'])
+                ->name('demandeur.proprietes');
+            
+            // ✅ Obtenir les demandeurs associés à une propriété
+            Route::get('/propriete/{id_propriete}/demandeurs', [AssociationController::class, 'getProprieteDemandeurs'])
+                ->name('propriete.demandeurs');
+        });
+    });
+    
+    // Route::middleware(['district.access:delete', 'check.dossier.closed:modify'])->group(function () {
+    //     Route::post('/demandeur-propriete/dissociate', [DemandeurProprieteController::class, 'dissociate'])
+    //         ->name('demandeur-propriete.dissociate');
+    // });
+    
+    // // Dissocier - Retirer un demandeur d'une propriété
+    // Route::middleware('district.access:delete')->group(function () {
+    //     Route::post('/demandeur-propriete/dissociate', [DemandeurProprieteController::class, 'dissociate'])
+    //         ->name('demandeur-propriete.dissociate');
+    // });
+    
+    // ============ ANCIENNES ROUTES À CONSERVER (compatibilité) ============
+    // ✅ Garder ces routes pour les anciens formulaires qui les utilisent
     Route::middleware(['district.access:create', 'check.dossier.closed:modify'])->group(function () {
+        // Création nouveau lot avec demandeur
         Route::get('/nouveau-lot/{id}', [DemandeurProprieteController::class, 'create'])
+            ->middleware('auth', 'district.scope')
             ->name('nouveau-lot.create');
         Route::post('/nouveau-lot', [DemandeurProprieteController::class, 'store'])
+            ->middleware('auth', 'district.scope')
             ->name('nouveau-lot.store');
         
+        // Anciens formulaires (peuvent être gardés ou supprimés selon vos besoins)
         Route::get('/lier-demandeur/{id}/{id_demandeur?}/{id_propriete?}', [DemandeurProprieteController::class, 'linkExisting'])
+            ->middleware('auth', 'district.scope')
             ->name('lier-demandeur.create');
         Route::post('/lier-demandeur/search', [DemandeurProprieteController::class, 'searchToLink'])
+            ->middleware('auth', 'district.scope')
             ->name('lier-demandeur.search');
         Route::post('/lier-demandeur/store', [DemandeurProprieteController::class, 'storeLink'])
+            ->middleware('auth', 'district.scope')
             ->name('lier-demandeur.store');
         
         Route::get('/ajouter-demandeur/{id}/{id_propriete?}', [DemandeurProprieteController::class, 'addToProperty'])
+            ->middleware('auth', 'district.scope')
             ->name('ajouter-demandeur.create');
         Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])
+            ->middleware('auth', 'district.scope')
             ->name('ajouter-demandeur.store');
     });
-    
-    Route::middleware(['district.access:delete', 'check.dossier.closed:modify'])->group(function () {
-        Route::post('/demandeur-propriete/dissociate', [DemandeurProprieteController::class, 'dissociate'])
-            ->name('demandeur-propriete.dissociate');
-    });
-    
-    // Dissocier - Retirer un demandeur d'une propriété
-    Route::middleware('district.access:delete')->group(function () {
-        Route::post('/demandeur-propriete/dissociate', [DemandeurProprieteController::class, 'dissociate'])
-            ->name('demandeur-propriete.dissociate');
-    });
-    
+
+
     // ============ CONFIGURATION DES PRIX ============
     // Accessible seulement aux super_admin et admin_district
     Route::prefix('circonscription')->name('circonscription.')
@@ -277,6 +317,38 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         Route::get('/requisition', [DocumentGenerationController::class, 'generateRequisition'])->name('requisition');
     });
 
+    // ============ PIÈCES JOINTES ============
+    Route::middleware(['auth', 'district.scope'])->group(function () {
+        Route::prefix('pieces-jointes')->name('pieces-jointes.')->group(function () {
+            // Upload (créer)
+            Route::post('/upload', [PieceJointeController::class, 'upload'])
+                ->middleware('district.access:create')
+                ->name('upload');
+            
+            // Lister
+            Route::get('/', [PieceJointeController::class, 'index'])
+                ->name('index');
+            
+            // Télécharger
+            Route::get('/{id}/download', [PieceJointeController::class, 'download'])
+                ->name('download');
+            
+            // Visualiser
+            Route::get('/{id}/view', [PieceJointeController::class, 'view'])
+                ->name('view');
+            
+            // Supprimer
+            Route::delete('/{id}', [PieceJointeController::class, 'destroy'])
+                ->middleware('district.access:delete')
+                ->name('destroy');
+            
+            // Vérifier (admin)
+            Route::post('/{id}/verify', [PieceJointeController::class, 'verify'])
+                ->middleware('district.access:manage_users')
+                ->name('verify');
+        });
+    });
+
     // ============ LOGS D'ACTIVITÉ (Admin et Super Admin) ============
     Route::prefix('admin/activity-logs')->name('admin.activity-logs.')
         ->middleware(['auth', 'district.scope', 'district.access:manage_users'])
@@ -287,18 +359,28 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             Route::get('/export', [ActivityLogController::class, 'export'])->name('export');
         });
 
-        // ============ API ENDPOINTS ============
-        Route::prefix('api')->name('api.')->group(function () {
-            Route::get('/demandeur/{id_demandeur}/proprietes', [AssociationController::class, 'getDemandeurProprietes'])
-                ->name('demandeur.proprietes');
-            
-            Route::get('/propriete/{id_propriete}/demandeurs', [AssociationController::class, 'getProprieteDemandeurs'])
-                ->name('propriete.demandeurs');
-            
-            Route::post('/dissociate', [AssociationController::class, 'dissociate'])
-                ->middleware('district.access:delete')
-                ->name('dissociate');
+        // ============ API ENDPOINTS - POUR RÉCUPÉRER LES DONNÉES ============
+        Route::middleware(['auth', 'district.scope'])->group(function () {
+            Route::prefix('api')->name('api.')->group(function () {
+                // ✅ Obtenir les propriétés associées à un demandeur
+                Route::get('/demandeur/{id_demandeur}/proprietes', [AssociationController::class, 'getDemandeurProprietes'])
+                    ->name('demandeur.proprietes');
+                
+                // ✅ Obtenir les demandeurs associés à une propriété
+                Route::get('/propriete/{id_propriete}/demandeurs', [AssociationController::class, 'getProprieteDemandeurs'])
+                    ->name('propriete.demandeurs');
+                
+                // ✅ NOUVEAU : Recherche de demandeur par CIN (DÉPLACÉ ICI)
+                Route::get('/demandeur/search-by-cin/{cin}', [DemandeurController::class, 'searchByCin'])
+                    ->name('demandeur.search-by-cin');
+                
+                // Dissociation
+                Route::post('/dissociate', [AssociationController::class, 'dissociate'])
+                    ->middleware('district.access:delete')
+                    ->name('dissociate');
+            });
         });
+        
 
     // Logout
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');

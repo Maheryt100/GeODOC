@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasPiecesJointes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Propriete extends Model
 {
+    use HasPiecesJointes;
     protected $fillable = [
         'lot',
         'propriete_mere',

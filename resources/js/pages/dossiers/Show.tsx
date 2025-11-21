@@ -1,27 +1,30 @@
-// pages/dossiers/Show.tsx (refactorisé)
-// Importe les listes depuis proprietes/index.tsx et demandeurs/index.tsx
-
+// pages/dossiers/Show.tsx
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
     LandPlot, Pencil, Lock, LockOpen, FileOutput, 
-    MapPin, Calendar, Building2, Unlink 
+    MapPin, Calendar, Building2, Link2 
 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
 import { CloseDossierDialog } from '@/components/CloseDossierDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+// ✅ Import des nouveaux composants d'association
+import { LinkDemandeurDialog } from '@/components/associations/LinkDemandeurDialog';
+import { LinkProprieteDialog } from '@/components/associations/LinkProprieteDialog';
+
 // ✅ Import des composants de liste
 import DemandeursIndex from '@/pages/demandeurs/index';
 import ProprietesIndex from '@/pages/proprietes/index';
+
+import AttachmentsSection from '@/components/AttachmentsSection';
 
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
@@ -38,13 +41,17 @@ interface PageProps {
 export default function Show() {
     const { dossier } = usePage<PageProps>().props;
     const { flash } = usePage<SharedData>().props;
-    const [selectedDemandeur, setSelectedDemandeur] = useState<DemandeurWithProperty | null>(null);
-    const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteType, setDeleteType] = useState<'dossier' | 'definitif'>('dossier');
     const [itemToDelete, setItemToDelete] = useState<{ type: 'demandeur' | 'propriete', id: number } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    
+    // ✅ États pour les dialogues d'association
+    const [linkDemandeurOpen, setLinkDemandeurOpen] = useState(false);
+    const [linkProprieteOpen, setLinkProprieteOpen] = useState(false);
+    const [selectedProprieteForLink, setSelectedProprieteForLink] = useState<Propriete | null>(null);
+    const [selectedDemandeurForLink, setSelectedDemandeurForLink] = useState<Demandeur | null>(null);
 
     useEffect(() => {
         if (flash?.message) toast.info(flash.message);
@@ -52,7 +59,18 @@ export default function Show() {
         if (flash?.error) toast.error(flash.error);
     }, [flash?.message, flash?.success, flash?.error]);
 
-    // ========== HANDLERS ==========
+    // ========== HANDLERS D'ASSOCIATION ==========
+    const handleLinkDemandeur = (propriete: Propriete) => {
+        setSelectedProprieteForLink(propriete);
+        setLinkDemandeurOpen(true);
+    };
+
+    const handleLinkPropriete = (demandeur: Demandeur) => {
+        setSelectedDemandeurForLink(demandeur);
+        setLinkProprieteOpen(true);
+    };
+
+    // ========== HANDLERS EXISTANTS ==========
     const handleDeleteDemandeur = (id: number) => {
         setItemToDelete({ type: 'demandeur', id });
         setDeleteType('dossier');
@@ -114,7 +132,7 @@ export default function Show() {
 
     const handleDissociate = (demandeurId: number, proprieteId: number, demandeurNom: string) => {
         if (confirm(`Dissocier ${demandeurNom} de cette propriété ?`)) {
-            router.post(route('demandeur-propriete.dissociate'), {
+            router.post(route('association.dissociate'), {
                 id_demandeur: demandeurId,
                 id_propriete: proprieteId,
             }, {
@@ -341,13 +359,14 @@ export default function Show() {
                     </CardContent>
                 </Card>
 
-                {/* ✅ Utilisation des composants importés */}
+                {/* ✅ Listes avec boutons d'association */}
                 <DemandeursIndex
                     demandeurs={allDemandeurs}
                     dossier={dossier}
                     proprietes={proprietes}
-                    onSelectDemandeur={setSelectedDemandeur}
+                    onSelectDemandeur={(dem) => console.log('Sélectionné:', dem)}
                     onDeleteDemandeur={handleDeleteDemandeur}
+                    onLinkPropriete={handleLinkPropriete}
                     isDemandeurIncomplete={isDemandeurIncomplete}
                 />
 
@@ -355,13 +374,35 @@ export default function Show() {
                     proprietes={proprietes}
                     dossier={dossier}
                     demandeurs={allDemandeurs}
-                    onSelectPropriete={setSelectedPropriete}
+                    onSelectPropriete={(prop) => console.log('Sélectionné:', prop)}
                     onDeletePropriete={handleDeletePropriete}
                     onArchivePropriete={handleArchivePropriete}
                     onUnarchivePropriete={handleUnarchivePropriete}
+                    onLinkDemandeur={handleLinkDemandeur}
                     isPropertyIncomplete={isPropertyIncomplete}
                 />
             </div>
+
+            {/* ✅ Dialogues d'association */}
+            {selectedProprieteForLink && (
+                <LinkDemandeurDialog
+                    open={linkDemandeurOpen}
+                    onOpenChange={setLinkDemandeurOpen}
+                    propriete={selectedProprieteForLink}
+                    demandeursDossier={allDemandeurs}
+                    dossierId={dossier.id}
+                />
+            )}
+
+            {selectedDemandeurForLink && (
+                <LinkProprieteDialog
+                    open={linkProprieteOpen}
+                    onOpenChange={setLinkProprieteOpen}
+                    demandeur={selectedDemandeurForLink}
+                    proprietesDossier={proprietes}
+                    dossierId={dossier.id}
+                />
+            )}
 
             {/* Dialog fermeture/réouverture */}
             <CloseDossierDialog
@@ -372,67 +413,6 @@ export default function Show() {
                 open={closeDialogOpen}
                 onOpenChange={setCloseDialogOpen}
             />
-
-            {/* Dialog Demandeur détails (simplifié) */}
-            <Dialog open={!!selectedDemandeur} onOpenChange={() => setSelectedDemandeur(null)}>
-                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Détails du demandeur</DialogTitle>
-                    </DialogHeader>
-                    {selectedDemandeur && (
-                        <div className="space-y-4">
-                            <p className="text-xl font-bold">
-                                {selectedDemandeur.titre_demandeur} {selectedDemandeur.nom_demandeur} {selectedDemandeur.prenom_demandeur}
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div><strong>CIN:</strong> {selectedDemandeur.cin}</div>
-                                <div><strong>Téléphone:</strong> {selectedDemandeur.telephone || '-'}</div>
-                                <div><strong>Domiciliation:</strong> {selectedDemandeur.domiciliation || '-'}</div>
-                                <div><strong>Occupation:</strong> {selectedDemandeur.occupation || '-'}</div>
-                            </div>
-                            <Button onClick={() => setSelectedDemandeur(null)}>Fermer</Button>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
-
-            {/* Dialog Propriété détails (simplifié) */}
-            <Dialog open={!!selectedPropriete} onOpenChange={() => setSelectedPropriete(null)}>
-                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Détails de la propriété</DialogTitle>
-                    </DialogHeader>
-                    {selectedPropriete && (
-                        <div className="space-y-4">
-                            <p className="text-xl font-bold">Lot {selectedPropriete.lot}</p>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div><strong>Titre:</strong> {selectedPropriete.titre ? `TNº${selectedPropriete.titre}` : '-'}</div>
-                                <div><strong>Contenance:</strong> {selectedPropriete.contenance}m²</div>
-                                <div><strong>Nature:</strong> {selectedPropriete.nature}</div>
-                                <div><strong>Vocation:</strong> {selectedPropriete.vocation}</div>
-                            </div>
-                            {selectedPropriete.demandeurs && selectedPropriete.demandeurs.length > 0 && (
-                                <div>
-                                    <h4 className="font-semibold mb-2">Demandeurs associés:</h4>
-                                    {selectedPropriete.demandeurs.map((dem) => (
-                                        <div key={dem.id} className="flex justify-between items-center p-2 bg-muted rounded mb-2">
-                                            <span>{dem.nom_demandeur} {dem.prenom_demandeur}</span>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => handleDissociate(dem.id, selectedPropriete.id, dem.nom_demandeur)}
-                                            >
-                                                <Unlink className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <Button onClick={() => setSelectedPropriete(null)}>Fermer</Button>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
 
             {/* AlertDialog suppression demandeur */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -473,6 +453,19 @@ export default function Show() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            {/* Section Pièces Jointes */}
+        <div className="mt-6">
+            <AttachmentsSection
+                attachableType="Dossier"
+                attachableId={dossier.id}
+                title="Documents du Dossier"
+                typeDocument="Document administratif"
+                canUpload={permissions.canEdit && !dossier.is_closed}
+                canDelete={permissions.canDelete && !dossier.is_closed}
+                canVerify={permissions.canClose}
+                initialCount={dossier.pieces_jointes_count || 0}
+            />
+        </div>
         </AppLayout>
     );
 }

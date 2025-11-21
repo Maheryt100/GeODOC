@@ -24,6 +24,7 @@ interface DemandeursIndexProps {
     proprietes: Propriete[];
     onDeleteDemandeur: (id: number) => void;
     onSelectDemandeur?: (demandeur: DemandeurWithProperty) => void;
+    onLinkPropriete?: (demandeur: Demandeur) => void;
     isDemandeurIncomplete: (dem: Demandeur) => boolean;
 }
 
@@ -33,12 +34,13 @@ export default function DemandeursIndex({
     proprietes,
     onDeleteDemandeur,
     onSelectDemandeur,
-    isDemandeurIncomplete
+    isDemandeurIncomplete,
+    onLinkPropriete
 }: DemandeursIndexProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // ✅ États pour les modals de détails
+    // États pour les modals de détails
     const [selectedDemandeur, setSelectedDemandeur] = useState<DemandeurWithProperty | null>(null);
     const [showDemandeurDetail, setShowDemandeurDetail] = useState(false);
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
@@ -59,19 +61,19 @@ export default function DemandeursIndex({
         return lots;
     };
 
-    // ✅ Handler pour ouvrir le détail demandeur
+    // Handler pour ouvrir le détail demandeur
     const handleSelectDemandeur = (demandeur: DemandeurWithProperty) => {
         setSelectedDemandeur(demandeur);
         setShowDemandeurDetail(true);
     };
 
-    // ✅ Handler pour ouvrir le détail propriété depuis le modal demandeur
+    // Handler pour ouvrir le détail propriété depuis le modal demandeur
     const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
         setSelectedPropriete(propriete);
         setShowProprieteDetail(true);
     };
 
-    // ✅ Handler pour ouvrir le détail demandeur depuis le modal propriété
+    // Handler pour ouvrir le détail demandeur depuis le modal propriété
     const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
         const demandeurWithProperty = demandeurs.find(d => d.id === demandeur.id);
         if (demandeurWithProperty) {
@@ -144,14 +146,7 @@ export default function DemandeursIndex({
                                 </span>
                             </CardDescription>
                         </div>
-                        {proprietes.length > 0 && !dossier.is_closed && (
-                            <Button asChild size="sm">
-                                <Link href={route('ajouter-demandeur.create', dossier.id)}>
-                                    <UserPlus className="mr-2 h-4 w-4" />
-                                    Ajouter un demandeur à un lot
-                                </Link>
-                            </Button>
-                        )}
+                      
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -226,31 +221,27 @@ export default function DemandeursIndex({
                                                                 <Eye className="mr-2 h-4 w-4" />
                                                                 Voir détails
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild>
-                                                                <Link
-                                                                    href={route('demandeurs.edit', {
-                                                                        id_dossier: dossier.id,
-                                                                        id_demandeur: demandeur.id
-                                                                    })}
-                                                                    className="flex items-center"
-                                                                >
-                                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                                    Modifier
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                            {proprietes.length > 0 && (
-                                                                <DropdownMenuItem asChild>
-                                                                    <Link
-                                                                        href={route('lier-demandeur.create', {
-                                                                            id: dossier.id,
-                                                                            id_demandeur: demandeur.id
-                                                                        })}
-                                                                        className="flex items-center"
-                                                                    >
-                                                                        <Link2 className="mr-2 h-4 w-4" />
-                                                                        Lier à une propriété
-                                                                    </Link>
-                                                                </DropdownMenuItem>
+                                                            {!dossier.is_closed && (
+                                                                <>
+                                                                    <DropdownMenuItem asChild>
+                                                                        <Link
+                                                                            href={route('demandeurs.edit', {
+                                                                                id_dossier: dossier.id,
+                                                                                id_demandeur: demandeur.id
+                                                                            })}
+                                                                            className="flex items-center"
+                                                                        >
+                                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                                            Modifier
+                                                                        </Link>
+                                                                    </DropdownMenuItem>
+                                                                    {proprietes.length > 0 && (
+                                                                        <DropdownMenuItem onClick={() => onLinkPropriete?.(demandeur)}>
+                                                                            <Link2 className="mr-2 h-4 w-4" />
+                                                                            Lier à une propriété
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </>
                                                             )}
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem
@@ -274,7 +265,7 @@ export default function DemandeursIndex({
                 </CardContent>
             </Card>
 
-            {/* ✅ Modals de détails avec navigation entre eux */}
+            {/* Modals de détails avec navigation entre eux */}
             <DemandeurDetailDialog
                 demandeur={selectedDemandeur}
                 open={showDemandeurDetail}

@@ -65,10 +65,6 @@ export default function DemandeurDetailDialog({
         );
     };
 
-    function onEdit(demandeur: Demandeur) {
-        throw new Error('Function not implemented.');
-    }
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -272,20 +268,23 @@ export default function DemandeurDetailDialog({
                     )}
                 </div>
                 {!dossierClosed && (
-                        <Button 
-                            onClick={() => {
-                                onOpenChange(false);
-                                // Transmettre au parent pour ouvrir le modal d'édition
-                                setTimeout(() => {
-                                window.location. href= route('demandeurs.edit', demandeur.id);
+                    <Button 
+                        onClick={() => {
+                            onOpenChange(false);
+                            // Petit délai pour laisser le modal se fermer
+                            setTimeout(() => {
+                                window.location.href = route('demandeurs.edit', { 
+                                    id_dossier: dossierId, 
+                                    id_demandeur: demandeur.id 
+                                });
                             }, 100);
-                            }} 
-                            size="sm"
-                        >
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Modifier
-                        </Button>
-                    )}
+                        }} 
+                        size="sm"
+                    >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Modifier
+                    </Button>
+                )}
             </DialogContent>
         </Dialog>
     );

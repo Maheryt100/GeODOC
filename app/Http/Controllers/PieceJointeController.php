@@ -2,105 +2,144 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Demandeur;
-use App\Models\Dossier;
+use App\Models\User;
 use App\Models\PieceJointe;
+use App\Models\Dossier;
+use App\Models\Demandeur;
 use App\Models\Propriete;
+use App\Services\UploadService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class PieceJointeController extends Controller
 {
     /**
-     * Afficher toutes les pièces jointes d'un dossier
+     * Upload de pièces jointes
      */
-    public function index($id_dossier)
+    public function upload(Request $request)
     {
-        $dossier = Dossier::with([
-            'piecesJointes.user',
-            'proprietes.piecesJointes.user',
-            'demandeurs.piecesJointes.user'
-        ])->findOrFail($id_dossier);
-
-        // Organiser les pièces jointes par catégorie
-        $piecesJointes = [
-            'dossier' => $dossier->piecesJointes,
-            'proprietes' => $dossier->proprietes->map(fn($p) => [
-                'id' => $p->id,
-                'lot' => $p->lot,
-                'titre' => $p->titre,
-                'pieces' => $p->piecesJointes,
-            ])->filter(fn($p) => $p['pieces']->isNotEmpty()),
-            'demandeurs' => $dossier->demandeurs->map(fn($d) => [
-                'id' => $d->id,
-                'nom' => $d->nom_demandeur . ' ' . $d->prenom_demandeur,
-                'cin' => $d->cin,
-                'pieces' => $d->piecesJointes,
-            ])->filter(fn($d) => $d['pieces']->isNotEmpty()),
-        ];
-
-        return Inertia::render('PiecesJointes/Index', [
-            'dossier' => $dossier,
-            'piecesJointes' => $piecesJointes,
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => 'required|file|max:10240', // 10 MB max
+            'attachable_type' => 'required|in:Dossier,Demandeur,Propriete',
+            'attachable_id' => 'required|integer',
+            'type_document' => 'nullable|string|max:50',
+            'descriptions' => 'nullable|array',
+            'descriptions.*' => 'nullable|string|max:500',
         ]);
+
+        try {
+            // Récupérer l'entité
+            $modelClass = "App\\Models\\" . $request->attachable_type;
+            $entity = $modelClass::findOrFail($request->attachable_id);
+
+            // Vérifier les permissions
+            if (!$this->canManagePiecesJointes($entity)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé'
+                ], 403);
+            }
+
+            $uploaded = [];
+            $errors = [];
+            
+            DB::beginTransaction();
+
+            foreach ($request->file('files') as $index => $file) {
+                // Valider le fichier
+                $validation = UploadService::validateFile($file);
+                
+                if (!$validation['valid']) {
+                    $errors[] = [
+                        'file' => $file->getClientOriginalName(),
+                        'errors' => $validation['errors']
+                    ];
+                    continue;
+                }
+
+                // Description optionnelle
+                $description = $request->descriptions[$index] ?? null;
+
+                // Uploader
+                $piece = $entity->ajouterPieceJointe(
+                    $file,
+                    $request->type_document,
+                    $description,
+                    Auth::id(),
+                    $entity->id_district ?? Auth::user()->id_district
+                );
+
+                // Optimiser si c'est une image
+                if ($piece->isImage()) {
+                    UploadService::optimizeImage($file, $piece->chemin);
+                }
+
+                $uploaded[] = $piece;
+
+                Log::info('Pièce jointe uploadée', [
+                    'piece_id' => $piece->id,
+                    'entity' => $request->attachable_type,
+                    'entity_id' => $request->attachable_id,
+                    'user_id' => Auth::id()
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => count($uploaded) . ' fichier(s) uploadé(s) avec succès',
+                'uploaded' => $uploaded,
+                'errors' => $errors
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erreur upload pièces jointes', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'upload: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
-     * Upload une pièce jointe
+     * Lister les pièces jointes d'une entité
      */
-    public function store(Request $request)
+    public function index(Request $request)
     {
         $request->validate([
-            'fichier' => 'required|file|max:10240', // 10MB max
-            'type_document' => 'required|in:piece_identite,acte_vente,csf,requisition,autre',
-            'description' => 'nullable|string|max:500',
-            'attachable_type' => 'required|in:dossier,propriete,demandeur',
+            'attachable_type' => 'required|in:Dossier,Demandeur,Propriete',
             'attachable_id' => 'required|integer',
         ]);
 
         try {
-            $file = $request->file('fichier');
-            
-            // Déterminer le modèle
-            $modelClass = match($request->attachable_type) {
-                'dossier' => Dossier::class,
-                'propriete' => Propriete::class,
-                'demandeur' => Demandeur::class,
-            };
+            $modelClass = "App\\Models\\" . $request->attachable_type;
+            $entity = $modelClass::findOrFail($request->attachable_id);
 
-            $attachable = $modelClass::findOrFail($request->attachable_id);
+            $pieces = $entity->piecesJointes()
+                ->with(['user:id,name', 'verifiedBy:id,name'])
+                ->get();
 
-            // Générer un nom unique
-            $nomFichier = Str::uuid() . '.' . $file->getClientOriginalExtension();
-            
-            // Stocker le fichier
-            $chemin = $file->storeAs(
-                'pieces_jointes/' . $request->attachable_type . 's',
-                $nomFichier,
-                'public'
-            );
-
-            // Créer l'enregistrement
-            $pieceJointe = PieceJointe::create([
-                'nom_fichier' => $nomFichier,
-                'nom_original' => $file->getClientOriginalName(),
-                'chemin' => $chemin,
-                'type_mime' => $file->getMimeType(),
-                'taille' => $file->getSize(),
-                'type_document' => $request->type_document,
-                'description' => $request->description,
-                'attachable_type' => $modelClass,
-                'attachable_id' => $request->attachable_id,
-                'id_user' => Auth::id(),
+            return response()->json([
+                'success' => true,
+                'pieces_jointes' => $pieces
             ]);
 
-            return back()->with('message', 'Fichier uploadé avec succès');
-
         } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Erreur lors de l\'upload: ' . $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -109,15 +148,65 @@ class PieceJointeController extends Controller
      */
     public function download($id)
     {
-        $piece = PieceJointe::findOrFail($id);
-        
-        $fullPath = storage_path('app/public/' . $piece->chemin);
-        
-        if (!file_exists($fullPath)) {
-            return back()->withErrors(['error' => 'Fichier introuvable']);
-        }
+        try {
+            $piece = PieceJointe::findOrFail($id);
 
-        return response()->download($fullPath, $piece->nom_original);
+            // Vérifier les permissions
+            if (!$this->canAccessPieceJointe($piece)) {
+                abort(403, 'Accès non autorisé');
+            }
+
+            if (!$piece->exists()) {
+                abort(404, 'Fichier introuvable');
+            }
+
+            // Logger le téléchargement
+            Log::info('Téléchargement pièce jointe', [
+                'piece_id' => $piece->id,
+                'user_id' => Auth::id(),
+                'file' => $piece->nom_original
+            ]);
+
+            return Storage::disk('public')->download(
+                $piece->chemin,
+                $piece->nom_original
+            );
+
+        } catch (\Exception $e) {
+            Log::error('Erreur téléchargement', [
+                'piece_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            abort(500, 'Erreur lors du téléchargement');
+        }
+    }
+
+    /**
+     * Visualiser une pièce jointe (inline)
+     */
+    public function view($id)
+    {
+        try {
+            $piece = PieceJointe::findOrFail($id);
+
+            if (!$this->canAccessPieceJointe($piece)) {
+                abort(403, 'Accès non autorisé');
+            }
+
+            if (!$piece->exists()) {
+                abort(404, 'Fichier introuvable');
+            }
+
+            $file = Storage::disk('public')->get($piece->chemin);
+            
+            return response($file, 200)
+                ->header('Content-Type', $piece->type_mime)
+                ->header('Content-Disposition', 'inline; filename="' . $piece->nom_original . '"');
+
+        } catch (\Exception $e) {
+            abort(500, 'Erreur lors de la visualisation');
+        }
     }
 
     /**
@@ -125,51 +214,124 @@ class PieceJointeController extends Controller
      */
     public function destroy($id)
     {
-        $piece = PieceJointe::findOrFail($id);
-        
-        // Vérifier si l'utilisateur est le propriétaire ou admin
-        // Si vous n'avez pas de système de rôles, supprimez cette vérification
-        if ($piece->id_user !== Auth::id()) {
-            // Autoriser quand même pour simplifier
-            // return back()->withErrors(['error' => 'Non autorisé']);
-        }
+        try {
+            $piece = PieceJointe::findOrFail($id);
 
-        $piece->delete();
-        
-        return back()->with('message', 'Fichier supprimé avec succès');
+            if (!$this->canManagePiecesJointes($piece->attachable)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé'
+                ], 403);
+            }
+
+            $piece->deleteFile();
+
+            Log::info('Pièce jointe supprimée', [
+                'piece_id' => $piece->id,
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Fichier supprimé avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Erreur suppression', [
+                'piece_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
-     * Afficher les documents générés d'un dossier
+     * Vérifier une pièce jointe (admin seulement)
      */
-    public function documentsGeneres($id_dossier)
+    public function verify($id)
     {
-        $dossier = Dossier::with([
-            'proprietes.piecesJointes' => function($q) {
-                $q->whereIn('type_document', ['acte_vente', 'csf', 'requisition'])
-                  ->with('user')
-                  ->latest();
-            },
-            'proprietes.demandeurs'
-        ])->findOrFail($id_dossier);
+        /** @var User $user */
+        $user = Auth::user();
 
-        // Récupérer tous les documents générés
-        $documentsGeneres = PieceJointe::where(function($q) use ($dossier) {
-            $q->where('attachable_type', Dossier::class)
-              ->where('attachable_id', $dossier->id);
-        })
-        ->orWhere(function($q) use ($dossier) {
-            $q->where('attachable_type', Propriete::class)
-              ->whereIn('attachable_id', $dossier->proprietes->pluck('id'));
-        })
-        ->whereIn('type_document', ['acte_vente', 'csf', 'requisition'])
-        ->with(['attachable', 'user'])
-        ->latest()
-        ->get();
+        if (!$user->isSuperAdmin() && !$user->isAdminDistrict()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès non autorisé'
+            ], 403);
+        }
 
-        return Inertia::render('PiecesJointes/DocumentsGeneres', [
-            'dossier' => $dossier,
-            'documents' => $documentsGeneres,
-        ]);
+        try {
+            $piece = PieceJointe::findOrFail($id);
+            $piece->verify($user->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document vérifié',
+                'piece_jointe' => $piece->fresh()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ============ MÉTHODES PRIVÉES ============
+
+    private function canAccessPieceJointe(PieceJointe $piece): bool
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Vérifier si l'utilisateur appartient au même district
+        if ($piece->id_district && $user->id_district === $piece->id_district) {
+            return true;
+        }
+
+        // Vérifier si c'est l'uploader
+        if ($piece->id_user === $user->id) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function canManagePiecesJointes($entity): bool
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Vérifier le district
+        $entityDistrict = match(class_basename($entity)) {
+            'Dossier' => $entity->id_district,
+            'Demandeur' => $entity->dossiers()->first()?->id_district,
+            'Propriete' => $entity->dossier?->id_district,
+            default => null,
+        };
+
+        if ($entityDistrict && $user->id_district === $entityDistrict) {
+            // Vérifier si le dossier est fermé
+            if (method_exists($entity, 'is_closed') && $entity->is_closed) {
+                return false;
+            }
+            
+            return $user->canCreate();
+        }
+
+        return false;
     }
 }

@@ -194,7 +194,9 @@ class ProprieteController extends Controller
 
     public function show($id)
     {
-        $propriete = Propriete::findOrFail($id);
+        $propriete = Propriete::with(['piecesJointes' => function($q) {
+            $q->orderBy('created_at', 'desc');
+        }])->findOrFail($id);
         return Inertia::render('proprietes/read', [
             'propriete' => $propriete,
         ]);
@@ -215,6 +217,8 @@ class ProprieteController extends Controller
             'dossier' => $dossier,
         ]);
     }
+
+    
 
     public function update(Request $request, string $id)
     {
@@ -442,17 +446,8 @@ class ProprieteController extends Controller
     /**
      * Message bloqué pour propriété archivée
      */
-    private function getBlockedActionMessage(Propriete $propriete, string $action = 'action'): string
+    private function getBlockedActionMessage(Propriete $propriete, string $action): string
     {
-        $demandes = Demander::where('id_propriete', $propriete->id)
-            ->where('status', 'archive')
-            ->with('demandeur')
-            ->get();
-        
-        $demandeurs = $demandes->pluck('demandeur.nom_demandeur')->filter()->toArray();
-        $demandeursStr = !empty($demandeurs) ? implode(', ', $demandeurs) : 'demandeur(s) inconnu(s)';
-        
-        return "🔒 PROPRIÉTÉ ARCHIVÉE (ACQUISE) - La propriété Lot {$propriete->lot} est archivée par : {$demandeursStr}. " .
-               "❌ Aucune {$action} possible tant qu'elle reste archivée.";
+        return "Impossible d'effectuer l'action '{$action}' : la propriété Lot {$propriete->lot} est archivée (acquise).";
     }
 }
