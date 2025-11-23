@@ -12,23 +12,34 @@ use Illuminate\Support\Facades\Log;
 
 trait HasPiecesJointes
 {
+    /**
+     * Relation morphMany vers les pièces jointes
+     */
     public function piecesJointes(): MorphMany
     {
         return $this->morphMany(PieceJointe::class, 'attachable')
             ->orderBy('created_at', 'desc');
     }
 
+    /**
+     * Pièces jointes actives (non supprimées)
+     */
     public function piecesJointesActives(): MorphMany
     {
         return $this->piecesJointes()->whereNull('deleted_at');
     }
 
+    /**
+     * Pièces jointes vérifiées
+     */
     public function piecesJointesVerifiees(): MorphMany
     {
         return $this->piecesJointes()->where('is_verified', true);
     }
 
-    // Filtrer par catégorie
+    /**
+     * Filtrer par catégorie
+     */
     public function piecesJointesGlobales(): MorphMany
     {
         return $this->piecesJointes()->where('categorie', PieceJointe::CATEGORIE_GLOBAL);
@@ -45,7 +56,7 @@ trait HasPiecesJointes
     }
 
     /**
-     * Ajouter une pièce jointe avec catégorie
+     * Ajouter une pièce jointe
      */
     public function ajouterPieceJointe(
         UploadedFile $file,
@@ -56,6 +67,7 @@ trait HasPiecesJointes
         ?string $categorie = null
     ): PieceJointe {
         try {
+            // Validation du fichier
             $validation = app(\App\Services\UploadService::class)->validateFile($file);
             
             if (!$validation['valid']) {
@@ -65,6 +77,7 @@ trait HasPiecesJointes
             $extension = strtolower($file->getClientOriginalExtension());
             $nomFichier = Str::uuid() . '.' . $extension;
             
+            // Déterminer le sous-dossier
             $modelType = class_basename($this);
             $sousDossier = match($modelType) {
                 'Dossier' => 'dossiers',
@@ -80,14 +93,17 @@ trait HasPiecesJointes
                 default => PieceJointe::CATEGORIE_GLOBAL,
             };
             
+            // Construire le chemin avec année/mois
             $directory = "pieces_jointes/{$sousDossier}/" . date('Y/m');
             
+            // Stocker le fichier
             $chemin = Storage::disk('public')->putFileAs(
                 $directory,
                 $file,
                 $nomFichier
             );
             
+            // Créer l'enregistrement
             $piece = $this->piecesJointes()->create([
                 'nom_original' => $file->getClientOriginalName(),
                 'nom_fichier' => $nomFichier,
@@ -102,6 +118,7 @@ trait HasPiecesJointes
                 'id_district' => $districtId ?? (Auth::user()?->id_district ?? null),
             ]);
 
+            // Log l'activité
             if (class_exists(\App\Models\ActivityLog::class)) {
                 \App\Models\ActivityLog::logPieceJointeUpload(
                     $piece->id,
@@ -109,7 +126,7 @@ trait HasPiecesJointes
                     $file->getSize(),
                     class_basename($this),
                     $this->id,
-                    $districtId ?? (Auth::user()?->id_district ?? null),
+                    $piece->id_district,
                     $typeDocument
                 );
             }
@@ -135,9 +152,13 @@ trait HasPiecesJointes
         }
     }
 
+    /**
+     * Ajouter plusieurs pièces jointes
+     */
     public function ajouterPiecesJointes(
         array $files,
         ?string $typeDocument = null,
+        ?array $descriptions = null,
         ?int $userId = null,
         ?int $districtId = null,
         ?string $categorie = null
@@ -148,10 +169,12 @@ trait HasPiecesJointes
         foreach ($files as $index => $file) {
             if ($file instanceof UploadedFile) {
                 try {
+                    $description = $descriptions[$index] ?? null;
+                    
                     $piecesAjoutees[] = $this->ajouterPieceJointe(
                         $file,
                         $typeDocument,
-                        null,
+                        $description,
                         $userId,
                         $districtId,
                         $categorie
@@ -166,15 +189,24 @@ trait HasPiecesJointes
             }
         }
         
-        return $piecesAjoutees;
+        return [
+            'uploaded' => $piecesAjoutees,
+            'errors' => $erreurs
+        ];
     }
 
+    /**
+     * Supprimer une pièce jointe
+     */
     public function supprimerPieceJointe(int $pieceJointeId): bool
     {
         $piece = $this->piecesJointes()->find($pieceJointeId);
         
-        if (!$piece) return false;
+        if (!$piece) {
+            return false;
+        }
 
+        // Log l'activité
         if (class_exists(\App\Models\ActivityLog::class)) {
             \App\Models\ActivityLog::logActivity(
                 'delete',
@@ -192,6 +224,9 @@ trait HasPiecesJointes
         return $piece->deleteFile();
     }
 
+    /**
+     * Supprimer toutes les pièces jointes
+     */
     public function supprimerToutesPiecesJointes(): bool
     {
         try {
@@ -209,33 +244,48 @@ trait HasPiecesJointes
         }
     }
 
+    /**
+     * Obtenir les pièces jointes par type
+     */
     public function getPiecesJointesParType(string $typeDocument)
     {
         return $this->piecesJointes()->where('type_document', $typeDocument)->get();
     }
 
+    /**
+     * Obtenir les pièces jointes par catégorie
+     */
     public function getPiecesJointesParCategorie(string $categorie)
     {
         return $this->piecesJointes()->where('categorie', $categorie)->get();
     }
 
+    /**
+     * Vérifier si l'entité a des pièces jointes
+     */
     public function hasPiecesJointes(): bool
     {
         return $this->piecesJointes()->exists();
     }
 
+    /**
+     * Nombre de pièces jointes
+     */
     public function nombrePiecesJointes(): int
     {
         return $this->piecesJointes()->count();
     }
 
+    /**
+     * Taille totale des pièces jointes
+     */
     public function tailleTotalePiecesJointes(): int
     {
         return $this->piecesJointes()->sum('taille') ?? 0;
     }
 
     /**
-     * Statistiques des pièces jointes par catégorie
+     * Statistiques des pièces jointes
      */
     public function getStatsPiecesJointes(): array
     {
@@ -251,6 +301,9 @@ trait HasPiecesJointes
         ];
     }
 
+    /**
+     * Boot du trait
+     */
     public static function bootHasPiecesJointes()
     {
         static::deleting(function ($model) {

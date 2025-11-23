@@ -1,6 +1,4 @@
-// components/AttachmentsSection.tsx
-import { useState, useEffect, useCallback } from 'react';
-import { router } from '@inertiajs/react';
+import { useState, useEffect, useCallback, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,22 +9,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
 import { 
     Upload, FileText, Image, Trash2, Download, Eye, 
     CheckCircle, MoreVertical, Loader2, FolderOpen,
-    User, Home, FileIcon, Filter, Search, X
+    User, Home, File, Filter, Search, X, AlertCircle
 } from 'lucide-react';
-import type { Demandeur, Propriete } from '@/types';
+import { toast } from 'sonner';
+import { router } from '@inertiajs/react';
+
+// ============ TYPES ============
 
 interface PieceJointe {
     id: number;
     nom_original: string;
+    nom_fichier: string;
     type_mime: string;
-    taille_formatee: string;
+    taille: number;
     extension: string;
     type_document: string | null;
-    categorie: string;
+    categorie: 'global' | 'demandeur' | 'propriete' | 'administratif';
     categorie_label: string;
     description: string | null;
     is_verified: boolean;
@@ -34,13 +35,55 @@ interface PieceJointe {
     is_pdf: boolean;
     url: string;
     view_url: string;
+    taille_formatee: string;
+    icone: string;
     created_at: string;
-    user: { id: number; name: string } | null;
-    verified_by: { id: number; name: string } | null;
-    demandeur_id?: number;
-    demandeur_nom?: string;
-    propriete_id?: number;
-    propriete_lot?: string;
+    user: {
+        id: number;
+        name: string;
+    } | null;
+    verified_by: {
+        id: number;
+        name: string;
+    } | null;
+    verified_at: string | null;
+}
+
+interface BaseDemandeur {
+    id: number;
+    nom_demandeur: string;
+    prenom_demandeur: string;
+    cin: string;
+}
+
+interface BasePropriete {
+    id: number;
+    lot: string;
+    titre: string | null;
+}
+
+interface RelatedDemandeurData {
+    demandeur: BaseDemandeur;
+    pieces: PieceJointe[];
+}
+
+interface RelatedProprieteData {
+    propriete: BasePropriete;
+    pieces: PieceJointe[];
+}
+
+interface RelatedPieces {
+    demandeurs: Record<number, RelatedDemandeurData>;
+    proprietes: Record<number, RelatedProprieteData>;
+}
+
+interface UploadForm {
+    files: File[];
+    type_document: string;
+    categorie: string;
+    description: string;
+    linked_entity_type: '' | 'Demandeur' | 'Propriete';
+    linked_entity_id: string | number;
 }
 
 interface AttachmentsSectionProps {
@@ -51,17 +94,18 @@ interface AttachmentsSectionProps {
     canDelete?: boolean;
     canVerify?: boolean;
     initialCount?: number;
-    // Pour le dossier: lier à des demandeurs/propriétés
-    demandeurs?: Demandeur[];
-    proprietes?: Propriete[];
+    demandeurs?: BaseDemandeur[];
+    proprietes?: BasePropriete[];
     showRelated?: boolean;
 }
 
+// ============ CONSTANTES ============
+
 const CATEGORIES = {
-    global: { label: 'Document général', icon: FileIcon, color: 'bg-blue-100 text-blue-700' },
-    demandeur: { label: 'Document demandeur', icon: User, color: 'bg-green-100 text-green-700' },
-    propriete: { label: 'Document propriété', icon: Home, color: 'bg-purple-100 text-purple-700' },
-    administratif: { label: 'Document administratif', icon: FileText, color: 'bg-orange-100 text-orange-700' },
+    global: { label: 'Document général', color: 'bg-blue-100 text-blue-700' },
+    demandeur: { label: 'Document demandeur', color: 'bg-green-100 text-green-700' },
+    propriete: { label: 'Document propriété', color: 'bg-purple-100 text-purple-700' },
+    administratif: { label: 'Document administratif', color: 'bg-orange-100 text-orange-700' },
 };
 
 const TYPES_DOCUMENTS = {
@@ -74,6 +118,8 @@ const TYPES_DOCUMENTS = {
     'PV de bornage': 'PV de bornage',
     'Autre': 'Autre',
 };
+
+// ============ COMPOSANT ============
 
 export default function AttachmentsSection({
     attachableType,
@@ -88,7 +134,10 @@ export default function AttachmentsSection({
     showRelated = true,
 }: AttachmentsSectionProps) {
     const [pieces, setPieces] = useState<PieceJointe[]>([]);
-    const [relatedPieces, setRelatedPieces] = useState<any>({ demandeurs: {}, proprietes: {} });
+    const [relatedPieces, setRelatedPieces] = useState<RelatedPieces>({ 
+        demandeurs: {}, 
+        proprietes: {} 
+    });
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -97,14 +146,13 @@ export default function AttachmentsSection({
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategorie, setFilterCategorie] = useState<string>('all');
 
-    // État du formulaire d'upload
-    const [uploadForm, setUploadForm] = useState({
-        files: [] as File[],
+    const [uploadForm, setUploadForm] = useState<UploadForm>({
+        files: [],
         type_document: '',
         categorie: 'global',
         description: '',
-        linked_entity_type: '' as '' | 'Demandeur' | 'Propriete',
-        linked_entity_id: '' as string | number,
+        linked_entity_type: '',
+        linked_entity_id: '',
     });
 
     const fetchPieces = useCallback(async () => {
@@ -116,7 +164,17 @@ export default function AttachmentsSection({
                 include_related: showRelated && attachableType === 'Dossier' ? 'true' : 'false',
             });
 
-            const response = await fetch(`/pieces-jointes?${params}`);
+            const response = await fetch(`/pieces-jointes?${params}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Erreur HTTP: ${response.status}`);
+            }
+
             const data = await response.json();
 
             if (data.success) {
@@ -124,9 +182,12 @@ export default function AttachmentsSection({
                 if (data.related_pieces) {
                     setRelatedPieces(data.related_pieces);
                 }
+            } else {
+                toast.error('Erreur lors du chargement des pièces jointes');
             }
         } catch (error) {
             console.error('Erreur chargement:', error);
+            toast.error('Erreur de chargement des pièces jointes');
         } finally {
             setLoading(false);
         }
@@ -163,7 +224,6 @@ export default function AttachmentsSection({
             formData.append('descriptions[0]', uploadForm.description);
         }
 
-        // Si lié à une entité spécifique
         if (uploadForm.linked_entity_type && uploadForm.linked_entity_id) {
             formData.append('linked_entity_type', uploadForm.linked_entity_type);
             formData.append('linked_entity_id', String(uploadForm.linked_entity_id));
@@ -175,6 +235,8 @@ export default function AttachmentsSection({
                 body: formData,
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
 
@@ -196,6 +258,7 @@ export default function AttachmentsSection({
                 toast.error(data.message || 'Erreur lors de l\'upload');
             }
         } catch (error) {
+            console.error('Erreur upload:', error);
             toast.error('Erreur de connexion');
         } finally {
             setUploading(false);
@@ -210,6 +273,8 @@ export default function AttachmentsSection({
                 method: 'DELETE',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
 
@@ -231,6 +296,8 @@ export default function AttachmentsSection({
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
 
@@ -244,7 +311,6 @@ export default function AttachmentsSection({
         }
     };
 
-    // Filtrer les pièces
     const filteredPieces = pieces.filter(p => {
         const matchSearch = p.nom_original.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (p.type_document?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -255,7 +321,7 @@ export default function AttachmentsSection({
     const getFileIcon = (piece: PieceJointe) => {
         if (piece.is_image) return <Image className="h-5 w-5 text-green-600" />;
         if (piece.is_pdf) return <FileText className="h-5 w-5 text-red-600" />;
-        return <FileIcon className="h-5 w-5 text-gray-600" />;
+        return <File className="h-5 w-5 text-gray-600" />;
     };
 
     const renderPieceItem = (piece: PieceJointe, showEntity = false) => (
@@ -267,12 +333,12 @@ export default function AttachmentsSection({
                 {getFileIcon(piece)}
                 <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{piece.nom_original}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                         <span>{piece.taille_formatee}</span>
                         {piece.type_document && (
                             <Badge variant="outline" className="text-xs">{piece.type_document}</Badge>
                         )}
-                        <Badge className={`text-xs ${CATEGORIES[piece.categorie as keyof typeof CATEGORIES]?.color || ''}`}>
+                        <Badge className={`text-xs ${CATEGORIES[piece.categorie]?.color || ''}`}>
                             {piece.categorie_label}
                         </Badge>
                         {piece.is_verified && (
@@ -281,13 +347,10 @@ export default function AttachmentsSection({
                                 Vérifié
                             </Badge>
                         )}
-                        {showEntity && piece.demandeur_nom && (
-                            <span className="text-blue-600">• {piece.demandeur_nom}</span>
-                        )}
-                        {showEntity && piece.propriete_lot && (
-                            <span className="text-purple-600">• Lot {piece.propriete_lot}</span>
-                        )}
                     </div>
+                    {piece.description && (
+                        <p className="text-xs text-muted-foreground mt-1 italic">{piece.description}</p>
+                    )}
                 </div>
             </div>
             <DropdownMenu>
@@ -330,8 +393,8 @@ export default function AttachmentsSection({
     );
 
     const totalCount = pieces.length + 
-        Object.values(relatedPieces.demandeurs).reduce((acc: number, d: any) => acc + (d.pieces?.length || 0), 0) +
-        Object.values(relatedPieces.proprietes).reduce((acc: number, p: any) => acc + (p.pieces?.length || 0), 0);
+        Object.values(relatedPieces.demandeurs).reduce((acc, d) => acc + (d.pieces?.length || 0), 0) +
+        Object.values(relatedPieces.proprietes).reduce((acc, p) => acc + (p.pieces?.length || 0), 0);
 
     return (
         <Card>
@@ -351,7 +414,6 @@ export default function AttachmentsSection({
                 </div>
             </CardHeader>
             <CardContent>
-                {/* Filtres */}
                 <div className="flex gap-2 mb-4">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -376,16 +438,11 @@ export default function AttachmentsSection({
                     </Select>
                 </div>
 
-                {/* Onglets pour Dossier */}
                 {attachableType === 'Dossier' && showRelated ? (
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="mb-4">
-                            <TabsTrigger value="all">
-                                Tous ({totalCount})
-                            </TabsTrigger>
-                            <TabsTrigger value="dossier">
-                                Dossier ({pieces.length})
-                            </TabsTrigger>
+                            <TabsTrigger value="all">Tous ({totalCount})</TabsTrigger>
+                            <TabsTrigger value="dossier">Dossier ({pieces.length})</TabsTrigger>
                             <TabsTrigger value="demandeurs">
                                 Demandeurs ({Object.keys(relatedPieces.demandeurs).length})
                             </TabsTrigger>
@@ -396,30 +453,36 @@ export default function AttachmentsSection({
 
                         <TabsContent value="all" className="space-y-2">
                             {filteredPieces.map(p => renderPieceItem(p))}
-                            {Object.values(relatedPieces.demandeurs).map((d: any) =>
+                            {Object.values(relatedPieces.demandeurs).map((d) =>
                                 d.pieces?.map((p: PieceJointe) => renderPieceItem(p, true))
                             )}
-                            {Object.values(relatedPieces.proprietes).map((pr: any) =>
+                            {Object.values(relatedPieces.proprietes).map((pr) =>
                                 pr.pieces?.map((p: PieceJointe) => renderPieceItem(p, true))
                             )}
                             {totalCount === 0 && (
-                                <p className="text-center text-muted-foreground py-8">Aucune pièce jointe</p>
+                                <div className="text-center text-muted-foreground py-8">
+                                    <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                    <p>Aucune pièce jointe</p>
+                                </div>
                             )}
                         </TabsContent>
 
                         <TabsContent value="dossier" className="space-y-2">
                             {filteredPieces.map(p => renderPieceItem(p))}
                             {filteredPieces.length === 0 && (
-                                <p className="text-center text-muted-foreground py-8">Aucune pièce jointe du dossier</p>
+                                <div className="text-center text-muted-foreground py-8">
+                                    <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                    <p>Aucune pièce jointe du dossier</p>
+                                </div>
                             )}
                         </TabsContent>
 
                         <TabsContent value="demandeurs" className="space-y-4">
-                            {Object.entries(relatedPieces.demandeurs).map(([id, data]: [string, any]) => (
+                            {Object.entries(relatedPieces.demandeurs).map(([id, data]) => (
                                 <div key={id} className="border rounded-lg p-4">
                                     <h4 className="font-medium mb-2 flex items-center gap-2">
                                         <User className="h-4 w-4" />
-                                        {data.demandeur.nom} {data.demandeur.prenom}
+                                        {data.demandeur.nom_demandeur} {data.demandeur.prenom_demandeur}
                                         <Badge variant="outline" className="text-xs">{data.demandeur.cin}</Badge>
                                     </h4>
                                     <div className="space-y-2">
@@ -428,12 +491,15 @@ export default function AttachmentsSection({
                                 </div>
                             ))}
                             {Object.keys(relatedPieces.demandeurs).length === 0 && (
-                                <p className="text-center text-muted-foreground py-8">Aucune pièce jointe de demandeur</p>
+                                <div className="text-center text-muted-foreground py-8">
+                                    <User className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                    <p>Aucune pièce jointe de demandeur</p>
+                                </div>
                             )}
                         </TabsContent>
 
                         <TabsContent value="proprietes" className="space-y-4">
-                            {Object.entries(relatedPieces.proprietes).map(([id, data]: [string, any]) => (
+                            {Object.entries(relatedPieces.proprietes).map(([id, data]) => (
                                 <div key={id} className="border rounded-lg p-4">
                                     <h4 className="font-medium mb-2 flex items-center gap-2">
                                         <Home className="h-4 w-4" />
@@ -446,7 +512,10 @@ export default function AttachmentsSection({
                                 </div>
                             ))}
                             {Object.keys(relatedPieces.proprietes).length === 0 && (
-                                <p className="text-center text-muted-foreground py-8">Aucune pièce jointe de propriété</p>
+                                <div className="text-center text-muted-foreground py-8">
+                                    <Home className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                    <p>Aucune pièce jointe de propriété</p>
+                                </div>
                             )}
                         </TabsContent>
                     </Tabs>
@@ -459,13 +528,16 @@ export default function AttachmentsSection({
                         ) : filteredPieces.length > 0 ? (
                             filteredPieces.map(p => renderPieceItem(p))
                         ) : (
-                            <p className="text-center text-muted-foreground py-8">Aucune pièce jointe</p>
+                            <div className="text-center text-muted-foreground py-8">
+                                <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                <p>Aucune pièce jointe</p>
+                            </div>
                         )}
                     </div>
                 )}
             </CardContent>
 
-            {/* Dialog Upload */}
+            {/* Dialog d'upload */}
             <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
@@ -521,7 +593,6 @@ export default function AttachmentsSection({
                             </Select>
                         </div>
 
-                        {/* Lier à un demandeur ou propriété (pour Dossier) */}
                         {attachableType === 'Dossier' && (demandeurs.length > 0 || proprietes.length > 0) && (
                             <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
                                 <Label className="text-sm font-medium">Lier à une entité (optionnel)</Label>
@@ -620,7 +691,7 @@ export default function AttachmentsSection({
                 </DialogContent>
             </Dialog>
 
-            {/* Preview Dialog */}
+            {/* Dialog de prévisualisation */}
             <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
                 <DialogContent className="max-w-4xl max-h-[90vh]">
                     <DialogHeader>

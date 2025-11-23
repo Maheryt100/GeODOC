@@ -7,19 +7,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
-
-
-/**
- * @property int $id
- * @property string $nom_original
- * ...
- */
+use Illuminate\Support\Facades\Log;
 
 class PieceJointe extends Model
 {
     use SoftDeletes;
 
     protected $table = 'pieces_jointes';
+
+    // ============ CONSTANTES CATÉGORIES ============
+    const CATEGORIE_GLOBAL = 'global';
+    const CATEGORIE_DEMANDEUR = 'demandeur';
+    const CATEGORIE_PROPRIETE = 'propriete';
+    const CATEGORIE_ADMINISTRATIF = 'administratif';
+
+    // ============ TYPES DE DOCUMENTS ============
+    const TYPE_CIN = 'CIN';
+    const TYPE_ACTE_NAISSANCE = 'Acte de naissance';
+    const TYPE_ACTE_MARIAGE = 'Acte de mariage';
+    const TYPE_CERTIFICAT_RESIDENCE = 'Certificat de résidence';
+    const TYPE_PLAN_TERRAIN = 'Plan du terrain';
+    const TYPE_TITRE_FONCIER = 'Titre foncier';
+    const TYPE_PV_BORNAGE = 'PV de bornage';
+    const TYPE_AUTRE = 'Autre';
 
     protected $fillable = [
         'attachable_type',
@@ -30,6 +40,7 @@ class PieceJointe extends Model
         'type_mime',
         'taille',
         'extension',
+        'categorie',
         'type_document',
         'description',
         'id_user',
@@ -45,19 +56,24 @@ class PieceJointe extends Model
         'verified_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'attachable_id' => 'integer',
+        'id_user' => 'integer',
+        'id_district' => 'integer',
+        'verified_by' => 'integer',
     ];
 
     protected $appends = [
         'url',
+        'view_url',
         'taille_formatee',
         'icone',
+        'categorie_label',
+        'is_image',
+        'is_pdf',
     ];
 
     // ============ RELATIONS ============
 
-    /**
-     * Relation polymorphique vers l'entité parente
-     */
     public function attachable(): MorphTo
     {
         return $this->morphTo();
@@ -80,9 +96,6 @@ class PieceJointe extends Model
 
     // ============ ACCESSORS ============
 
-    /**
-     * URL de téléchargement
-     */
     public function getUrlAttribute(): string
     {
         if (!$this->exists || !$this->getKey()) {
@@ -91,9 +104,14 @@ class PieceJointe extends Model
         return route('pieces-jointes.download', ['id' => $this->getKey()]);
     }
 
-    /**
-     * Taille formatée lisible
-     */
+    public function getViewUrlAttribute(): string
+    {
+        if (!$this->exists || !$this->getKey()) {
+            return '#';
+        }
+        return route('pieces-jointes.view', ['id' => $this->getKey()]);
+    }
+
     public function getTailleFormateeAttribute(): string
     {
         $bytes = (int)$this->taille;
@@ -109,9 +127,6 @@ class PieceJointe extends Model
         return $bytes . ' octets';
     }
 
-    /**
-     * Icône selon le type de fichier
-     */
     public function getIconeAttribute(): string
     {
         $ext = strtolower($this->extension ?? '');
@@ -126,19 +141,61 @@ class PieceJointe extends Model
         };
     }
 
+    public function getCategorieLabelAttribute(): string
+    {
+        return match($this->categorie) {
+            self::CATEGORIE_GLOBAL => 'Document général',
+            self::CATEGORIE_DEMANDEUR => 'Document demandeur',
+            self::CATEGORIE_PROPRIETE => 'Document propriété',
+            self::CATEGORIE_ADMINISTRATIF => 'Document administratif',
+            default => ucfirst($this->categorie ?? 'Non défini'),
+        };
+    }
+
+    public function getIsImageAttribute(): bool
+    {
+        $ext = strtolower($this->extension ?? '');
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
+    }
+
+    public function getIsPdfAttribute(): bool
+    {
+        return strtolower($this->extension ?? '') === 'pdf';
+    }
+
+    // ============ MÉTHODES STATIQUES ============
+
+    public static function getCategories(): array
+    {
+        return [
+            self::CATEGORIE_GLOBAL => 'Document général',
+            self::CATEGORIE_DEMANDEUR => 'Document demandeur',
+            self::CATEGORIE_PROPRIETE => 'Document propriété',
+            self::CATEGORIE_ADMINISTRATIF => 'Document administratif',
+        ];
+    }
+
+    public static function getTypesDocuments(): array
+    {
+        return [
+            self::TYPE_CIN => 'CIN',
+            self::TYPE_ACTE_NAISSANCE => 'Acte de naissance',
+            self::TYPE_ACTE_MARIAGE => 'Acte de mariage',
+            self::TYPE_CERTIFICAT_RESIDENCE => 'Certificat de résidence',
+            self::TYPE_PLAN_TERRAIN => 'Plan du terrain',
+            self::TYPE_TITRE_FONCIER => 'Titre foncier',
+            self::TYPE_PV_BORNAGE => 'PV de bornage',
+            self::TYPE_AUTRE => 'Autre',
+        ];
+    }
+
     // ============ MÉTHODES ============
 
-    /**
-     * Vérifier si le fichier existe physiquement
-     */
     public function fileExists(): bool
     {
         return Storage::disk('public')->exists($this->chemin ?? '');
     }
 
-    /**
-     * Obtenir le chemin complet du fichier
-     */
     public function getFullPath(): string
     {
         if (!$this->chemin) {
@@ -147,9 +204,6 @@ class PieceJointe extends Model
         return Storage::disk('public')->path($this->chemin);
     }
 
-    /**
-     * Obtenir l'URL publique du fichier
-     */
     public function getPublicUrl(): string
     {
         if (!$this->chemin) {
@@ -158,9 +212,6 @@ class PieceJointe extends Model
         return asset('storage/' . $this->chemin);
     }
 
-    /**
-     * Vérifier le document
-     */
     public function verify(?int $userId = null): bool
     {
         return $this->update([
@@ -170,9 +221,6 @@ class PieceJointe extends Model
         ]);
     }
 
-    /**
-     * Révoquer la vérification
-     */
     public function unverify(): bool
     {
         return $this->update([
@@ -182,26 +230,6 @@ class PieceJointe extends Model
         ]);
     }
 
-    /**
-     * Vérifier si c'est une image
-     */
-    public function isImage(): bool
-    {
-        $ext = strtolower($this->extension ?? '');
-        return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
-    }
-
-    /**
-     * Vérifier si c'est un PDF
-     */
-    public function isPdf(): bool
-    {
-        return strtolower($this->extension ?? '') === 'pdf';
-    }
-
-    /**
-     * Supprimer le fichier physique et l'enregistrement
-     */
     public function deleteFile(): bool
     {
         try {
@@ -211,7 +239,7 @@ class PieceJointe extends Model
             
             return (bool)$this->delete();
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Erreur suppression fichier', [
+            Log::error('Erreur suppression fichier', [
                 'piece_id' => $this->getKey(),
                 'chemin' => $this->chemin,
                 'error' => $e->getMessage()
@@ -238,6 +266,11 @@ class PieceJointe extends Model
         return $query->where('type_document', $type);
     }
 
+    public function scopeByCategorie($query, string $categorie)
+    {
+        return $query->where('categorie', $categorie);
+    }
+
     public function scopeByUser($query, int $userId)
     {
         return $query->where('id_user', $userId);
@@ -248,20 +281,25 @@ class PieceJointe extends Model
         return $query->where('id_district', $districtId);
     }
 
+    public function scopeForAttachable($query, string $type, int $id)
+    {
+        return $query->where('attachable_type', $type)
+                     ->where('attachable_id', $id);
+    }
+
     // ============ BOOT ============
 
     protected static function boot()
     {
         parent::boot();
 
-        // Supprimer le fichier physique lors de la suppression définitive
         static::forceDeleting(function (PieceJointe $piece) {
             try {
                 if ($piece->fileExists()) {
                     Storage::disk('public')->delete($piece->chemin);
                 }
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Erreur suppression fichier lors du forceDelete', [
+                Log::error('Erreur suppression fichier lors du forceDelete', [
                     'piece_id' => $piece->getKey(),
                     'error' => $e->getMessage()
                 ]);

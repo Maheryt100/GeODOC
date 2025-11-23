@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'log.access' => LogUserAccess::class,
             'district.scope' => \App\Http\Middleware\EnsureDistrictScope::class,
             'check.dossier.closed' => CheckDossierClosed::class,
+            'check.attachments' => \App\Http\Middleware\CheckAttachmentsAccess::class,
         ]);;
     })
     ->withExceptions(function (Exceptions $exceptions) {

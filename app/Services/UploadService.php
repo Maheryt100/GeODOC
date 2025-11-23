@@ -5,12 +5,13 @@ namespace App\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use App\Models\PieceJointe;
 
 class UploadService
 {
     // Extensions autorisées par catégorie
     const ALLOWED_DOCUMENTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
-    const ALLOWED_IMAGES = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    const ALLOWED_IMAGES = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
     const ALLOWED_ARCHIVES = ['zip', 'rar', '7z'];
     
     // Tailles maximales (en octets)
@@ -20,14 +21,16 @@ class UploadService
     /**
      * Valider un fichier
      */
-    public static function validateFile(UploadedFile $file): array
+    public function validateFile(UploadedFile $file): array
     {
         $errors = [];
         
         // Vérifier la taille
-        if ($file->getSize() > self::MAX_FILE_SIZE) {
-            $errors[] = "Le fichier dépasse la taille maximale de " . 
-                       (self::MAX_FILE_SIZE / 1048576) . " MB";
+        $maxSize = $this->isImage($file) ? self::MAX_IMAGE_SIZE : self::MAX_FILE_SIZE;
+        
+        if ($file->getSize() > $maxSize) {
+            $maxMB = $maxSize / 1048576;
+            $errors[] = "Le fichier dépasse la taille maximale de {$maxMB} MB";
         }
         
         // Vérifier l'extension
@@ -44,7 +47,7 @@ class UploadService
         
         // Vérifier le MIME type
         $mimeType = $file->getMimeType();
-        if (!self::isValidMimeType($mimeType)) {
+        if (!$this->isValidMimeType($mimeType)) {
             $errors[] = "Type MIME non autorisé: {$mimeType}";
         }
         
@@ -61,9 +64,18 @@ class UploadService
     }
 
     /**
+     * Vérifier si c'est une image
+     */
+    private function isImage(UploadedFile $file): bool
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+        return in_array($extension, self::ALLOWED_IMAGES);
+    }
+
+    /**
      * Valider le MIME type
      */
-    private static function isValidMimeType(string $mimeType): bool
+    private function isValidMimeType(string $mimeType): bool
     {
         $validMimeTypes = [
             // Documents
@@ -79,25 +91,16 @@ class UploadService
             'image/png',
             'image/gif',
             'image/webp',
+            'image/svg+xml',
             
             // Archives
             'application/zip',
+            'application/x-zip-compressed',
             'application/x-rar-compressed',
             'application/x-7z-compressed',
         ];
         
         return in_array($mimeType, $validMimeTypes);
-    }
-
-    /**
-     * Générer un nom de fichier sécurisé
-     */
-    public static function generateSecureFileName(string $originalName): string
-    {
-        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
-        $baseNameSecure = \Illuminate\Support\Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
-        
-        return $baseNameSecure . '_' . \Illuminate\Support\Str::uuid() . '.' . $extension;
     }
 
     /**
@@ -111,19 +114,17 @@ class UploadService
             $files = Storage::disk('public')->allFiles('pieces_jointes');
             
             foreach ($files as $file) {
-                // Vérifier si le fichier est référencé dans la base
                 $nomFichier = basename($file);
                 
-                if (class_exists(\App\Models\PieceJointe::class)) {
-                    $exists = \App\Models\PieceJointe::where('nom_fichier', $nomFichier)
-                        ->orWhere('chemin', $file)
-                        ->exists();
-                    
-                    if (!$exists) {
-                        Storage::disk('public')->delete($file);
-                        $deleted++;
-                        Log::info('Fichier orphelin supprimé', ['file' => $file]);
-                    }
+                // Vérifier si le fichier est référencé dans la base
+                $exists = PieceJointe::where('nom_fichier', $nomFichier)
+                    ->orWhere('chemin', $file)
+                    ->exists();
+                
+                if (!$exists) {
+                    Storage::disk('public')->delete($file);
+                    $deleted++;
+                    Log::info('Fichier orphelin supprimé', ['file' => $file]);
                 }
             }
             
@@ -134,5 +135,85 @@ class UploadService
         }
         
         return $deleted;
+    }
+
+    /**
+     * Vérifier l'intégrité des fichiers
+     */
+    public static function checkIntegrity(): array
+    {
+        $missing = [];
+        $totalChecked = 0;
+        
+        try {
+            PieceJointe::whereNull('deleted_at')
+                ->chunk(100, function($pieces) use (&$missing, &$totalChecked) {
+                    foreach ($pieces as $piece) {
+                        $totalChecked++;
+                        
+                        if (!Storage::disk('public')->exists($piece->chemin ?? '')) {
+                            $missing[] = [
+                                'id' => $piece->id,
+                                'nom_original' => $piece->nom_original,
+                                'chemin' => $piece->chemin,
+                                'created_at' => $piece->created_at->format('Y-m-d H:i:s'),
+                            ];
+                        }
+                    }
+                });
+
+        } catch (\Exception $e) {
+            Log::error('Erreur vérification intégrité', ['error' => $e->getMessage()]);
+        }
+        
+        return [
+            'total_checked' => $totalChecked,
+            'missing_files' => $missing,
+            'missing_count' => count($missing),
+        ];
+    }
+
+    /**
+     * Obtenir les statistiques de stockage
+     */
+    public static function getStorageStats(): array
+    {
+        $totalSize = PieceJointe::whereNull('deleted_at')->sum('taille');
+        $totalCount = PieceJointe::whereNull('deleted_at')->count();
+        
+        $byCategorie = PieceJointe::whereNull('deleted_at')
+            ->selectRaw('categorie, COUNT(*) as count, SUM(taille) as size')
+            ->groupBy('categorie')
+            ->get()
+            ->mapWithKeys(fn($item) => [
+                $item->categorie => [
+                    'count' => $item->count,
+                    'size' => $item->size,
+                    'size_formatted' => self::formatBytes($item->size),
+                ]
+            ]);
+
+        return [
+            'total_count' => $totalCount,
+            'total_size' => $totalSize,
+            'total_size_formatted' => self::formatBytes($totalSize),
+            'by_categorie' => $byCategorie,
+        ];
+    }
+
+    /**
+     * Formater les bytes
+     */
+    public static function formatBytes(int $bytes, int $precision = 2): string
+    {
+        if ($bytes >= 1073741824) {
+            return number_format($bytes / 1073741824, $precision) . ' GB';
+        } elseif ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, $precision) . ' MB';
+        } elseif ($bytes >= 1024) {
+            return number_format($bytes / 1024, $precision) . ' KB';
+        }
+        
+        return $bytes . ' octets';
     }
 }

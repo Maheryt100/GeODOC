@@ -10,143 +10,213 @@ use Illuminate\Support\Facades\Storage;
 
 class MaintainPiecesJointes extends Command
 {
-    protected $signature = 'pieces-jointes:maintain {--clean : Nettoyer les fichiers orphelins}';
-    protected $description = 'Maintenance des pièces jointes (vérification d\'intégrité et nettoyage)';
+    protected $signature = 'pieces-jointes:maintain 
+                            {--clean : Nettoyer les fichiers orphelins}
+                            {--check : Vérifier l\'intégrité}
+                            {--stats : Afficher les statistiques}
+                            {--all : Exécuter toutes les opérations}
+                            {--fix : Corriger automatiquement les problèmes}';
+    
+    protected $description = 'Maintenance des pièces jointes (nettoyage, vérification, statistiques)';
 
     public function handle(): int
     {
         $this->info('🔧 Démarrage de la maintenance des pièces jointes...');
+        $this->newLine();
 
         try {
-            // Statistiques
-            $total = PieceJointe::count();
-            $verified = PieceJointe::where('is_verified', true)->count();
-            $notVerified = PieceJointe::where('is_verified', false)->count();
-            $deleted = PieceJointe::onlyTrashed()->count();
+            $runAll = $this->option('all');
 
-            $this->info("📊 Statistiques:");
-            $this->line("   Total: {$total}");
-            $this->line("   ✅ Vérifiées: {$verified}");
-            $this->line("   ❌ Non vérifiées: {$notVerified}");
-            $this->line("   🗑️  Supprimées (soft): {$deleted}");
-
-            // Nettoyer les orphelins si demandé
-            if ($this->option('clean')) {
-                $this->info('');
-                $this->info('🧹 Nettoyage des fichiers orphelins...');
-                
-                $deletedOrphan = UploadService::cleanOrphanFiles();
-                
-                if ($deletedOrphan > 0) {
-                    $this->info("✅ {$deletedOrphan} fichier(s) orphelin(s) supprimé(s)");
-                } else {
-                    $this->info("✅ Aucun fichier orphelin trouvé");
-                }
+            // Statistiques de base
+            if ($this->option('stats') || $runAll || (!$this->hasAnyOption())) {
+                $this->showStats();
             }
 
-            // Vérifier l'intégrité
-            $this->info('');
-            $this->info('🔍 Vérification de l\'intégrité des fichiers...');
-            
-            $missing = [];
-            $total_checked = 0;
-            
-            PieceJointe::whereNull('deleted_at')
-                ->chunk(100, function($pieces) use (&$missing, &$total_checked) {
-                    foreach ($pieces as $piece) {
-                        $total_checked++;
-                        
-                        if (!Storage::disk('public')->exists($piece->chemin ?? '')) {
-                            $missing[] = $piece;
-                            
-                            $this->warn("❌ Fichier manquant: {$piece->nom_original} " .
-                                "(ID: {$piece->id}, Chemin: {$piece->chemin})");
-                        }
-                    }
-                });
-
-            $this->line("✅ {$total_checked} fichiers vérifiés");
-
-            if (count($missing) === 0) {
-                $this->info('✅ Tous les fichiers physiques sont présents');
-            } else {
-                $this->warn("⚠️  " . count($missing) . " fichier(s) manquant(s) en base");
-                
-                // Ligne 81
-                if ($this->confirm('Supprimer les enregistrements orphelins en base de données?')) {
-                    foreach ($missing as $piece) {
-                        $piece->forceDelete();
-                        $this->line("   🗑️  Supprimé: {$piece->nom_original}");
-                    }
-                    $this->info("✅ " . count($missing) . " enregistrement(s) supprimé(s)");
-                }
+            // Nettoyage des orphelins
+            if ($this->option('clean') || $runAll) {
+                $this->cleanOrphans();
             }
 
-            // Vérifier l'espace disque
-            $this->info('');
-            $this->info('💾 Espace disque:');
-            
-            $totalSize = PieceJointe::whereNull('deleted_at')->sum('taille');
-            $formattedSize = $this->formatBytes($totalSize);
-            $this->line("   Taille totale: {$formattedSize}");
-
-            // Informations supplémentaires
-            $this->info('');
-            $this->info('ℹ️  Informations:');
-            
-            $oldestPiece = PieceJointe::whereNull('deleted_at')
-                ->orderBy('created_at', 'asc')
-                ->first();
-            
-            if ($oldestPiece) {
-                $days = now()->diffInDays($oldestPiece->created_at);
-                $this->line("   Fichier le plus ancien: {$oldestPiece->nom_original} ({$days} jours)");
+            // Vérification d'intégrité
+            if ($this->option('check') || $runAll) {
+                $this->checkIntegrity();
             }
 
-            $newestPiece = PieceJointe::whereNull('deleted_at')
-                ->orderBy('created_at', 'desc')
-                ->first();
-                
-            if ($newestPiece) {
-                $this->line("   Fichier le plus récent: {$newestPiece->nom_original}");
-            }
-
-            $this->info('');
+            $this->newLine();
             $this->info('✅ Maintenance terminée avec succès');
-            
-            Log::info('Maintenance pièces jointes complétée', [
-                'total' => $total,
-                'verified' => $verified,
-                'total_size' => $totalSize,
-                'missing_files' => count($missing),
-                'cleaned_orphans' => $this->option('clean'),
-            ]);
 
             return self::SUCCESS;
 
         } catch (\Exception $e) {
-            $this->error('❌ Erreur lors de la maintenance: ' . $e->getMessage());
-            
+            $this->error('❌ Erreur: ' . $e->getMessage());
             Log::error('Erreur maintenance pièces jointes', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-
             return self::FAILURE;
         }
     }
 
-    /**
-     * Formater les bytes en format lisible
-     */
-    private function formatBytes(int $bytes, int $precision = 2): string
+    private function hasAnyOption(): bool
     {
-        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        return $this->option('clean') || 
+               $this->option('check') || 
+               $this->option('stats') || 
+               $this->option('all');
+    }
+
+    private function showStats(): void
+    {
+        $this->info('📊 Statistiques des pièces jointes:');
+        $this->newLine();
         
-        for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
-            $bytes /= 1024;
+        $total = PieceJointe::count();
+        $verified = PieceJointe::where('is_verified', true)->count();
+        $notVerified = PieceJointe::where('is_verified', false)->count();
+        $deleted = PieceJointe::onlyTrashed()->count();
+
+        $this->table(
+            ['Catégorie', 'Valeur'],
+            [
+                ['Total (actifs)', $total],
+                ['Vérifiées', $verified],
+                ['Non vérifiées', $notVerified],
+                ['Supprimées (soft delete)', $deleted],
+            ]
+        );
+
+        // Statistiques par catégorie
+        $this->newLine();
+        $this->info('📁 Par catégorie:');
+        
+        $categorieStats = PieceJointe::selectRaw('categorie, COUNT(*) as count')
+            ->groupBy('categorie')
+            ->get();
+        
+        foreach ($categorieStats as $stat) {
+            $this->line("   • " . ucfirst($stat->categorie) . ": " . $stat->count);
         }
+
+        // Statistiques de stockage
+        $this->newLine();
+        $stats = UploadService::getStorageStats();
         
-        return round($bytes, $precision) . ' ' . $units[$i];
+        $this->info('💾 Stockage:');
+        $this->line("   Taille totale: {$stats['total_size_formatted']}");
+        
+        if (isset($stats['by_categorie']) && count($stats['by_categorie']) > 0) {
+            $this->newLine();
+            $this->info('Par catégorie:');
+            foreach ($stats['by_categorie'] as $categorie => $data) {
+                $this->line("   • {$categorie}: {$data['count']} fichiers ({$data['size_formatted']})");
+            }
+        }
+
+        // Top 10 des fichiers les plus lourds
+        $this->newLine();
+        $this->info('📈 Top 10 des fichiers les plus volumineux:');
+        
+        $heavyFiles = PieceJointe::orderBy('taille', 'desc')
+            ->limit(10)
+            ->get(['nom_original', 'taille', 'categorie', 'created_at']);
+        
+        if ($heavyFiles->count() > 0) {
+            $this->table(
+                ['Fichier', 'Taille', 'Catégorie', 'Date'],
+                $heavyFiles->map(fn($f) => [
+                    substr($f->nom_original, 0, 40) . (strlen($f->nom_original) > 40 ? '...' : ''),
+                    UploadService::formatBytes($f->taille),
+                    $f->categorie,
+                    $f->created_at->format('Y-m-d'),
+                ])->toArray()
+            );
+        }
+    }
+
+    private function cleanOrphans(): void
+    {
+        $this->newLine();
+        $this->info('🧹 Nettoyage des fichiers orphelins...');
+        
+        $bar = $this->output->createProgressBar();
+        $bar->start();
+        
+        $deleted = UploadService::cleanOrphanFiles();
+        
+        $bar->finish();
+        $this->newLine();
+        
+        if ($deleted > 0) {
+            $this->warn("⚠️  {$deleted} fichier(s) orphelin(s) supprimé(s)");
+        } else {
+            $this->info("✅ Aucun fichier orphelin trouvé");
+        }
+    }
+
+    private function checkIntegrity(): void
+    {
+        $this->newLine();
+        $this->info('🔍 Vérification de l\'intégrité des fichiers...');
+        
+        $result = UploadService::checkIntegrity();
+        
+        $this->line("✅ {$result['total_checked']} enregistrements vérifiés");
+        
+        if ($result['missing_count'] === 0) {
+            $this->info('✅ Tous les fichiers référencés sont présents');
+        } else {
+            $this->warn("⚠️  {$result['missing_count']} fichier(s) manquant(s) détecté(s)!");
+            $this->newLine();
+            
+            // Afficher les premiers fichiers manquants
+            $displayCount = min(10, $result['missing_count']);
+            $this->table(
+                ['ID', 'Nom original', 'Chemin', 'Date création'],
+                array_map(fn($m) => [
+                    $m['id'],
+                    substr($m['nom_original'], 0, 30) . (strlen($m['nom_original']) > 30 ? '...' : ''),
+                    substr($m['chemin'], 0, 40) . (strlen($m['chemin']) > 40 ? '...' : ''),
+                    $m['created_at']
+                ], array_slice($result['missing_files'], 0, $displayCount))
+            );
+            
+            if ($result['missing_count'] > $displayCount) {
+                $this->line("... et " . ($result['missing_count'] - $displayCount) . " autre(s)");
+            }
+            
+            // Proposer de corriger
+            if ($this->option('fix') || $this->confirm('Supprimer les enregistrements orphelins de la base de données?', false)) {
+                $deleted = 0;
+                foreach ($result['missing_files'] as $missing) {
+                    $piece = PieceJointe::find($missing['id']);
+                    if ($piece) {
+                        $piece->forceDelete();
+                        $deleted++;
+                    }
+                }
+                $this->info("✅ {$deleted} enregistrement(s) supprimé(s)");
+            }
+        }
+
+        // Vérifier les chemins dupliqués
+        $this->newLine();
+        $this->info('🔍 Vérification des chemins dupliqués...');
+        
+        $duplicates = PieceJointe::select('chemin')
+            ->whereNotNull('chemin')
+            ->groupBy('chemin')
+            ->havingRaw('COUNT(*) > 1')
+            ->get();
+        
+        if ($duplicates->count() > 0) {
+            $this->warn("⚠️  {$duplicates->count()} chemin(s) dupliqué(s) trouvé(s)");
+            
+            foreach ($duplicates->take(5) as $dup) {
+                $count = PieceJointe::where('chemin', $dup->chemin)->count();
+                $this->line("   • {$dup->chemin} ({$count} occurrences)");
+            }
+        } else {
+            $this->info('✅ Aucun chemin dupliqué');
+        }
     }
 }

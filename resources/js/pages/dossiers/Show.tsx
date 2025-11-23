@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
     LandPlot, Pencil, Lock, LockOpen, FileOutput, 
-    MapPin, Calendar, Building2, Link2 
+    MapPin, Calendar, Building2 
 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -16,11 +16,11 @@ import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '
 import { CloseDossierDialog } from '@/components/CloseDossierDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// ✅ Import des nouveaux composants d'association
+// Import des nouveaux composants d'association
 import { LinkDemandeurDialog } from '@/components/associations/LinkDemandeurDialog';
 import { LinkProprieteDialog } from '@/components/associations/LinkProprieteDialog';
 
-// ✅ Import des composants de liste
+// Import des composants de liste
 import DemandeursIndex from '@/pages/demandeurs/index';
 import ProprietesIndex from '@/pages/proprietes/index';
 
@@ -30,7 +30,22 @@ interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
 }
 
-// ✅ Interface unifiée et complète
+// Interface pour les demandeurs de base (pour AttachmentsSection)
+interface BaseDemandeur {
+    id: number;
+    nom_demandeur: string;
+    prenom_demandeur: string;
+    cin: string;
+   
+}
+
+// Interface pour les propriétés de base (pour AttachmentsSection)
+interface BasePropriete {
+    id: number;
+    lot: string;
+    titre: string | null;
+}
+
 interface PageProps {
     dossier: Dossier & {
         demandeurs: Demandeur[];
@@ -65,7 +80,7 @@ export default function Show() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     
-    // ✅ États pour les dialogues d'association
+    // États pour les dialogues d'association
     const [linkDemandeurOpen, setLinkDemandeurOpen] = useState(false);
     const [linkProprieteOpen, setLinkProprieteOpen] = useState(false);
     const [selectedProprieteForLink, setSelectedProprieteForLink] = useState<Propriete | null>(null);
@@ -211,6 +226,20 @@ export default function Show() {
         return !dem.date_naissance || !dem.lieu_naissance || !dem.date_delivrance || 
                !dem.lieu_delivrance || !dem.domiciliation || !dem.occupation || !dem.nom_mere;
     };
+
+    // Convertir les demandeurs et propriétés pour AttachmentsSection
+    const baseDemandeursForAttachments: BaseDemandeur[] = allDemandeurs.map(d => ({
+        id: d.id,
+        nom_demandeur: d.nom_demandeur,
+        prenom_demandeur: d.prenom_demandeur ?? "",
+        cin: d.cin,
+    }));
+
+    const baseProprietesForAttachments: BasePropriete[] = proprietes.map(p => ({
+        id: p.id,
+        lot: p.lot,
+        titre: p.titre,
+    }));
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dossiers', href: route('dossiers') },
@@ -364,7 +393,7 @@ export default function Show() {
                     </CardContent>
                 </Card>
 
-                {/* ✅ Listes avec boutons d'association */}
+                {/* Listes avec boutons d'association */}
                 <DemandeursIndex
                     demandeurs={allDemandeurs}
                     dossier={dossier}
@@ -387,7 +416,7 @@ export default function Show() {
                     isPropertyIncomplete={isPropertyIncomplete}
                 />
                 
-                {/* ✅ Section Pièces Jointes améliorée - À la fin */}
+                {/* Section Pièces Jointes - Corrigée */}
                 <div className="mt-6">
                     <AttachmentsSection
                         attachableType="Dossier"
@@ -397,15 +426,14 @@ export default function Show() {
                         canDelete={userPermissions.canDelete && !dossier.is_closed}
                         canVerify={userPermissions.canClose}
                         initialCount={dossier.pieces_jointes_count || 0}
-                        // ✅ NOUVEAU: Passer les demandeurs et propriétés pour la liaison
-                        demandeurs={allDemandeurs}
-                        proprietes={proprietes}
+                        demandeurs={baseDemandeursForAttachments}
+                        proprietes={baseProprietesForAttachments}
                         showRelated={true}
                     />
                 </div>
             </div>
 
-            {/* ✅ Dialogues d'association */}
+            {/* Dialogues d'association */}
             {selectedProprieteForLink && (
                 <LinkDemandeurDialog
                     open={linkDemandeurOpen}

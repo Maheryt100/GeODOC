@@ -18,7 +18,97 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class PieceJointeController extends Controller
 {
     /**
-     * Upload de pièces jointes avec catégorie
+     * Lister les pièces jointes
+     */
+    public function index(Request $request)
+    {
+        // ✅ CORRECTION: Validation plus permissive pour include_related
+        $request->validate([
+            'attachable_type' => 'required|in:Dossier,Demandeur,Propriete',
+            'attachable_id' => 'required|integer',
+            'categorie' => 'nullable|string',
+            'type_document' => 'nullable|string',
+            'include_related' => 'nullable|string|in:true,false,1,0', // ✅ Accepte string
+        ]);
+
+        try {
+            $modelClass = "App\\Models\\" . $request->attachable_type;
+            
+            if (!class_exists($modelClass)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Type d\'entité invalide'
+                ], 400);
+            }
+
+            $entity = $modelClass::find($request->attachable_id);
+            
+            if (!$entity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Entité introuvable'
+                ], 404);
+            }
+
+            // Vérifier l'accès
+            if (!$this->canAccessEntity($entity)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé'
+                ], 403);
+            }
+
+            // Query de base
+            $query = $entity->piecesJointes()
+                ->with(['user:id,name,email', 'verifiedBy:id,name,email'])
+                ->orderBy('created_at', 'desc');
+
+            // Filtres
+            if ($request->filled('categorie')) {
+                $query->where('categorie', $request->categorie);
+            }
+
+            if ($request->filled('type_document')) {
+                $query->where('type_document', $request->type_document);
+            }
+
+            $pieces = $query->get()->map(fn($piece) => $this->formatPieceJointe($piece));
+
+            // PJ des entités liées (pour Dossier)
+            $relatedPieces = [];
+            
+            // ✅ CORRECTION: Vérifier plusieurs formats de valeur
+            $includeRelated = in_array($request->input('include_related'), ['true', '1', true, 1], true);
+            
+            if ($includeRelated && $entity instanceof Dossier) {
+                $relatedPieces = $this->getRelatedPiecesJointes($entity);
+            }
+
+            return response()->json([
+                'success' => true,
+                'pieces_jointes' => $pieces,
+                'related_pieces' => $relatedPieces,
+                'total' => $pieces->count(),
+                'categories' => PieceJointe::getCategories(),
+                'types_documents' => PieceJointe::getTypesDocuments(),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Erreur liste pièces jointes', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du chargement: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload de pièces jointes
      */
     public function upload(Request $request)
     {
@@ -31,7 +121,6 @@ class PieceJointeController extends Controller
             'categorie' => 'nullable|string|in:global,demandeur,propriete,administratif',
             'descriptions' => 'nullable|array',
             'descriptions.*' => 'nullable|string|max:500',
-            // Pour lier à une entité spécifique (demandeur/propriete) depuis un dossier
             'linked_entity_type' => 'nullable|in:Demandeur,Propriete',
             'linked_entity_id' => 'nullable|integer',
         ]);
@@ -48,6 +137,7 @@ class PieceJointeController extends Controller
 
             $entity = $modelClass::findOrFail($request->attachable_id);
 
+            // Vérifier les permissions
             if (!$this->canManagePiecesJointes($entity)) {
                 return response()->json([
                     'success' => false,
@@ -55,22 +145,21 @@ class PieceJointeController extends Controller
                 ], 403);
             }
 
-            // Déterminer l'entité cible (peut être différente de l'entité attachable)
-            $targetEntity = $entity;
-            $categorie = $request->categorie;
-
-            // Si on lie à une entité spécifique depuis un dossier
-            if ($request->linked_entity_type && $request->linked_entity_id) {
-                $linkedClass = "App\\Models\\" . $request->linked_entity_type;
-                $targetEntity = $linkedClass::findOrFail($request->linked_entity_id);
+            // Si une entité liée est spécifiée (pour les dossiers)
+            if ($request->filled('linked_entity_type') && $request->filled('linked_entity_id')) {
+                $linkedModelClass = "App\\Models\\" . $request->linked_entity_type;
+                $linkedEntity = $linkedModelClass::findOrFail($request->linked_entity_id);
                 
-                // Définir la catégorie automatiquement
-                $categorie = $categorie ?? match($request->linked_entity_type) {
-                    'Demandeur' => PieceJointe::CATEGORIE_DEMANDEUR,
-                    'Propriete' => PieceJointe::CATEGORIE_PROPRIETE,
-                    default => PieceJointe::CATEGORIE_GLOBAL,
-                };
+                // Utiliser l'entité liée pour l'upload
+                $entity = $linkedEntity;
             }
+
+            // Déterminer la catégorie
+            $categorie = $request->categorie ?? match($entity::class) {
+                Demandeur::class => PieceJointe::CATEGORIE_DEMANDEUR,
+                Propriete::class => PieceJointe::CATEGORIE_PROPRIETE,
+                default => PieceJointe::CATEGORIE_GLOBAL,
+            };
 
             $uploaded = [];
             $errors = [];
@@ -78,7 +167,7 @@ class PieceJointeController extends Controller
             DB::beginTransaction();
 
             foreach ($request->file('files') as $index => $file) {
-                $validation = UploadService::validateFile($file);
+                $validation = app(UploadService::class)->validateFile($file);
                 
                 if (!$validation['valid']) {
                     $errors[] = [
@@ -90,11 +179,9 @@ class PieceJointeController extends Controller
 
                 try {
                     $description = $request->descriptions[$index] ?? null;
-                    
-                    // Obtenir le district de l'entité
-                    $districtId = $this->getEntityDistrictId($targetEntity);
+                    $districtId = $this->getEntityDistrictId($entity);
 
-                    $piece = $targetEntity->ajouterPieceJointe(
+                    $piece = $entity->ajouterPieceJointe(
                         $file,
                         $request->type_document,
                         $description,
@@ -103,9 +190,14 @@ class PieceJointeController extends Controller
                         $categorie
                     );
 
-                    $uploaded[] = $piece;
+                    $uploaded[] = $this->formatPieceJointe($piece);
 
                 } catch (\Exception $fileException) {
+                    Log::error('Erreur upload fichier individuel', [
+                        'file' => $file->getClientOriginalName(),
+                        'error' => $fileException->getMessage()
+                    ]);
+                    
                     $errors[] = [
                         'file' => $file->getClientOriginalName(),
                         'errors' => [$fileException->getMessage()]
@@ -115,9 +207,14 @@ class PieceJointeController extends Controller
 
             DB::commit();
 
+            $message = count($uploaded) . ' fichier(s) uploadé(s) avec succès';
+            if (count($errors) > 0) {
+                $message .= ' - ' . count($errors) . ' erreur(s)';
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => count($uploaded) . ' fichier(s) uploadé(s) avec succès',
+                'message' => $message,
                 'uploaded' => $uploaded,
                 'errors' => $errors
             ]);
@@ -138,55 +235,7 @@ class PieceJointeController extends Controller
     }
 
     /**
-     * Lister les pièces jointes avec filtres
-     */
-    public function index(Request $request)
-    {
-        $request->validate([
-            'attachable_type' => 'required|in:Dossier,Demandeur,Propriete',
-            'attachable_id' => 'required|integer',
-            'categorie' => 'nullable|string',
-            'include_related' => 'nullable|boolean', // Inclure les PJ des entités liées
-        ]);
-
-        try {
-            $modelClass = "App\\Models\\" . $request->attachable_type;
-            $entity = $modelClass::findOrFail($request->attachable_id);
-
-            $query = $entity->piecesJointes()
-                ->with(['user:id,name,email', 'verifiedBy:id,name,email']);
-
-            // Filtrer par catégorie si spécifié
-            if ($request->filled('categorie')) {
-                $query->where('categorie', $request->categorie);
-            }
-
-            $pieces = $query->get()->map(fn($piece) => $this->formatPieceJointe($piece));
-
-            // Si on demande les PJ des entités liées (pour un Dossier)
-            $relatedPieces = [];
-            if ($request->boolean('include_related') && $entity instanceof Dossier) {
-                $relatedPieces = $this->getRelatedPiecesJointes($entity);
-            }
-
-            return response()->json([
-                'success' => true,
-                'pieces_jointes' => $pieces,
-                'related_pieces' => $relatedPieces,
-                'categories' => PieceJointe::getCategories(),
-                'types_documents' => PieceJointe::getTypesDocuments(),
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Récupérer les pièces jointes des demandeurs et propriétés d'un dossier
+     * Récupérer les PJ des entités liées d'un dossier
      */
     private function getRelatedPiecesJointes(Dossier $dossier): array
     {
@@ -195,60 +244,67 @@ class PieceJointeController extends Controller
             'proprietes' => [],
         ];
 
-        // PJ des demandeurs du dossier
-        foreach ($dossier->demandeurs as $demandeur) {
-            $pieces = $demandeur->piecesJointes()
-                ->with(['user:id,name'])
-                ->get()
-                ->map(fn($p) => $this->formatPieceJointe($p, [
-                    'demandeur_id' => $demandeur->id,
-                    'demandeur_nom' => "{$demandeur->nom_demandeur} {$demandeur->prenom_demandeur}",
-                ]));
-            
-            if ($pieces->count() > 0) {
-                $related['demandeurs'][$demandeur->id] = [
-                    'demandeur' => [
-                        'id' => $demandeur->id,
-                        'nom' => $demandeur->nom_demandeur,
-                        'prenom' => $demandeur->prenom_demandeur,
-                        'cin' => $demandeur->cin,
-                    ],
-                    'pieces' => $pieces,
-                ];
+        try {
+            // PJ des demandeurs
+            if ($dossier->demandeurs) {
+                foreach ($dossier->demandeurs as $demandeur) {
+                    $pieces = $demandeur->piecesJointes()
+                        ->with(['user:id,name'])
+                        ->orderBy('created_at', 'desc')
+                        ->get()
+                        ->map(fn($p) => $this->formatPieceJointe($p));
+                    
+                    if ($pieces->count() > 0) {
+                        $related['demandeurs'][$demandeur->id] = [
+                            'demandeur' => [
+                                'id' => $demandeur->id,
+                                'nom' => $demandeur->nom_demandeur,
+                                'prenom' => $demandeur->prenom_demandeur,
+                                'cin' => $demandeur->cin,
+                            ],
+                            'pieces' => $pieces,
+                        ];
+                    }
+                }
             }
-        }
 
-        // PJ des propriétés du dossier
-        foreach ($dossier->proprietes as $propriete) {
-            $pieces = $propriete->piecesJointes()
-                ->with(['user:id,name'])
-                ->get()
-                ->map(fn($p) => $this->formatPieceJointe($p, [
-                    'propriete_id' => $propriete->id,
-                    'propriete_lot' => $propriete->lot,
-                ]));
-            
-            if ($pieces->count() > 0) {
-                $related['proprietes'][$propriete->id] = [
-                    'propriete' => [
-                        'id' => $propriete->id,
-                        'lot' => $propriete->lot,
-                        'titre' => $propriete->titre,
-                    ],
-                    'pieces' => $pieces,
-                ];
+            // PJ des propriétés
+            if ($dossier->proprietes) {
+                foreach ($dossier->proprietes as $propriete) {
+                    $pieces = $propriete->piecesJointes()
+                        ->with(['user:id,name'])
+                        ->orderBy('created_at', 'desc')
+                        ->get()
+                        ->map(fn($p) => $this->formatPieceJointe($p));
+                    
+                    if ($pieces->count() > 0) {
+                        $related['proprietes'][$propriete->id] = [
+                            'propriete' => [
+                                'id' => $propriete->id,
+                                'lot' => $propriete->lot,
+                                'titre' => $propriete->titre,
+                            ],
+                            'pieces' => $pieces,
+                        ];
+                    }
+                }
             }
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la récupération des PJ liées', [
+                'dossier_id' => $dossier->id,
+                'error' => $e->getMessage()
+            ]);
         }
 
         return $related;
     }
 
     /**
-     * Formater une pièce jointe pour la réponse JSON
+     * Formater une pièce jointe
      */
-    private function formatPieceJointe(PieceJointe $piece, array $extra = []): array
+    private function formatPieceJointe(PieceJointe $piece): array
     {
-        return array_merge([
+        return [
             'id' => $piece->id,
             'nom_original' => $piece->nom_original,
             'nom_fichier' => $piece->nom_fichier,
@@ -260,17 +316,23 @@ class PieceJointeController extends Controller
             'categorie_label' => $piece->categorie_label,
             'description' => $piece->description,
             'is_verified' => $piece->is_verified,
-            'url' => route('pieces-jointes.download', $piece->id),
-            'view_url' => route('pieces-jointes.view', $piece->id),
+            'url' => $piece->url,
+            'view_url' => $piece->view_url,
             'taille_formatee' => $piece->taille_formatee,
             'icone' => $piece->icone,
-            'is_image' => $piece->isImage(),
-            'is_pdf' => $piece->isPdf(),
-            'created_at' => $piece->created_at,
-            'user' => $piece->user ? ['id' => $piece->user->id, 'name' => $piece->user->name] : null,
-            'verified_by' => $piece->verifiedBy ? ['id' => $piece->verifiedBy->id, 'name' => $piece->verifiedBy->name] : null,
-            'verified_at' => $piece->verified_at,
-        ], $extra);
+            'is_image' => $piece->is_image,
+            'is_pdf' => $piece->is_pdf,
+            'created_at' => $piece->created_at->toISOString(),
+            'user' => $piece->user ? [
+                'id' => $piece->user->id,
+                'name' => $piece->user->name
+            ] : null,
+            'verified_by' => $piece->verifiedBy ? [
+                'id' => $piece->verifiedBy->id,
+                'name' => $piece->verifiedBy->name
+            ] : null,
+            'verified_at' => $piece->verified_at?->toISOString(),
+        ];
     }
 
     /**
@@ -286,10 +348,14 @@ class PieceJointeController extends Controller
             }
 
             if (!$piece->fileExists()) {
+                Log::error('Fichier introuvable', [
+                    'piece_id' => $id,
+                    'chemin' => $piece->chemin
+                ]);
                 abort(404, 'Fichier introuvable');
             }
 
-            $fullPath = Storage::disk('public')->path($piece->chemin);
+            $fullPath = $piece->getFullPath();
 
             return response()->download(
                 $fullPath,
@@ -298,13 +364,16 @@ class PieceJointeController extends Controller
             );
 
         } catch (\Exception $e) {
-            Log::error('Erreur téléchargement', ['piece_id' => $id, 'error' => $e->getMessage()]);
+            Log::error('Erreur téléchargement', [
+                'piece_id' => $id,
+                'error' => $e->getMessage()
+            ]);
             abort(500, 'Erreur lors du téléchargement');
         }
     }
 
     /**
-     * Visualiser une pièce jointe (inline)
+     * Visualiser une pièce jointe
      */
     public function view($id)
     {
@@ -326,6 +395,10 @@ class PieceJointeController extends Controller
                 ->header('Content-Disposition', 'inline; filename="' . $piece->nom_original . '"');
 
         } catch (\Exception $e) {
+            Log::error('Erreur visualisation', [
+                'piece_id' => $id,
+                'error' => $e->getMessage()
+            ]);
             abort(500, 'Erreur lors de la visualisation');
         }
     }
@@ -345,7 +418,14 @@ class PieceJointeController extends Controller
                 ], 403);
             }
 
+            $nomFichier = $piece->nom_original;
             $piece->deleteFile();
+
+            Log::info('Pièce jointe supprimée', [
+                'piece_id' => $id,
+                'nom' => $nomFichier,
+                'user_id' => Auth::id()
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -353,6 +433,11 @@ class PieceJointeController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Erreur suppression pièce jointe', [
+                'piece_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur: ' . $e->getMessage()
@@ -369,12 +454,20 @@ class PieceJointeController extends Controller
         $user = Auth::user();
 
         if (!$user || (!$user->isSuperAdmin() && !$user->isAdminDistrict())) {
-            return response()->json(['success' => false, 'message' => 'Accès non autorisé'], 403);
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès non autorisé'
+            ], 403);
         }
 
         try {
             $piece = PieceJointe::findOrFail($id);
             $piece->verify($user->id);
+
+            Log::info('Pièce jointe vérifiée', [
+                'piece_id' => $id,
+                'verified_by' => $user->id
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -391,7 +484,7 @@ class PieceJointeController extends Controller
     }
 
     /**
-     * Mettre à jour les métadonnées d'une pièce jointe
+     * Mettre à jour les métadonnées
      */
     public function update(Request $request, $id)
     {
@@ -405,7 +498,10 @@ class PieceJointeController extends Controller
             $piece = PieceJointe::findOrFail($id);
 
             if (!$this->canManagePiecesJointes($piece->attachable)) {
-                return response()->json(['success' => false, 'message' => 'Accès non autorisé'], 403);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé'
+                ], 403);
             }
 
             $piece->update($request->only(['type_document', 'categorie', 'description']));
@@ -424,7 +520,7 @@ class PieceJointeController extends Controller
         }
     }
 
-    // ============ MÉTHODES PRIVÉES ============
+    // ============ HELPERS ============
 
     private function getEntityDistrictId($entity): ?int
     {
@@ -438,13 +534,25 @@ class PieceJointeController extends Controller
         return Auth::user()?->id_district;
     }
 
+    private function canAccessEntity($entity): bool
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        if (!$user) return false;
+        if ($user->isSuperAdmin() || $user->isCentralUser()) return true;
+
+        $entityDistrict = $this->getEntityDistrictId($entity);
+        return $entityDistrict && $user->id_district === $entityDistrict;
+    }
+
     private function canAccessPieceJointe(PieceJointe $piece): bool
     {
         /** @var User $user */
         $user = Auth::user();
 
         if (!$user) return false;
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin() || $user->isCentralUser()) return true;
         if ($piece->id_district && $user->id_district === $piece->id_district) return true;
         if ($piece->id_user === $user->id) return true;
 
@@ -476,7 +584,7 @@ class PieceJointeController extends Controller
         }
 
         if ($dossier && $dossier->is_closed) {
-            return false;
+            return $user->isSuperAdmin() || $user->isAdminDistrict();
         }
         
         return $user->canCreate();
