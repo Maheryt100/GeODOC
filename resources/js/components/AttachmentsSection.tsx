@@ -15,6 +15,7 @@ import {
     User, Home, File, Filter, Search, X, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PreviewModal from '@/components/PreviewModal';
 import { router } from '@inertiajs/react';
 
 // ============ TYPES ============
@@ -691,23 +692,11 @@ export default function AttachmentsSection({
                 </DialogContent>
             </Dialog>
 
-            {/* Dialog de prévisualisation */}
-            <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
-                <DialogContent className="max-w-4xl max-h-[90vh]">
-                    <DialogHeader>
-                        <DialogTitle>Aperçu</DialogTitle>
-                    </DialogHeader>
-                    {previewUrl && (
-                        <div className="flex justify-center overflow-auto max-h-[70vh]">
-                            {previewUrl.includes('.pdf') ? (
-                                <iframe src={previewUrl} className="w-full h-[70vh]" />
-                            ) : (
-                                <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
-                            )}
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
+            {/* Dialog de prévisualisation - Utilise le nouveau composant */}
+            <PreviewModal 
+                url={previewUrl} 
+                onClose={() => setPreviewUrl(null)} 
+            />
         </Card>
     );
 }
