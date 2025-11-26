@@ -8,12 +8,12 @@ import {
     BookOpen,
     Folder,
     Folders,
-    HandCoinsIcon,
+    Coins,
     LayoutGrid,
-    Users,
     Settings,
     UserCog,
-    Activity
+    Activity,
+    BarChart3
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -21,7 +21,7 @@ export function AppSidebar() {
     const { auth } = usePage().props as any;
     const user = auth?.user;
 
-    // Items principaux visibles par tous
+    // ============ NAVIGATION PRINCIPALE ============
     const mainNavItems: NavItem[] = [
         {
             title: 'Dashboard',
@@ -34,13 +34,13 @@ export function AppSidebar() {
             icon: Folders,
         },
         {
-            title: 'Consorts',
-            href: '/consorts',
-            icon: Users,
+            title: 'Statistiques', // ✅ REMPLACE "Consorts"
+            href: '/statistiques',
+            icon: BarChart3,
         },
     ];
 
-    // Items de configuration (admin seulement)
+    // ============ CONFIGURATION (Admin uniquement) ============
     const configNavItems: NavItem[] = [];
 
     // Prix du terrain - accessible aux super_admin et admin_district
@@ -48,13 +48,14 @@ export function AppSidebar() {
         configNavItems.push({
             title: 'Prix du terrain',
             href: '/circonscription',
-            icon: HandCoinsIcon,
+            icon: Coins,
         });
-        // ✅ AJOUT : Logs d'activité
+        
+        // Logs d'activité
         configNavItems.push({
             title: 'Logs d\'activité',
             href: '/admin/activity-logs',
-            icon: Activity, // N'oubliez pas d'importer Activity de lucide-react
+            icon: Activity,
         });
     }
 
@@ -67,6 +68,7 @@ export function AppSidebar() {
         });
     }
 
+    // ============ FOOTER (Documentation) ============
     const footerNavItems: NavItem[] = [
         {
             title: 'Repository',
@@ -95,8 +97,10 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
+                {/* Navigation principale */}
                 <NavMain items={mainNavItems} />
                 
+                {/* Section Configuration (si items disponibles) */}
                 {configNavItems.length > 0 && (
                     <div className="mt-4">
                         <div className="px-3 py-2">

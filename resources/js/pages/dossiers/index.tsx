@@ -4,7 +4,7 @@ import type { BreadcrumbItem, Dossier, SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { FolderPlus, Search, Calendar, SlidersHorizontal, Eye, Pencil, ChevronDown, ChevronUp, X, ChevronLeft, ChevronRight, LockOpen, Lock as LockIcon } from 'lucide-react';
+import { FolderPlus, Search, Calendar, SlidersHorizontal, Eye, Pencil, ChevronDown, ChevronUp, X, ChevronLeft, ChevronRight, LockOpen, Lock as LockIcon, FileText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -405,30 +405,18 @@ export default function Index() {
                                                             >
                                                                 <Link href={route("nouveau-lot.create", dossier.id)} className="flex items-center">
                                                                     <LandPlot className="mr-2 h-4 w-4" />
-                                                                    Nouveau Lot
+                                                                    Nouvelle entrées
                                                                 </Link>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild>
-                                                                <Link href={route("ajouter-demandeur.create", dossier.id)} className="flex items-center">
-                                                                    <UserPlus className="mr-2 h-4 w-4" />
-                                                                    Ajouter Demandeur
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild>
-                                                                <Link href={route("lier-demandeur.create", dossier.id)} className="flex items-center">
-                                                                    <Link2 className="mr-2 h-4 w-4" />
-                                                                    Lier Existant
-                                                                </Link>
-                                                            </DropdownMenuItem>
+                                                            </DropdownMenuItem>                                                                                                      
                                                             
                                                             <DropdownMenuSeparator />
                                                             
-                                                            {/* <DropdownMenuItem asChild>
-                                                                <Link href={route("dossiers.list", dossier.id)} className="flex items-center">
-                                                                    <List className="mr-2 h-4 w-4" />
-                                                                    Liste
+                                                            <DropdownMenuItem asChild>
+                                                                <Link href={route('demandes.resume', dossier.id)}>
+                                                                    <FileText className="mr-2 h-4 w-4" />
+                                                                    Résumé des demandes
                                                                 </Link>
-                                                            </DropdownMenuItem> */}
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

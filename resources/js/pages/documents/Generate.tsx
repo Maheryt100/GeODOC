@@ -27,7 +27,9 @@ import {
     CheckCircle2,
     Lock,
     History,
-    RotateCcw
+    RotateCcw,
+    Clock,
+    Eye
 } from 'lucide-react';
 import { BreadcrumbItem, Demandeur, Dossier, Propriete } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -50,6 +52,7 @@ interface RecuHistoryItem {
     cree_par: string;
     cree_le: string;
     status: string;
+    download_count: number;
     file_exists: boolean;
 }
 
@@ -59,6 +62,9 @@ interface RecuPaiement {
     montant: string;
     date_recu: string;
     status: string;
+    generated_by: string;
+    generated_at: string;
+    download_count: number;
 }
 
 interface ProprieteWithDemandeurs extends Propriete {
@@ -94,7 +100,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
     // États pour Réquisition
     const [reqPropriete, setReqPropriete] = useState<string>('');
 
-    // États pour l'historique des reçus
+    // États pour l'historique
     const [showHistoryPopover, setShowHistoryPopover] = useState(false);
     const [recuHistory, setRecuHistory] = useState<RecuHistoryItem[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -116,7 +122,6 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
             const prop = proprietes.find(p => p.id === Number(selectedPropriete));
             const dem = demandeurs.find(d => d.id === Number(selectedDemandeur));
             if (!prop || !dem) return false;
-            // Vérifier qu'un reçu existe ET que les données sont complètes
             return isProprieteComplete(prop) && isDemandeurComplete(dem) && prop.has_recu;
         }
         if (type === 'csf') {
@@ -180,7 +185,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
     };
 
     /**
-     * Retélécharger un reçu existant
+     * Télécharger un reçu existant
      */
     const handleDownloadExistingRecu = (recuId: number) => {
         try {
@@ -195,7 +200,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
     };
 
     /**
-     * Construire l'URL de téléchargement avec les paramètres
+     * Construire l'URL de téléchargement
      */
     const buildDownloadUrl = (type: 'acte_vente' | 'csf' | 'requisition' | 'recu') => {
         let baseUrl: string;
@@ -222,7 +227,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
     };
 
     /**
-     * Télécharger le document
+     * Télécharger/Générer le document
      */
     const handleDownload = (type: 'acte_vente' | 'csf' | 'requisition' | 'recu') => {
         if (type === 'recu' && (!selectedPropriete || !selectedDemandeur)) {
@@ -247,17 +252,17 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
             window.location.href = url;
             
             const messages = {
-                recu: 'Téléchargement du reçu de paiement en cours',
+                recu: 'Téléchargement du reçu en cours...',
                 acte_vente: hasConsorts(selectedPropriete) 
                     ? `Téléchargement en cours (${getDemandeursForPropriete(selectedPropriete).length} demandeurs)`
-                    : 'Téléchargement de l\'acte de vente en cours',
-                csf: 'Téléchargement du CSF en cours',
-                requisition: 'Téléchargement de la réquisition en cours'
+                    : 'Téléchargement de l\'acte de vente...',
+                csf: 'Téléchargement du CSF en cours...',
+                requisition: 'Téléchargement de la réquisition en cours...'
             };
             
             toast.success(messages[type]);
             
-            // Recharger la page après génération du reçu pour actualiser les données
+            // Recharger après génération du reçu
             if (type === 'recu') {
                 setTimeout(() => {
                     router.reload({ only: ['proprietes'] });
@@ -293,8 +298,8 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                 <Alert className="mb-6 bg-blue-500/10 border-blue-500/50">
                     <Info className="h-4 w-4 text-blue-500" />
                     <AlertDescription className="text-blue-700 dark:text-blue-300">
-                        <strong>Information :</strong> Les documents seront téléchargés automatiquement dans votre dossier "Téléchargements" 
-                        et une copie sera sauvegardée dans le système.
+                        <strong>💡 Nouveau :</strong> Chaque document n'est généré qu'une seule fois. 
+                        Si le document existe déjà, il sera automatiquement téléchargé depuis les archives.
                     </AlertDescription>
                 </Alert>
 
@@ -320,7 +325,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                             <CardHeader>
                                 <CardTitle>Acte de Vente</CardTitle>
                                 <CardDescription>
-                                    Sélectionnez la propriété et le demandeur pour générer l'acte de vente
+                                    Sélectionnez la propriété et le demandeur
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -366,12 +371,12 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
 
                                 {selectedPropriete && (
                                     <>
-                                        {/* Afficher le statut du reçu avec option historique */}
+                                        {/* Statut du reçu avec historique et compteur */}
                                         {!selectedProprieteData?.has_recu ? (
                                             <Alert className="bg-amber-500/10 border-amber-500/50">
                                                 <AlertCircle className="h-4 w-4 text-amber-500" />
                                                 <AlertDescription className="text-amber-700 dark:text-amber-300">
-                                                    <strong>Étape obligatoire :</strong> Vous devez d'abord générer le reçu de paiement avant de pouvoir créer l'acte de vente.
+                                                    <strong>Étape obligatoire :</strong> Générer d'abord le reçu de paiement
                                                 </AlertDescription>
                                             </Alert>
                                         ) : (
@@ -380,11 +385,23 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                                     <div className="flex items-center gap-2">
                                                         <CheckCircle2 className="h-4 w-4 text-green-500" />
                                                         <AlertDescription className="text-green-700 dark:text-green-300">
-                                                            Reçu de paiement N°{selectedProprieteData.dernier_recu?.numero_recu} confirmé
+                                                            <div className="flex flex-col gap-1">
+                                                                <div>
+                                                                    Reçu N°{selectedProprieteData.dernier_recu?.numero_recu} confirmé
+                                                                </div>
+                                                                <div className="text-xs opacity-75 flex items-center gap-2">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    Généré par {selectedProprieteData.dernier_recu?.generated_by} 
+                                                                    le {selectedProprieteData.dernier_recu?.generated_at}
+                                                                </div>
+                                                                <div className="text-xs opacity-75 flex items-center gap-2">
+                                                                    <Eye className="h-3 w-3" />
+                                                                    Téléchargé {selectedProprieteData.dernier_recu?.download_count} fois
+                                                                </div>
+                                                            </div>
                                                         </AlertDescription>
                                                     </div>
                                                     
-                                                    {/* Bouton historique et retéléchargement */}
                                                     <div className="flex items-center gap-2">
                                                         {selectedProprieteData.dernier_recu && (
                                                             <Button
@@ -448,7 +465,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                                                                                         {recu.demandeur}
                                                                                                     </div>
                                                                                                 </div>
-                                                                                                <Badge variant={recu.status === 'confirmed' ? 'default' : 'secondary'}>
+                                                                                                <Badge variant="default">
                                                                                                     {recu.status}
                                                                                                 </Badge>
                                                                                             </div>
@@ -467,8 +484,11 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                                                                                     <span>{recu.cree_par}</span>
                                                                                                 </div>
                                                                                                 <div className="flex justify-between">
-                                                                                                    <span className="text-muted-foreground">Créé le:</span>
-                                                                                                    <span>{recu.cree_le}</span>
+                                                                                                    <span className="text-muted-foreground">Téléchargements:</span>
+                                                                                                    <Badge variant="secondary">
+                                                                                                        <Eye className="h-3 w-3 mr-1" />
+                                                                                                        {recu.download_count}
+                                                                                                    </Badge>
                                                                                                 </div>
                                                                                             </div>
                                                                                             
@@ -518,7 +538,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                                 <Users className="h-4 w-4 text-blue-500" />
                                                 <AlertDescription className="text-blue-700 dark:text-blue-300">
                                                     Cette propriété a {getDemandeursForPropriete(selectedPropriete).length} demandeurs.
-                                                    Le document généré inclura automatiquement tous les demandeurs (avec consorts).
+                                                    Le document inclura automatiquement tous les demandeurs.
                                                 </AlertDescription>
                                             </Alert>
                                         )}
@@ -559,7 +579,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                     </Alert>
                                 )}
 
-                                {/* Bouton pour générer le reçu */}
+                                {/* Bouton reçu si nécessaire */}
                                 {selectedPropriete && selectedDemandeur && !selectedProprieteData?.has_recu && (
                                     <Button
                                         onClick={() => handleDownload('recu')}
@@ -572,7 +592,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                     </Button>
                                 )}
 
-                                {/* Bouton acte de vente (désactivé si pas de reçu) */}
+                                {/* Bouton ADV */}
                                 <Button
                                     onClick={() => handleDownload('acte_vente')}
                                     disabled={!canGenerate('acte_vente')}
@@ -587,7 +607,7 @@ export default function Generate({ dossier, proprietes, demandeurs }: GeneratePr
                                     ) : (
                                         <>
                                             <Download className="h-4 w-4 mr-2" />
-                                            Télécharger l'Acte de Vente
+                                            Obtenir l'Acte de Vente
                                         </>
                                     )}
                                 </Button>

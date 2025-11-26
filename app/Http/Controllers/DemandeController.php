@@ -21,6 +21,7 @@ use NumberFormatter;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\TemplateProcessor;
+use App\Services\PrixCalculatorService;
 
 class DemandeController extends Controller
 {
@@ -157,19 +158,23 @@ class DemandeController extends Controller
     /**
      * Normalise le nom de la vocation pour correspondre aux colonnes de districts
      */
-    private function normalizeVocation(string $vocation): string
-    {
-        $mapping = [
-            'Edilitaire' => 'edilitaire',
-            'Agricole' => 'agricole',
-            'Forestière' => 'forestiere',
-            'Forestiere' => 'forestiere',
-            'Touristique' => 'touristique',
-        ];
+    // private function normalizeVocation(string $vocation): string
+    // {
+    //     $mapping = [
+    //         'Edilitaire' => 'edilitaire',
+    //         'Agricole' => 'agricole',
+    //         'Forestière' => 'forestiere',
+    //         'Forestiere' => 'forestiere',
+    //         'Touristique' => 'touristique',
+    //     ];
 
-        return $mapping[$vocation] ?? strtolower($vocation);
-    }
+    //     return $mapping[$vocation] ?? strtolower($vocation);
+    // }
 
+    /**
+     * ✅ MÉTHODE STORE SIMPLIFIÉE
+     * Le calcul du prix est maintenant géré par l'Observer
+     */
     public function store(Request $request)
     {
         $validate = $request->validate([
@@ -181,47 +186,26 @@ class DemandeController extends Controller
         ]);
 
         try {
+            DB::beginTransaction();
+
             $dossier = Dossier::findOrFail($validate['id_dossier']);
             $propriete = Propriete::findOrFail($validate['propriete_id']);
-            
-            // Normaliser le nom de la vocation
-            $vocationColumn = $this->normalizeVocation($propriete->vocation);
-            
-            Log::info('Calcul prix', [
-                'vocation_originale' => $propriete->vocation,
-                'colonne' => $vocationColumn,
-                'dossier_id' => $dossier->id
-            ]);
 
-            // Récupération du prix
-            $prixDistrict = DB::table('districts')
-                ->join('dossiers', 'districts.id', '=', 'dossiers.id_district')
-                ->select("districts.$vocationColumn as prix")
-                ->where('dossiers.id', $dossier->id)
-                ->first();
-
-            if (!$prixDistrict || !isset($prixDistrict->prix) || $prixDistrict->prix <= 0) {
-                Log::error('Prix introuvable ou invalide', [
-                    'vocation' => $propriete->vocation,
-                    'colonne' => $vocationColumn,
-                    'dossier_id' => $dossier->id,
-                    'resultat' => $prixDistrict
-                ]);
-                
+            // ✅ VÉRIFIER que le prix peut être calculé AVANT de créer
+            try {
+                PrixCalculatorService::calculerPrixTotal($propriete);
+            } catch (\Exception $e) {
+                DB::rollBack();
                 return back()->withErrors([
-                    'error' => "Prix introuvable pour la vocation '{$propriete->vocation}'. Veuillez configurer le prix dans le district."
+                    'error' => "Impossible de créer la demande : {$e->getMessage()}"
                 ]);
             }
 
-            $prix = $prixDistrict->prix;
-            $superficie = $propriete->contenance;
-            $prixTotal = $prix * $superficie;
-
-            // Création de la demande
+            // ✅ CRÉATION SIMPLIFIÉE - L'Observer calcule automatiquement le prix
             $document = Demander::create([
                 'id_demandeur' => $validate['demandeur_id'],
                 'id_propriete' => $validate['propriete_id'],
-                'total_prix' => $prixTotal,
+                // ❌ NE PAS mettre 'total_prix' ici - l'Observer s'en charge
                 'id_user' => Auth::id(),
                 'status' => 'active',
                 'status_consort' => !empty($validate['consort']),
@@ -245,10 +229,19 @@ class DemandeController extends Controller
                 }
             }
 
+            DB::commit();
+
+            Log::info('Demande créée avec succès', [
+                'demande_id' => $document->id,
+                'prix_final' => $document->total_prix
+            ]);
+
             return redirect()->route('dossiers.list', $dossier->id)
                 ->with('message', 'Document créé avec succès!');
 
         } catch (\Exception $exception) {
+            DB::rollBack();
+            
             Log::error('Erreur store demande', [
                 'message' => $exception->getMessage(),
                 'trace' => $exception->getTraceAsString()
@@ -270,23 +263,15 @@ class DemandeController extends Controller
             $propriete = $demande->propriete;
             $dossier = $propriete->dossier;
 
-            // Normaliser la vocation
-            $vocationColumn = $this->normalizeVocation($propriete->vocation);
-
-            // Récupération du prix
-            $prixDistrict = DB::table('districts')
-                ->join('dossiers', 'districts.id', '=', 'dossiers.id_district')
-                ->select("districts.$vocationColumn as prix")
-                ->where('dossiers.id', $dossier->id)
-                ->first();
-
-            if (!$prixDistrict || !isset($prixDistrict->prix)) {
+            // ✅ UTILISER LE SERVICE POUR RÉCUPÉRER LE PRIX UNITAIRE
+            try {
+                $prix = PrixCalculatorService::getPrixUnitaire($propriete);
+            } catch (\Exception $e) {
                 return back()->withErrors([
-                    'error' => "Prix introuvable pour la vocation: {$propriete->vocation}"
+                    'error' => "Prix introuvable : {$e->getMessage()}"
                 ]);
             }
 
-            $prix = $prixDistrict->prix;
             $prixLettre = Str::upper(ucfirst($formatter->format($prix)));
             $prixTotal = $demande->total_prix;
             $superficie = $propriete->contenance;
@@ -339,7 +324,7 @@ class DemandeController extends Controller
 
             $type_operation = $propriete->type_operation;
 
-            // Générer le document
+            // ✅ GÉNÉRATION DU DOCUMENT - Code inchangé
             if ($demande->status_consort == false) {
                 // SANS CONSORT
                 $templatePath = $type_operation == 'morcellement' 
@@ -747,5 +732,69 @@ class DemandeController extends Controller
 
             return back()->with('error', 'Erreur lors de la désarchivation : ' . $e->getMessage());
         }
+    }
+
+
+    // pour la liste résumée
+    public function resume(Request $request, $dossierId)
+    {
+        $dossier = Dossier::with(['proprietes', 'demandeurs'])->findOrFail($dossierId);
+
+        // Identique à index() mais avec une vue différente
+        $query = Demander::with(['demandeur', 'propriete'])
+        ->whereHas('propriete', fn($q) => $q->where('id_dossier', $dossier->id));
+
+        $demandes = $query->get();
+
+        // Log pour debug
+        Log::info('Resume demandes', [
+            'count' => $demandes->count(),
+            'first' => $demandes->first()
+        ]);
+
+        $documentsGroupes = $demandes->groupBy('id_propriete')->map(function ($groupe) {
+            $premiere = $groupe->first();
+            
+            return [
+                'id' => $premiere->id,
+                'id_propriete' => $premiere->id_propriete,
+                'propriete' => $premiere->propriete,
+                'demandeurs' => $groupe->map(function ($demande) {
+                    return [
+                        'id' => $demande->id,
+                        'id_demandeur' => $demande->id_demandeur,
+                        'demandeur' => $demande->demandeur,
+                        'total_prix' => $demande->total_prix,
+                        'status_consort' => $demande->status_consort,
+                        'status' => $demande->status,
+                    ];
+                })->values(),
+                'demandeur' => $premiere->demandeur,
+                'total_prix' => $premiere->total_prix,
+                'status_consort' => $groupe->count() > 1,
+                'status' => $premiere->status,
+                'nombre_demandeurs' => $groupe->count(),
+            ];
+        })->values();
+
+        $page = $request->get('page', 1);
+        $perPage = 20;
+        $total = $documentsGroupes->count();
+        $lastPage = ceil($total / $perPage);
+        
+        $paginatedData = $documentsGroupes->slice(($page - 1) * $perPage, $perPage)->values();
+
+        $documents = [
+            'data' => $paginatedData,
+            'current_page' => (int) $page,
+            'last_page' => (int) $lastPage,
+            'per_page' => $perPage,
+            'total' => $total,
+        ];
+
+        return Inertia::render('demandes/ResumeDossier', [
+            'dossier' => $dossier,
+            'documents' => $documents,
+        ]);
     }
 }

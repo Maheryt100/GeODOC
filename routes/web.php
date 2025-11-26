@@ -1,7 +1,5 @@
 <?php
 
-// routes/web.php
-
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AssociationController;
 use App\Http\Controllers\AuthController;
@@ -17,6 +15,7 @@ use App\Http\Controllers\StatController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\GlobalSearchController; // ✅ NOUVEAU
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -44,6 +43,16 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     // ============================================================================
     
     Route::get('/dashboard', [StatController::class, 'index'])->name('dashboard');
+    Route::get('/statistiques', [StatController::class, 'statistics'])->name('statistiques.index');
+
+    // ============================================================================
+    // STATISTIQUES
+    // ============================================================================
+    
+    Route::prefix('statistiques')->name('statistiques.')->group(function () {
+        Route::get('/', [StatController::class, 'statistics'])->name('index');
+        Route::get('/export-pdf', [StatController::class, 'exportPDF'])->name('export-pdf');
+    });
 
     // ============================================================================
     // PARAMÈTRES UTILISATEUR (Settings)
@@ -176,6 +185,11 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             ->middleware('dossier.access:dossierId')
             ->name('index');
         
+        // Route de résumé
+        Route::get('/resume/{dossierId}', [DemandeController::class, 'resume'])
+            ->middleware('dossier.access:dossierId')
+            ->name('resume');
+        
         // Création
         Route::middleware('district.access:create')->group(function () {
             Route::get('/create/{id}', [DemandeController::class, 'create'])->name('create');
@@ -268,18 +282,20 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             ->middleware('dossier.access:id_dossier')
             ->name('generate');
         
-        // Reçu
+        // ✅ Routes de génération/téléchargement unifiées
         Route::get('/recu', [DocumentGenerationController::class, 'generateRecu'])->name('recu');
-        Route::get('/recu/{id}/download', [DocumentGenerationController::class, 'downloadRecu'])->name('recu.download');
-        Route::get('/recu/history/{id_propriete}', [DocumentGenerationController::class, 'getRecuHistory'])->name('recu.history');
-        
-        // Autres documents
         Route::get('/acte-vente', [DocumentGenerationController::class, 'generateActeVente'])->name('acte-vente');
         Route::get('/csf', [DocumentGenerationController::class, 'generateCsf'])->name('csf');
         Route::get('/requisition', [DocumentGenerationController::class, 'generateRequisition'])->name('requisition');
+        
+        // ✅ Téléchargement d'un document existant (par ID)
+        Route::get('/recu/{id}/download', [DocumentGenerationController::class, 'downloadRecu'])->name('recu.download');
+        
+        // ✅ Historique des documents
+        Route::get('/recu/history/{id_propriete}', [DocumentGenerationController::class, 'getRecuHistory'])->name('recu.history');
     });
 
-     // ============================================================================
+    // ============================================================================
     // PIÈCES JOINTES
     // ============================================================================
     
@@ -349,6 +365,16 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         Route::post('/dissociate', [AssociationController::class, 'dissociate'])
             ->middleware('district.access:delete')
             ->name('dissociate');
+
+        // ============================================================================
+        // RECHERCHE GLOBALE (API)
+        // ============================================================================
+        
+        Route::get('/api/global-search', [GlobalSearchController::class, 'search'])
+            ->name('api.global-search');
+        Route::get('/api/search-suggestions', [GlobalSearchController::class, 'suggestions'])
+            ->name('api.search-suggestions');
+
     });
 
     // ============================================================================

@@ -1,5 +1,5 @@
 <?php
-
+// this is the structure of the database
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -166,6 +166,7 @@ return new class extends Migration
         Schema::create('dossiers', function (Blueprint $table) {
             $table->id();
             $table->string('nom_dossier', 100);
+            $table->string('numero_ouverture', 50)->nullable();
             $table->date('date_descente_debut');
             $table->date('date_descente_fin');
             $table->string('type_commune', 50);
@@ -184,8 +185,10 @@ return new class extends Migration
             $table->timestamps();
             
             $table->index('nom_dossier');
+            $table->index('numero_ouverture');
             $table->index('id_district');
             $table->index(['id_district', 'created_at']);
+            $table->index(['id_district', 'numero_ouverture']);
             $table->index('date_fermeture');
             $table->index(['id_district', 'date_fermeture']);
         });
@@ -208,6 +211,7 @@ return new class extends Migration
             $table->date('date_requisition')->nullable();
             $table->date('date_inscription')->nullable();
             $table->string('dep_vol', 50)->nullable();
+            $table->string('numero_dep_vol', 50)->nullable();
             $table->boolean('status')->default(false);
             $table->boolean('is_archived')->default(false);
             
@@ -217,6 +221,8 @@ return new class extends Migration
             
             $table->index('lot');
             $table->index('id_dossier');
+            $table->index('numero_dep_vol');
+            $table->index(['dep_vol', 'numero_dep_vol']);
             $table->index(['id_dossier', 'is_archived']);
         });
 
@@ -300,7 +306,53 @@ return new class extends Migration
         });
 
         // ========================================
-        // 5. PAIEMENTS
+        // 5. PIÈCES JOINTES (Gestion des fichiers)
+        // ========================================
+        
+        Schema::create('pieces_jointes', function (Blueprint $table) {
+            $table->id();
+            
+            // Relations polymorphiques
+            $table->string('attachable_type', 50);
+            $table->unsignedBigInteger('attachable_id');
+            
+            // Informations du fichier
+            $table->string('nom_original', 255);
+            $table->string('nom_fichier', 255)->unique();
+            $table->string('chemin', 500);
+            $table->string('type_mime', 100);
+            $table->unsignedBigInteger('taille');
+            $table->string('extension', 10);
+            
+            // Catégorisation et métadonnées
+            $table->string('categorie', 30)->default('global');
+            $table->string('type_document', 50)->nullable();
+            $table->text('description')->nullable();
+            
+            // Tracking utilisateur
+            $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
+            $table->foreignId('id_district')->nullable()->constrained('districts')->onDelete('set null');
+            
+            // Statut de vérification
+            $table->boolean('is_verified')->default(false);
+            $table->foreignId('verified_by')->nullable()->constrained('users')->onDelete('set null');
+            $table->timestamp('verified_at')->nullable();
+            
+            $table->timestamps();
+            $table->softDeletes();
+            
+            // Index optimisés
+            $table->index(['attachable_type', 'attachable_id']);
+            $table->index(['attachable_type', 'attachable_id', 'categorie']);
+            $table->index(['id_user', 'created_at']);
+            $table->index(['id_district', 'created_at']);
+            $table->index('type_document');
+            $table->index('categorie');
+            $table->index('is_verified');
+        });
+
+        // ========================================
+        // 6. PAIEMENTS
         // ========================================
         
         Schema::create('recu_paiements', function (Blueprint $table) {
@@ -320,7 +372,7 @@ return new class extends Migration
         });
 
         // ========================================
-        // 6. ASSIGNATIONS UTILISATEURS
+        // 7. ASSIGNATIONS UTILISATEURS
         // ========================================
         
         Schema::create('user_districts', function (Blueprint $table) {
@@ -377,6 +429,9 @@ return new class extends Migration
         
         // Paiements
         Schema::dropIfExists('recu_paiements');
+        
+        // Pièces jointes
+        Schema::dropIfExists('pieces_jointes');
         
         // Relations demandeurs
         Schema::dropIfExists('contenir');

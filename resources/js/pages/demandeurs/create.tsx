@@ -74,14 +74,18 @@ export default function DemandeurCreate({
     showRemoveButton = false
 }: DemandeurFormProps) {
     
+   
     const [localTitre, setLocalTitre] = useState(data.titre_demandeur);
     const [cinSearchStatus, setCinSearchStatus] = useState<'idle' | 'searching' | 'found' | 'not-found'>('idle');
     const [searchMessage, setSearchMessage] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     
+
+
     useEffect(() => {
         setLocalTitre(data.titre_demandeur);
     }, [data.titre_demandeur]);
+
     
     const handleTitreChange = (value: string) => {
         onChange('titre_demandeur', value);
@@ -152,6 +156,9 @@ export default function DemandeurCreate({
             searchDemandeurByCin(data.cin);
         }
     };
+
+     
+   
 
     return (
         <div className="border-0 rounded-lg shadow-lg p-6 space-y-8 bg-card">

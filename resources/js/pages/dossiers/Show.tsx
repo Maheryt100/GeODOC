@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
     LandPlot, Pencil, Lock, LockOpen, FileOutput, 
-    MapPin, Calendar, Building2 
+    MapPin, Calendar, Building2, 
+    FileText
 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -341,6 +342,12 @@ export default function Show() {
                                     <Link href={route('documents.generate', dossier.id)}>
                                         <FileOutput className="mr-2 h-4 w-4" />
                                         Générer documents
+                                    </Link>
+                                </Button>
+                                <Button asChild size="sm" variant="outline">
+                                    <Link href={route('demandes.resume', dossier.id)}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Résumé des demandes
                                     </Link>
                                 </Button>
                             </div>
