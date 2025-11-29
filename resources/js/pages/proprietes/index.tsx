@@ -1,17 +1,13 @@
-// pages/proprietes/index.tsx
-// Composant de liste des propriétés AVEC MODALS DE DÉTAILS
-// Utilisé par : dossiers/Show.tsx
-
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertCircle, Eye, Pencil, Trash, Ellipsis, Link2, UserPlus, Archive, ArchiveRestore, AlertTriangle } from 'lucide-react';
+import { AlertCircle, Eye, Pencil, Trash, Ellipsis, Link2, Archive, ArchiveRestore, LandPlot } from 'lucide-react';
 import type { Propriete, Dossier, Demandeur } from '@/types';
-import ProprieteDetailDialog from '@/components/ProprieteDetailDialog';
-import DemandeurDetailDialog from '@/components/DemandeurDetailDialog';
+import ProprieteDetailDialog from '@/pages/proprietes/components/ProprieteDetailDialog';
+import DemandeurDetailDialog from '@/pages/demandeurs/components/DemandeurDetailDialog';
 
 interface ProprietesIndexProps {
     proprietes: Propriete[];
@@ -23,6 +19,14 @@ interface ProprietesIndexProps {
     onUnarchivePropriete: (id: number) => void;
     onLinkDemandeur?: (propriete: Propriete) => void;
     isPropertyIncomplete: (prop: Propriete) => boolean;
+    // ✅ CORRECTION : Nouvelle signature
+    onDissociate: (
+        demandeurId: number,
+        proprieteId: number,
+        demandeurNom: string,
+        proprieteLot: string,
+        type: 'from-demandeur' | 'from-propriete'
+    ) => void;
 }
 
 export default function ProprietesIndex({
@@ -30,16 +34,15 @@ export default function ProprietesIndex({
     dossier,
     demandeurs,
     onDeletePropriete,
-    onSelectPropriete,
     onArchivePropriete,
     onUnarchivePropriete,
     isPropertyIncomplete,
-    onLinkDemandeur
+    onLinkDemandeur,
+    onDissociate 
 }: ProprietesIndexProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // ✅ États pour les modals de détails
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
     const [showProprieteDetail, setShowProprieteDetail] = useState(false);
     const [selectedDemandeur, setSelectedDemandeur] = useState<Demandeur | null>(null);
@@ -53,19 +56,16 @@ export default function ProprietesIndex({
         return prop.is_archived === true;
     };
 
-    // ✅ Handler pour ouvrir le détail propriété
     const handleSelectPropriete = (propriete: Propriete) => {
         setSelectedPropriete(propriete);
         setShowProprieteDetail(true);
     };
 
-    // ✅ Handler pour ouvrir le détail demandeur depuis le modal propriété
     const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
         setSelectedDemandeur(demandeur);
         setShowDemandeurDetail(true);
     };
 
-    // ✅ Handler pour ouvrir le détail propriété depuis le modal demandeur
     const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
         setSelectedPropriete(propriete);
         setShowProprieteDetail(true);
@@ -83,7 +83,7 @@ export default function ProprietesIndex({
         if (totalPages <= 1) return null;
 
         return (
-            <div className="flex justify-center items-center gap-2 mt-4">
+            <div className="flex justify-center items-center gap-2 mt-6 pb-4">
                 <Button
                     variant="outline"
                     size="sm"
@@ -116,55 +116,73 @@ export default function ProprietesIndex({
 
     return (
         <>
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                            <CardTitle>Propriétés</CardTitle>
-                            <CardDescription>
-                                Liste des propriétés du dossier ({proprietes.length})
-                       
-                                <span className="ml-2 text-xs block mt-2">
-                                    <span className="inline-flex items-center gap-1">
-                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded"></span>
-                                        <span>Données incomplètes</span>
-                                    </span>
-                                    <span className="inline-flex items-center gap-1 ml-3">
-                                        <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded"></span>
-                                        <span>Sans demandeur</span>
-                                    </span>
-                                </span>
-                                {dossier.is_closed && (
-                                    <span className="block mt-1 text-orange-600 dark:text-orange-400 flex items-center gap-1">
-                                        <AlertTriangle className="h-3 w-3" />
-                                        Aucune modification possible (dossier fermé)
-                                    </span>
-                                )}
-                            </CardDescription>
+            <Card className="border-0 shadow-lg">
+                {/* Header transparent avec gradient subtil */}
+                <div className="bg-gradient-to-r from-violet-50/50 to-purple-50/50 dark:from-violet-950/20 dark:to-purple-950/20 p-6 border-b">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
+                                <LandPlot className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold">Propriétés</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    {proprietes.length} propriété{proprietes.length > 1 ? 's' : ''} enregistrée{proprietes.length > 1 ? 's' : ''}
+                                </p>
+                            </div>
                         </div>
                         
-                       
+                        {/* Légende */}
+                        <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-200 dark:bg-red-900/50 rounded border border-red-300 dark:border-red-800"></div>
+                                <span>Données incomplètes</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-amber-200 dark:bg-amber-900/50 rounded border border-amber-300 dark:border-amber-800"></div>
+                                <span>Sans demandeur</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-gray-300 dark:bg-gray-700 rounded border border-gray-400 dark:border-gray-600"></div>
+                                <span>Acquise</span>
+                            </div>
+                        </div>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border overflow-x-auto">
+                </div>
+
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="border-b bg-muted/50">
+                            <thead className="bg-muted/30 border-b">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Lot</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Titre</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Dep/Vol</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Contenance</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Nature</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Statut</th>
-                                    <th className="px-4 py-3 w-[50px]"></th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Lot
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Titre
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Dep/Vol
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Contenance
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Nature
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Statut
+                                    </th>
+                                    <th className="px-6 py-4 w-[50px]"></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-border">
                                 {proprietes.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="text-center text-muted-foreground py-8">
-                                            Aucune propriété enregistrée
+                                        <td colSpan={7} className="px-6 py-12 text-center">
+                                            <LandPlot className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                                            <p className="font-medium text-muted-foreground">Aucune propriété enregistrée</p>
+                                            <p className="text-sm text-muted-foreground/70 mt-1">Commencez par ajouter une propriété au dossier</p>
                                         </td>
                                     </tr>
                                 ) : (
@@ -174,12 +192,12 @@ export default function ProprietesIndex({
                                         const isArchived = isPropertyArchived(propriete);
                                         
                                         const rowClass = isArchived
-                                            ? 'border-b hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-50/80 dark:bg-gray-900/50 cursor-pointer'
+                                            ? 'hover:bg-gray-100/50 dark:hover:bg-gray-800/30 bg-gray-50/50 dark:bg-gray-900/30 cursor-pointer transition-colors'
                                             : isIncomplete 
-                                                ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer'
+                                                ? 'hover:bg-red-50/50 dark:hover:bg-red-950/20 bg-red-50/30 dark:bg-red-950/10 cursor-pointer transition-colors'
                                                 : hasDemandeurs
-                                                    ? 'border-b hover:bg-muted/50 cursor-pointer'
-                                                    : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
+                                                    ? 'hover:bg-muted/30 cursor-pointer transition-colors'
+                                                    : 'hover:bg-amber-50/50 dark:hover:bg-amber-950/20 bg-amber-50/30 dark:bg-amber-950/10 cursor-pointer transition-colors';
                                         
                                         return (
                                             <tr 
@@ -187,32 +205,43 @@ export default function ProprietesIndex({
                                                 className={rowClass} 
                                                 onClick={() => handleSelectPropriete(propriete)}
                                             >
-                                                <td className="px-4 py-3 text-sm font-medium">
+                                                <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        {propriete.lot}
-                                                        {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
-                                                        {isArchived && <Archive className="h-4 w-4 text-gray-500" />}
+                                                        <span className="font-medium">
+                                                            {propriete.lot}
+                                                        </span>
+                                                        {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />}
+                                                        {isArchived && <Archive className="h-4 w-4 text-gray-500 flex-shrink-0" />}
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3 text-sm">{propriete.titre ? `TNº${propriete.titre}` : '-'}</td>
-                                                <td className="px-4 py-3 text-sm font-mono">
+                                                <td className="px-6 py-4 text-sm text-muted-foreground">
+                                                    {propriete.titre ? `TNº${propriete.titre}` : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-sm text-muted-foreground">
                                                     {propriete.dep_vol_complet || propriete.dep_vol || '-'}
                                                 </td>
-                                                <td className="px-4 py-3 text-sm">{propriete.contenance ? `${propriete.contenance} m²` : '-'}</td>
-                                                <td className="px-4 py-3 text-sm capitalize">{propriete.nature || '-'}</td>
-                                                <td className="px-4 py-3 text-sm">
+                                                <td className="px-6 py-4 text-sm text-muted-foreground">
+                                                    {propriete.contenance ? `${propriete.contenance} m²` : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-muted-foreground capitalize">
+                                                    {propriete.nature || '-'}
+                                                </td>
+                                                <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant={hasDemandeurs ? "default" : "secondary"} className="text-xs">
+                                                        <Badge 
+                                                            variant={hasDemandeurs ? "default" : "secondary"} 
+                                                            className="text-xs"
+                                                        >
                                                             {hasDemandeurs ? "Avec demandeur" : "Sans demandeur"}
                                                         </Badge>
                                                         {isArchived && (
-                                                            <Badge variant="outline" className="text-xs bg-gray-100 text-gray-700 border-gray-300">
+                                                            <Badge variant="outline" className="text-xs bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-900 dark:text-gray-400">
                                                                 Acquise
                                                             </Badge>
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon">
@@ -280,7 +309,6 @@ export default function ProprietesIndex({
                 </CardContent>
             </Card>
 
-            {/* ✅ Modals de détails avec navigation entre eux */}
             <ProprieteDetailDialog
                 propriete={selectedPropriete}
                 open={showProprieteDetail}

@@ -1,14 +1,11 @@
-// components/ProprieteDetailDialog.tsx
-// Modal de détails complets d'une propriété avec ses demandeurs associés
-
+// components/ProprieteDetailDialog.tsx - VERSION AMÉLIORÉE
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Link } from '@inertiajs/react';
 import { 
     Home, MapPin, FileText, Calendar, 
-    Ruler, Users, Pencil, Archive, AlertCircle
+    Ruler, Users, Pencil, Archive, AlertCircle, Unlink
 } from 'lucide-react';
 import type { Propriete, Demandeur } from '@/types';
 
@@ -18,7 +15,13 @@ interface ProprieteDetailDialogProps {
     onOpenChange: (open: boolean) => void;
     onSelectDemandeur?: (demandeur: Demandeur) => void;
     dossierClosed?: boolean;
-    onEdit?: (propriete: Propriete) => void;
+    onDissociate?: (
+        demandeurId: number,
+        proprieteId: number,
+        demandeurNom: string,
+        proprieteLot: string,
+        type: 'from-demandeur' | 'from-propriete'
+    ) => void;
 }
 
 export default function ProprieteDetailDialog({
@@ -26,24 +29,51 @@ export default function ProprieteDetailDialog({
     open,
     onOpenChange,
     onSelectDemandeur,
-    dossierClosed = false
+    dossierClosed = false,
+    onDissociate
 }: ProprieteDetailDialogProps) {
     if (!propriete) return null;
 
-    const isArchived = propriete.is_archived === true;
-    const demandeurs = propriete.demandeurs || [];
+    // ✅ CORRECTION : Récupérer demandeurs via demandes
+    const demandeurs = propriete.demandes?.map(d => d.demandeur).filter(Boolean) || [];
 
-    const demandeursActifs = demandeurs.filter(d => 
-        !propriete.demandes?.some(dem => 
-            dem.id_demandeur === d.id && dem.status === 'archive'
-        )
+    const demandeursActifs = demandeurs.filter((d, index) => 
+        propriete.demandes?.[index]?.status === 'active'
     );
 
-    const demandeursArchives = demandeurs.filter(d => 
-        propriete.demandes?.some(dem => 
-            dem.id_demandeur === d.id && dem.status === 'archive'
-        )
+    const demandeursArchives = demandeurs.filter((d, index) => 
+        propriete.demandes?.[index]?.status === 'archive'
     );
+
+    const formatNomComplet = (demandeur: Demandeur): string => {
+        return [
+            demandeur.titre_demandeur,
+            demandeur.nom_demandeur,
+            demandeur.prenom_demandeur
+        ].filter(Boolean).join(' ');
+    };
+
+    // ✅ NOUVEAU : Handler de dissociation
+    const handleDissociate = (demandeur: Demandeur, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!onDissociate || dossierClosed || propriete.is_archived) return;
+        
+        onDissociate(
+            demandeur.id,
+            propriete.id,
+            formatNomComplet(demandeur),
+            propriete.lot,
+            'from-propriete'
+        );
+    };
+
+    // ✅ Vérifier si un demandeur peut être dissocié
+    const canDissociate = (demandeur: Demandeur): boolean => {
+        if (dossierClosed || propriete.is_archived) return false;
+        
+        const demande = propriete.demandes?.find(d => d.id_demandeur === demandeur.id);
+        return demande?.status === 'active';
+    };
 
     const InfoRow = ({ icon: Icon, label, value, highlight = false }: any) => {
         if (!value || value === '-') return null;
@@ -57,10 +87,6 @@ export default function ProprieteDetailDialog({
             </div>
         );
     };
-
-    function onEdit(propriete: Propriete) {
-        throw new Error('Function not implemented.');
-    }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -76,13 +102,13 @@ export default function ProprieteDetailDialog({
                                 {propriete.titre && (
                                     <Badge variant="outline">TNº{propriete.titre}</Badge>
                                 )}
-                                <Badge variant={isArchived ? "outline" : "default"}>
+                                <Badge variant="default">
                                     {propriete.nature}
                                 </Badge>
                                 <Badge variant="secondary">
                                     {propriete.vocation}
                                 </Badge>
-                                {isArchived && (
+                                {demandeursArchives.length > 0 && demandeursActifs.length === 0 && (
                                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
                                         <Archive className="mr-1 h-3 w-3" />
                                         Acquise
@@ -90,7 +116,6 @@ export default function ProprieteDetailDialog({
                                 )}
                             </div>
                         </div>
-                        
                     </div>
                 </DialogHeader>
 
@@ -120,7 +145,7 @@ export default function ProprieteDetailDialog({
                             <InfoRow 
                                 icon={Ruler} 
                                 label="Contenance" 
-                                value={propriete.contenance ? `${propriete.contenance} m²` : '-'}
+                                value={propriete.contenance ? `${new Intl.NumberFormat('fr-FR').format(propriete.contenance)} m²` : '-'}
                             />
                         </div>
                     </section>
@@ -181,8 +206,8 @@ export default function ProprieteDetailDialog({
                         </div>
                     </section>
 
-                    {/* Demandeurs associés */}
-                    {demandeurs.length > 0 && (
+                    {/* ✅ Demandeurs associés avec bouton dissocier */}
+                    {demandeurs.length > 0 ? (
                         <section>
                             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                                 <Users className="h-5 w-5" />
@@ -193,18 +218,20 @@ export default function ProprieteDetailDialog({
                                     <>
                                         <p className="text-sm font-medium text-muted-foreground">Actifs</p>
                                         {demandeursActifs.map((demandeur) => (
-                                            <button
+                                            <div
                                                 key={demandeur.id}
-                                                onClick={() => {
-                                                    onOpenChange(false);
-                                                    onSelectDemandeur?.(demandeur);
-                                                }}
-                                                className="w-full p-4 border rounded-lg hover:bg-muted/50 transition text-left"
+                                                className="p-4 border rounded-lg hover:bg-muted/50 transition"
                                             >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            onOpenChange(false);
+                                                            onSelectDemandeur?.(demandeur);
+                                                        }}
+                                                        className="flex-1 text-left"
+                                                    >
                                                         <p className="font-medium">
-                                                            {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                                                            {formatNomComplet(demandeur)}
                                                         </p>
                                                         <p className="text-sm text-muted-foreground font-mono">
                                                             CIN: {demandeur.cin}
@@ -214,10 +241,22 @@ export default function ProprieteDetailDialog({
                                                                 {demandeur.domiciliation}
                                                             </p>
                                                         )}
+                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="default">Actif</Badge>
+                                                        {!dossierClosed && canDissociate(demandeur) && onDissociate && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={(e) => handleDissociate(demandeur, e)}
+                                                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                                            >
+                                                                <Unlink className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
                                                     </div>
-                                                    <Badge variant="default">Actif</Badge>
                                                 </div>
-                                            </button>
+                                            </div>
                                         ))}
                                     </>
                                 )}
@@ -238,7 +277,7 @@ export default function ProprieteDetailDialog({
                                                 <div className="flex items-center justify-between">
                                                     <div>
                                                         <p className="font-medium">
-                                                            {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                                                            {formatNomComplet(demandeur)}
                                                         </p>
                                                         <p className="text-sm text-muted-foreground font-mono">
                                                             CIN: {demandeur.cin}
@@ -260,20 +299,18 @@ export default function ProprieteDetailDialog({
                                 )}
                             </div>
                         </section>
-                    )}
-
-                    {demandeurs.length === 0 && (
+                    ) : (
                         <div className="text-center py-8 text-muted-foreground">
                             <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
                             <p>Aucun demandeur associé</p>
                         </div>
                     )}
                 </div>
-                {!dossierClosed && !isArchived && (
+
+                {!dossierClosed && demandeursActifs.length > 0 && (
                     <Button 
                         onClick={() => {
                             onOpenChange(false);
-                            // Petit délai pour laisser le modal se fermer
                             setTimeout(() => {
                                 window.location.href = route('proprietes.edit', propriete.id);
                             }, 100);

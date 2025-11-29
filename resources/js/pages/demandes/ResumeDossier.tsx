@@ -1,19 +1,31 @@
-// pages/demandes/ResumeDossier.tsx
-import { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+// pages/demandes/ResumeDossier.tsx - VERSION REFACTORISÉE ET AMÉLIORÉE
+import { useState, useEffect } from 'react';
+import { Head, router, Link, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
-    FileText, Download, Archive, Eye, Search, 
-    Users, MapPin, DollarSign, Filter 
+    FileText, Search, ArrowLeft, FileOutput
 } from 'lucide-react';
-import type { Dossier, Demander, BreadcrumbItem } from '@/types';
-import DemandeDetailDialog from '@/components/DemandeDetailDialog';
-import DemandeurDetailDialog from '@/components/DemandeurDetailDialog';
-import ProprieteDetailDialog from '@/components/ProprieteDetailDialog';
+import type { Dossier, BreadcrumbItem } from '@/types';
+import DemandeDetailDialog from '@/pages/demandes/components/DemandeDetailDialog';
+import DemandeurDetailDialog from '@/pages/demandeurs/components/DemandeurDetailDialog';
+import ProprieteDetailDialog from '@/pages/proprietes/components/ProprieteDetailDialog';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import DossierStats from './components/DossierStats';
+import DemandesList from './components/DemandesList';
 
 interface ResumeDossierProps {
     dossier: Dossier;
@@ -35,6 +47,8 @@ interface ResumeDossierProps {
 }
 
 export default function ResumeDossier({ dossier, documents }: ResumeDossierProps) {
+    const { flash } = usePage<{ flash?: { message?: string; success?: string; error?: string } }>().props;
+    
     const [search, setSearch] = useState('');
     const [selectedDemande, setSelectedDemande] = useState<any>(null);
     const [showDemandeDetail, setShowDemandeDetail] = useState(false);
@@ -43,17 +57,26 @@ export default function ResumeDossier({ dossier, documents }: ResumeDossierProps
     const [selectedPropriete, setSelectedPropriete] = useState<any>(null);
     const [showProprieteDetail, setShowProprieteDetail] = useState(false);
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'archive'>('all');
+    const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+    const [unarchiveDialogOpen, setUnarchiveDialogOpen] = useState(false);
+    const [selectedDemandeForAction, setSelectedDemandeForAction] = useState<any>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    // Handlers pour navigation entre modals
+    // Toast notifications
+    useEffect(() => {
+        if (flash?.message) toast.info(flash.message);
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.error) toast.error(flash.error);
+    }, [flash?.message, flash?.success, flash?.error]);
+
+    // Handlers
     const handleSelectDemande = (doc: any) => {
-        // Construire l'objet complet avec propriété
         const demandeData = {
-            ...doc.demandeurs[0], // Contient id, id_demandeur, demandeur, total_prix, status, status_consort
-            propriete: doc.propriete, // Ajouter la propriété depuis doc
-            nombre_demandeurs: doc.nombre_demandeurs //  Info bonus
+            ...doc.demandeurs[0],
+            propriete: doc.propriete,
+            nombre_demandeurs: doc.nombre_demandeurs,
+            demandeurs: doc.demandeurs
         };
-        
-        
         setSelectedDemande(demandeData);
         setShowDemandeDetail(true);
     };
@@ -68,13 +91,65 @@ export default function ResumeDossier({ dossier, documents }: ResumeDossierProps
         setShowProprieteDetail(true);
     };
 
+    const handleArchiveClick = (doc: any) => {
+        setSelectedDemandeForAction(doc);
+        setArchiveDialogOpen(true);
+    };
+
+    const handleUnarchiveClick = (doc: any) => {
+        setSelectedDemandeForAction(doc);
+        setUnarchiveDialogOpen(true);
+    };
+
+    const confirmArchive = () => {
+        if (!selectedDemandeForAction || isProcessing) return;
+        setIsProcessing(true);
+
+        router.post(route('proprietes.archive'), 
+            { id: selectedDemandeForAction.id_propriete },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Propriété archivée (acquise) avec succès');
+                    setArchiveDialogOpen(false);
+                    setSelectedDemandeForAction(null);
+                },
+                onError: (errors) => {
+                    toast.error('Erreur', { description: Object.values(errors).join('\n') });
+                },
+                onFinish: () => setIsProcessing(false)
+            }
+        );
+    };
+
+    const confirmUnarchive = () => {
+        if (!selectedDemandeForAction || isProcessing) return;
+        setIsProcessing(true);
+
+        router.post(route('proprietes.unarchive'), 
+            { id: selectedDemandeForAction.id_propriete },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Propriété désarchivée avec succès');
+                    setUnarchiveDialogOpen(false);
+                    setSelectedDemandeForAction(null);
+                },
+                onError: (errors) => {
+                    toast.error('Erreur', { description: Object.values(errors).join('\n') });
+                },
+                onFinish: () => setIsProcessing(false)
+            }
+        );
+    };
+
     // Filtrage
     const filteredDocuments = documents.data.filter(doc => {
         const matchesSearch = search === '' || 
-            doc.propriete.lot.toLowerCase().includes(search.toLowerCase()) ||
+            doc.propriete?.lot.toLowerCase().includes(search.toLowerCase()) ||
             doc.demandeurs.some(d => 
-                d.demandeur.nom_demandeur.toLowerCase().includes(search.toLowerCase()) ||
-                d.demandeur.cin.includes(search)
+                d.demandeur?.nom_demandeur.toLowerCase().includes(search.toLowerCase()) ||
+                d.demandeur?.cin.includes(search)
             );
         
         const matchesStatus = filterStatus === 'all' || doc.status === filterStatus;
@@ -88,200 +163,111 @@ export default function ResumeDossier({ dossier, documents }: ResumeDossierProps
         { title: 'Résumé des demandes', href: '#' }
     ];
 
+    const activeCount = documents.data.filter(d => d.status === 'active').length;
+    const archivedCount = documents.data.filter(d => d.status === 'archive').length;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Résumé - ${dossier.nom_dossier}`} />
+            <Toaster position="top-right" richColors />
 
             <div className="container mx-auto p-6 space-y-6">
                 {/* En-tête avec statistiques */}
-                <Card>
+                <Card className="shadow-lg bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <FileText className="h-5 w-5" />
-                            Résumé des demandes - {dossier.nom_dossier}
-                        </CardTitle>
-                        <CardDescription>
-                            {documents.total} demande(s) enregistrée(s)
-                        </CardDescription>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                                    <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                                        {dossier.nom_dossier}
+                                    </CardTitle>
+                                    <CardDescription className="text-base mt-1">
+                                        Résumé de toutes les demandes du dossier
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                asChild
+                                className="shadow-sm"
+                            >
+                                <Link href={route('dossiers.show', dossier.id)}>
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Retour au dossier
+                                </Link>
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                                <FileText className="h-8 w-8 text-blue-600" />
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Total demandes</p>
-                                    <p className="text-2xl font-bold">{documents.total}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                                <Users className="h-8 w-8 text-green-600" />
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Actives</p>
-                                    <p className="text-2xl font-bold">
-                                        {documents.data.filter(d => d.status === 'active').length}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
-                                <Archive className="h-8 w-8 text-orange-600" />
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Archivées</p>
-                                    <p className="text-2xl font-bold">
-                                        {documents.data.filter(d => d.status === 'archive').length}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                                <MapPin className="h-8 w-8 text-purple-600" />
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Propriétés</p>
-                                    <p className="text-2xl font-bold">{dossier.proprietes_count}</p>
-                                </div>
-                            </div>
-                        </div>
+                        <DossierStats
+                            totalDemandes={documents.total}
+                            activeCount={activeCount}
+                            archivedCount={archivedCount}
+                            proprietesCount={dossier.proprietes_count}
+                        />
                     </CardContent>
                 </Card>
 
-                {/* Filtres et recherche */}
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Rechercher par lot, nom ou CIN..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="pl-10"
-                                />
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant={filterStatus === 'all' ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setFilterStatus('all')}
-                                >
-                                    Toutes
-                                </Button>
-                                <Button
-                                    variant={filterStatus === 'active' ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setFilterStatus('active')}
-                                >
-                                    Actives
-                                </Button>
-                                <Button
-                                    variant={filterStatus === 'archive' ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setFilterStatus('archive')}
-                                >
-                                    Archivées
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                {/* Filtres et recherche avec bouton générer */}
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Rechercher par lot, nom ou CIN..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant={filterStatus === 'all' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setFilterStatus('all')}
+                        >
+                            Toutes
+                        </Button>
+                        <Button
+                            variant={filterStatus === 'active' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setFilterStatus('active')}
+                        >
+                            Actives
+                        </Button>
+                        <Button
+                            variant={filterStatus === 'archive' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setFilterStatus('archive')}
+                        >
+                            Archivées
+                        </Button>
+                    </div>
+                    <Button 
+                        asChild 
+                        size="sm" 
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    >
+                        <Link href={route('documents.generate', dossier.id)}>
+                            <FileOutput className="mr-2 h-4 w-4" />
+                            Générer documents
+                        </Link>
+                    </Button>
+                </div>
 
                 {/* Liste des demandes */}
-                <div className="space-y-3">
-                    {filteredDocuments.map((doc) => (
-                        <Card 
-                            key={doc.id}
-                            className="hover:shadow-md transition-shadow cursor-pointer"
-                            onClick={() => handleSelectDemande(doc)} // ✅ Passer doc complet
-                        >
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        {/* Propriété */}
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Lot</p>
-                                            <p className="font-bold text-lg">{doc.propriete?.lot || 'N/A'}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {doc.propriete?.titre ? `TNº${doc.propriete.titre}` : 'Sans titre'}
-                                            </p>
-                                        </div>
-
-                                        {/* Demandeur(s) */}
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Demandeur(s)</p>
-                                            <p className="font-medium">
-                                                {doc.demandeurs[0]?.demandeur?.nom_demandeur || 'N/A'} {doc.demandeurs[0]?.demandeur?.prenom_demandeur || ''}
-                                            </p>
-                                            {doc.nombre_demandeurs > 1 && (
-                                                <Badge variant="secondary" className="text-xs mt-1">
-                                                    +{doc.nombre_demandeurs - 1} consort(s)
-                                                </Badge>
-                                            )}
-                                        </div>
-
-                                        {/* Prix */}
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Prix total</p>
-                                            <p className="font-bold text-primary">
-                                                {doc.total_prix 
-                                                    ? new Intl.NumberFormat('fr-FR').format(doc.total_prix) 
-                                                    : '0'
-                                                } Ar
-                                            </p>
-                                        </div>
-
-                                        {/* Statut */}
-                                        <div className="flex items-center gap-2">
-                                            <Badge 
-                                                variant={doc.status === 'active' ? 'default' : 'secondary'}
-                                                className="h-fit"
-                                            >
-                                                {doc.status === 'active' ? 'Active' : 'Archivée'}
-                                            </Badge>
-                                            {doc.status_consort && (
-                                                <Badge variant="outline" className="h-fit">
-                                                    Consorts
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => handleSelectDemande(doc)}
-                                            title="Voir détails"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            asChild
-                                            title="Télécharger"
-                                        >
-                                            <a href={route('demandes.download', doc.id)}>
-                                                <Download className="h-4 w-4" />
-                                            </a>
-                                        </Button>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-
-                    {filteredDocuments.length === 0 && (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                                <p className="text-muted-foreground">
-                                    {search || filterStatus !== 'all' 
-                                        ? 'Aucune demande ne correspond aux filtres'
-                                        : 'Aucune demande enregistrée'
-                                    }
-                                </p>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
+                <DemandesList
+                    documents={filteredDocuments}
+                    search={search}
+                    filterStatus={filterStatus}
+                    onArchive={handleArchiveClick}
+                    onUnarchive={handleUnarchiveClick}
+                    onSelectDemande={handleSelectDemande}
+                />
             </div>
 
             {/* Modals */}
@@ -310,6 +296,67 @@ export default function ResumeDossier({ dossier, documents }: ResumeDossierProps
                 onSelectDemandeur={handleSelectDemandeurFromDemande}
                 dossierClosed={dossier.is_closed}
             />
+
+            {/* Dialog archivage */}
+            <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Archiver la propriété (acquise)</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Êtes-vous sûr de vouloir archiver cette propriété ? 
+                            <br /><br />
+                            <strong>Propriété :</strong> Lot {selectedDemandeForAction?.propriete?.lot}
+                            <br />
+                            <strong>Demandeur(s) :</strong> {selectedDemandeForAction?.nombre_demandeurs} personne(s)
+                            <br /><br />
+                            <span className="text-orange-600 font-semibold">
+                                ⚠️ Toutes les demandes associées à cette propriété seront archivées.
+                            </span>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isProcessing}>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmArchive}
+                            disabled={isProcessing}
+                            className="bg-orange-600 hover:bg-orange-700"
+                        >
+                            {isProcessing ? 'Archivage...' : 'Archiver'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialog désarchivage */}
+            <AlertDialog open={unarchiveDialogOpen} onOpenChange={setUnarchiveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Désarchiver la propriété</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Êtes-vous sûr de vouloir désarchiver cette propriété ? 
+                            <br />
+                            <strong>Propriété :</strong> Lot {selectedDemandeForAction?.propriete?.lot}
+                            <br />
+                            <strong>Demandeur(s) :</strong> {selectedDemandeForAction?.nombre_demandeurs} personne(s)
+                            <br />
+                            <br />
+                            <span className="text-blue-600 font-semibold">
+                                ℹ️ Toutes les demandes associées seront réactivées.
+                            </span>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isProcessing}>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmUnarchive}
+                            disabled={isProcessing}
+                            className="bg-blue-600 hover:bg-blue-700"
+                        >
+                            {isProcessing ? 'Désarchivage...' : 'Désarchiver'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

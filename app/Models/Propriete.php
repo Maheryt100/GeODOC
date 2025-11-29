@@ -86,6 +86,35 @@ class Propriete extends Model
         return $this->hasMany(RecuPaiement::class, 'id_propriete');
     }
 
+    // ✅ NOUVEAU : Vérifier si peut être dissociée
+    public function canBeDissociated(): bool
+    {
+        // Ne peut pas dissocier si archivée
+        if ($this->is_archived) {
+            return false;
+        }
+
+        // Ne peut pas dissocier si le dossier est fermé
+        if ($this->dossier && $this->dossier->is_closed) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // ✅ AMÉLIORATION : Vérifier si peut être modifiée
+    public function canBeModified(): bool
+    {
+        if ($this->is_archived) {
+            return false;
+        }
+
+        if ($this->dossier && $this->dossier->is_closed) {
+            return false;
+        }
+
+        return true;
+    }
     // ============ ACCESSORS ============
 
     /**
@@ -276,22 +305,8 @@ class Propriete extends Model
         return $this->demandesActives()->count();
     }
 
-    /**
-     * Vérifier si la propriété peut être modifiée
-     */
-    public function canBeModified(): bool
-    {
-        if ($this->is_archived) {
-            return false;
-        }
-
-        // Vérifier si le dossier parent est fermé
-        if ($this->dossier && $this->dossier->is_closed) {
-            return false;
-        }
-
-        return true;
-    }
+    
+  
 
     /**
      * Obtenir les statistiques de la propriété

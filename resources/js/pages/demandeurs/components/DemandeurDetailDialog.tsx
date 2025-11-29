@@ -1,15 +1,12 @@
-// components/DemandeurDetailDialog.tsx
-// Modal de détails complets d'un demandeur avec ses propriétés associées
-
+// components/DemandeurDetailDialog.tsx - VERSION AMÉLIORÉE
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Link } from '@inertiajs/react';
 import { 
     User, Calendar, MapPin, Phone, FileText, 
     Heart, Briefcase, Users, Home, Pencil,
-    Archive, AlertCircle 
+    Archive, AlertCircle, Unlink
 } from 'lucide-react';
 import type { Demandeur, Propriete } from '@/types';
 
@@ -21,7 +18,13 @@ interface DemandeurDetailDialogProps {
     onSelectPropriete?: (propriete: Propriete) => void;
     dossierId: number;
     dossierClosed?: boolean;
-    onEdit?: (demandeur: Demandeur) => void;
+    onDissociate?: (
+        demandeurId: number,
+        proprieteId: number,
+        demandeurNom: string,
+        proprieteLot: string,
+        type: 'from-demandeur' | 'from-propriete'
+    ) => void;
 }
 
 export default function DemandeurDetailDialog({
@@ -31,26 +34,58 @@ export default function DemandeurDetailDialog({
     proprietes = [],
     onSelectPropriete,
     dossierId,
-    dossierClosed = false
+    dossierClosed = false,
+    onDissociate
 }: DemandeurDetailDialogProps) {
     if (!demandeur) return null;
 
-    // Filtrer les propriétés liées à ce demandeur
-    const proprietesAssociees = proprietes.filter(prop => 
-        prop.demandeurs?.some(d => d.id === demandeur.id)
-    );
+    // ✅ CORRECTION : Filtrer via demandes au lieu de demandeurs
+    const proprietesAssociees = proprietes.filter(prop => {
+        if (!prop.demandes || prop.demandes.length === 0) return false;
+        return prop.demandes.some(d => d.id_demandeur === demandeur.id);
+    });
 
     const proprietesActives = proprietesAssociees.filter(p => 
-        !p.is_archived || p.demandes?.some(d => 
+        p.demandes?.some(d => 
             d.id_demandeur === demandeur.id && d.status === 'active'
         )
     );
 
     const proprietesAcquises = proprietesAssociees.filter(p => 
-        p.is_archived && p.demandes?.some(d => 
+        p.demandes?.some(d => 
             d.id_demandeur === demandeur.id && d.status === 'archive'
         )
     );
+
+    const formatNomComplet = (): string => {
+        return [
+            demandeur.titre_demandeur,
+            demandeur.nom_demandeur,
+            demandeur.prenom_demandeur
+        ].filter(Boolean).join(' ');
+    };
+
+    // ✅ NOUVEAU : Handler de dissociation
+    const handleDissociate = (propriete: Propriete, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!onDissociate || dossierClosed) return;
+        
+        onDissociate(
+            demandeur.id,
+            propriete.id,
+            formatNomComplet(),
+            propriete.lot,
+            'from-demandeur'
+        );
+    };
+
+    // ✅ Vérifier si une propriété peut être dissociée
+    const canDissociate = (propriete: Propriete): boolean => {
+        if (dossierClosed || propriete.is_archived) return false;
+        
+        const demande = propriete.demandes?.find(d => d.id_demandeur === demandeur.id);
+        return demande?.status === 'active';
+    };
 
     const InfoRow = ({ icon: Icon, label, value, highlight = false }: any) => {
         if (!value || value === '-') return null;
@@ -73,7 +108,7 @@ export default function DemandeurDetailDialog({
                         <div className="flex-1">
                             <DialogTitle className="text-2xl flex items-center gap-2">
                                 <User className="h-6 w-6" />
-                                {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                                {formatNomComplet()}
                             </DialogTitle>
                             <div className="flex flex-wrap items-center gap-2 mt-2">
                                 <Badge variant="outline" className="font-mono">
@@ -92,7 +127,6 @@ export default function DemandeurDetailDialog({
                                 )}
                             </div>
                         </div>
-                       
                     </div>
                 </DialogHeader>
 
@@ -189,8 +223,8 @@ export default function DemandeurDetailDialog({
                         </div>
                     </section>
 
-                    {/* Propriétés associées */}
-                    {proprietesAssociees.length > 0 && (
+                    {/* ✅ Propriétés associées avec bouton dissocier */}
+                    {proprietesAssociees.length > 0 ? (
                         <section>
                             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                                 <Home className="h-5 w-5" />
@@ -201,26 +235,40 @@ export default function DemandeurDetailDialog({
                                     <>
                                         <p className="text-sm font-medium text-muted-foreground">Actives</p>
                                         {proprietesActives.map((prop) => (
-                                            <button
+                                            <div
                                                 key={prop.id}
-                                                onClick={() => {
-                                                    onOpenChange(false);
-                                                    onSelectPropriete?.(prop);
-                                                }}
-                                                className="w-full p-4 border rounded-lg hover:bg-muted/50 transition text-left"
+                                                className="p-4 border rounded-lg hover:bg-muted/50 transition"
                                             >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            onOpenChange(false);
+                                                            onSelectPropriete?.(prop);
+                                                        }}
+                                                        className="flex-1 text-left"
+                                                    >
                                                         <p className="font-medium">Lot {prop.lot}</p>
                                                         <p className="text-sm text-muted-foreground">
                                                             {prop.titre && `TNº${prop.titre} • `}
                                                             {prop.nature} • {prop.vocation}
-                                                            {prop.contenance && ` • ${prop.contenance} m²`}
+                                                            {prop.contenance && ` • ${new Intl.NumberFormat('fr-FR').format(prop.contenance)} m²`}
                                                         </p>
+                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="default">Active</Badge>
+                                                        {!dossierClosed && canDissociate(prop) && onDissociate && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={(e) => handleDissociate(prop, e)}
+                                                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                                            >
+                                                                <Unlink className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
                                                     </div>
-                                                    <Badge variant="default">Active</Badge>
                                                 </div>
-                                            </button>
+                                            </div>
                                         ))}
                                     </>
                                 )}
@@ -244,7 +292,7 @@ export default function DemandeurDetailDialog({
                                                         <p className="text-sm text-muted-foreground">
                                                             {prop.titre && `TNº${prop.titre} • `}
                                                             {prop.nature} • {prop.vocation}
-                                                            {prop.contenance && ` • ${prop.contenance} m²`}
+                                                            {prop.contenance && ` • ${new Intl.NumberFormat('fr-FR').format(prop.contenance)} m²`}
                                                         </p>
                                                     </div>
                                                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
@@ -258,20 +306,18 @@ export default function DemandeurDetailDialog({
                                 )}
                             </div>
                         </section>
-                    )}
-
-                    {proprietesAssociees.length === 0 && (
+                    ) : (
                         <div className="text-center py-8 text-muted-foreground">
                             <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
                             <p>Aucune propriété associée</p>
                         </div>
                     )}
                 </div>
+
                 {!dossierClosed && (
                     <Button 
                         onClick={() => {
                             onOpenChange(false);
-                            // Petit délai pour laisser le modal se fermer
                             setTimeout(() => {
                                 window.location.href = route('demandeurs.edit', { 
                                     id_dossier: dossierId, 

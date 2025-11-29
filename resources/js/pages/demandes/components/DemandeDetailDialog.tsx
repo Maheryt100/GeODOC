@@ -1,11 +1,10 @@
-// components/DemandeDetailDialog.tsx
+// components/DemandeDetailDialog.tsx - VERSION OPTIMISÉE
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
 import { 
     MapPin, FileText, Users, AlertCircle, 
-    DollarSign, ArrowRight, X, Download, FileSpreadsheet
+    DollarSign, ArrowRight
 } from 'lucide-react';
 import type { Demandeur, Propriete } from '@/types';
 
@@ -28,8 +27,6 @@ interface DemandeData {
         status: string;
     }>;
     nombre_demandeurs?: number;
-    created_at?: string;
-    updated_at?: string;
 }
 
 interface DemandeDetailDialogProps {
@@ -52,38 +49,58 @@ export default function DemandeDetailDialog({
     const propriete = demande.propriete;
     const demandeur = demande.demandeur;
     
-    // ✅ Utiliser la liste complète des demandeurs si disponible
-    const allDemandeurs = demande.demandeurs || (demandeur ? [{
-        id: demande.id,
-        id_demandeur: demande.id_demandeur,
-        demandeur: demandeur,
-        total_prix: demande.total_prix,
-        status_consort: demande.status_consort,
-        status: demande.status
-    }] : []);
+    // ✅ AMÉLIORATION : Gestion robuste des demandeurs
+    const allDemandeurs = (() => {
+        // Si on a une liste complète de demandeurs
+        if (demande.demandeurs && Array.isArray(demande.demandeurs) && demande.demandeurs.length > 0) {
+            // Filtrer les entrées invalides
+            return demande.demandeurs.filter(d => d && d.demandeur);
+        }
+        
+        // Sinon, créer une liste avec le demandeur principal s'il existe
+        if (demandeur) {
+            return [{
+                id: demande.id,
+                id_demandeur: demande.id_demandeur,
+                demandeur: demandeur,
+                total_prix: demande.total_prix,
+                status_consort: demande.status_consort,
+                status: demande.status
+            }];
+        }
+        
+        // Aucun demandeur
+        return [];
+    })();
 
     const hasValidData = propriete && allDemandeurs.length > 0;
+
+    // ✅ Formater nom complet avec titre
+    const formatNomComplet = (demandeur: Demandeur): string => {
+        return [
+            demandeur.titre_demandeur,
+            demandeur.nom_demandeur,
+            demandeur.prenom_demandeur
+        ].filter(Boolean).join(' ');
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    {/* ✅ UN SEUL bouton fermer */}
-                    <div className="flex items-center justify-between pr-6">
-                        <DialogTitle className="flex items-center gap-2 flex-wrap">
-                            <FileText className="h-5 w-5" />
-                            Détails de la demande
-                            <Badge variant={demande.status === 'active' ? 'default' : 'secondary'}>
-                                {demande.status === 'active' ? 'Active' : 'Archivée'}
+                    <DialogTitle className="flex items-center gap-2 flex-wrap">
+                        <FileText className="h-5 w-5" />
+                        Détails de la demande
+                        <Badge variant={demande.status === 'active' ? 'default' : 'secondary'}>
+                            {demande.status === 'active' ? 'Active' : 'Archivée'}
+                        </Badge>
+                        {allDemandeurs.length > 1 && (
+                            <Badge variant="outline">
+                                <Users className="mr-1 h-3 w-3" />
+                                {allDemandeurs.length} demandeur(s)
                             </Badge>
-                            {allDemandeurs.length > 1 && (
-                                <Badge variant="outline">
-                                    <Users className="mr-1 h-3 w-3" />
-                                    {allDemandeurs.length} demandeur(s)
-                                </Badge>
-                            )}
-                        </DialogTitle>
-                    </div>
+                        )}
+                    </DialogTitle>
                 </DialogHeader>
 
                 {!hasValidData ? (
@@ -92,21 +109,9 @@ export default function DemandeDetailDialog({
                         <div>
                             <p className="text-lg font-semibold">Données incomplètes</p>
                             <p className="text-sm text-muted-foreground mt-2">
-                                Les informations de cette demande sont manquantes
+                                {!propriete && 'Propriété manquante. '}
+                                {allDemandeurs.length === 0 && 'Aucun demandeur associé. '}
                             </p>
-                        </div>
-                        <div className="bg-muted p-4 rounded-lg text-left max-w-md mx-auto space-y-2">
-                            <p className="text-xs font-medium">État des données :</p>
-                            <div className="space-y-1 text-xs">
-                                <div className="flex items-center gap-2">
-                                    {allDemandeurs.length > 0 ? '✅' : '❌'}
-                                    <span>Demandeur(s) {allDemandeurs.length > 0 ? 'trouvé(s)' : 'non trouvé(s)'}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {propriete ? '✅' : '❌'}
-                                    <span>Propriété {propriete ? 'trouvée' : 'non trouvée'}</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 ) : (
@@ -138,11 +143,7 @@ export default function DemandeDetailDialog({
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Nom complet</p>
                                                 <p className="text-sm font-medium">
-                                                    {[
-                                                        dem.demandeur.titre_demandeur,
-                                                        dem.demandeur.nom_demandeur,
-                                                        dem.demandeur.prenom_demandeur
-                                                    ].filter(Boolean).join(' ')}
+                                                    {formatNomComplet(dem.demandeur)}
                                                 </p>
                                             </div>
                                             <div>
@@ -258,24 +259,6 @@ export default function DemandeDetailDialog({
                                     <p>• Vocation : {propriete.vocation}</p>
                                 </div>
                             )}
-                        </div>
-
-                        {/* ✅ BOUTON TÉLÉCHARGER L'ACTE DE VENTE */}
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                asChild
-                            >
-                                <a 
-                                    href={route('demandes.download', demande.id)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Télécharger l'acte de vente
-                                </a>
-                            </Button>
                         </div>
 
                         {demande.status === 'archive' && (

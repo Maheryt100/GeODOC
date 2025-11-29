@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, usePage } from '@inertiajs/react';
 import { Toaster } from 'sonner';
 import type { BreadcrumbItem, District, Dossier } from '@/types';
-import DossierForm from '@/components/dossiers/DossierForm';
+import DossierForm from '@/pages/dossiers/components/DossierForm';
 
 interface PageProps {
     districts: District[];

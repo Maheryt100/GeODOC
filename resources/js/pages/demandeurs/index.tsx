@@ -1,18 +1,13 @@
-// pages/demandeurs/index.tsx
-// Composant de liste des demandeurs AVEC MODALS DE DÉTAILS
-// Utilisé par : dossiers/Show.tsx
-
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertCircle, Eye, Pencil, Trash, Ellipsis, UserPlus, Link2, Archive } from 'lucide-react';
+import { AlertCircle, Eye, Pencil, Trash, Ellipsis, Link2, Archive, Users } from 'lucide-react';
 import type { Demandeur, Dossier, Propriete } from '@/types';
-import DemandeurDetailDialog from '@/components/DemandeurDetailDialog';
-import ProprieteDetailDialog from '@/components/ProprieteDetailDialog';
-
+import DemandeurDetailDialog from '@/pages/demandeurs/components/DemandeurDetailDialog';
+import ProprieteDetailDialog from '@/pages/proprietes/components/ProprieteDetailDialog';
 
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
@@ -26,6 +21,14 @@ interface DemandeursIndexProps {
     onSelectDemandeur?: (demandeur: DemandeurWithProperty) => void;
     onLinkPropriete?: (demandeur: Demandeur) => void;
     isDemandeurIncomplete: (dem: Demandeur) => boolean;
+    // ✅ CORRECTION : Nouvelle signature
+    onDissociate: (
+        demandeurId: number,
+        proprieteId: number,
+        demandeurNom: string,
+        proprieteLot: string,
+        type: 'from-demandeur' | 'from-propriete'
+    ) => void;
 }
 
 export default function DemandeursIndex({
@@ -33,14 +36,13 @@ export default function DemandeursIndex({
     dossier,
     proprietes,
     onDeleteDemandeur,
-    onSelectDemandeur,
     isDemandeurIncomplete,
-    onLinkPropriete
+    onLinkPropriete,
+    onDissociate 
 }: DemandeursIndexProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // États pour les modals de détails
     const [selectedDemandeur, setSelectedDemandeur] = useState<DemandeurWithProperty | null>(null);
     const [showDemandeurDetail, setShowDemandeurDetail] = useState(false);
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
@@ -48,7 +50,6 @@ export default function DemandeursIndex({
 
     const getAcquiredLotsForDemandeur = (demandeurId: number): string[] => {
         const lots: string[] = [];
-        
         proprietes.forEach(prop => {
             if (prop.is_archived === true) {
                 const isLinked = prop.demandeurs?.some((d: any) => d.id === demandeurId);
@@ -57,23 +58,19 @@ export default function DemandeursIndex({
                 }
             }
         });
-        
         return lots;
     };
 
-    // Handler pour ouvrir le détail demandeur
     const handleSelectDemandeur = (demandeur: DemandeurWithProperty) => {
         setSelectedDemandeur(demandeur);
         setShowDemandeurDetail(true);
     };
 
-    // Handler pour ouvrir le détail propriété depuis le modal demandeur
     const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
         setSelectedPropriete(propriete);
         setShowProprieteDetail(true);
     };
 
-    // Handler pour ouvrir le détail demandeur depuis le modal propriété
     const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
         const demandeurWithProperty = demandeurs.find(d => d.id === demandeur.id);
         if (demandeurWithProperty) {
@@ -94,7 +91,7 @@ export default function DemandeursIndex({
         if (totalPages <= 1) return null;
 
         return (
-            <div className="flex justify-center items-center gap-2 mt-4">
+            <div className="flex justify-center items-center gap-2 mt-6 pb-4">
                 <Button
                     variant="outline"
                     size="sm"
@@ -127,47 +124,69 @@ export default function DemandeursIndex({
 
     return (
         <>
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                            <CardTitle>Demandeurs</CardTitle>
-                            <CardDescription>
-                                Liste des demandeurs du dossier ({demandeurs.length})
-                                <span className="ml-2 text-xs block mt-2">
-                                    <span className="inline-flex items-center gap-1">
-                                        <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded"></span>
-                                        <span>Données incomplètes</span>
-                                    </span>
-                                    <span className="inline-flex items-center gap-1 ml-3">
-                                        <span className="inline-block w-3 h-3 bg-amber-100 border border-amber-300 rounded"></span>
-                                        <span>Sans propriété</span>
-                                    </span>
-                                </span>
-                            </CardDescription>
+            <Card className="border-0 shadow-lg">
+                {/* Header transparent avec gradient subtil */}
+                <div className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 p-6 border-b">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                                <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold">Demandeurs</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    {demandeurs.length} demandeur{demandeurs.length > 1 ? 's' : ''} enregistré{demandeurs.length > 1 ? 's' : ''}
+                                </p>
+                            </div>
                         </div>
-                      
+                        
+                        {/* Légende */}
+                        <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-200 dark:bg-red-900/50 rounded border border-red-300 dark:border-red-800"></div>
+                                <span>Données incomplètes</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-amber-200 dark:bg-amber-900/50 rounded border border-amber-300 dark:border-amber-800"></div>
+                                <span>Sans propriété</span>
+                            </div>
+                        </div>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border overflow-x-auto">
+                </div>
+
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="border-b bg-muted/50">
+                            <thead className="bg-muted/30 border-b">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Nom complet</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">CIN</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Domiciliation</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Situation</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Téléphone</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium">Statut</th>
-                                    <th className="px-4 py-3 w-[50px]"></th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Nom complet
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        CIN
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Domiciliation
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Situation
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Téléphone
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Statut
+                                    </th>
+                                    <th className="px-6 py-4 w-[50px]"></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-border">
                                 {demandeurs.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="text-center text-muted-foreground py-8">
-                                            Aucun demandeur enregistré
+                                        <td colSpan={7} className="px-6 py-12 text-center">
+                                            <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                                            <p className="font-medium text-muted-foreground">Aucun demandeur enregistré</p>
+                                            <p className="text-sm text-muted-foreground/70 mt-1">Commencez par ajouter un demandeur au dossier</p>
                                         </td>
                                     </tr>
                                 ) : (
@@ -177,10 +196,10 @@ export default function DemandeursIndex({
                                         const hasAcquiredProperty = acquiredLots.length > 0;
                                         
                                         const rowClass = isIncomplete 
-                                            ? 'border-b hover:bg-red-50 dark:hover:bg-red-950/30 bg-red-50/50 dark:bg-red-950/20 cursor-pointer' 
+                                            ? 'hover:bg-red-50/50 dark:hover:bg-red-950/20 bg-red-50/30 dark:bg-red-950/10 cursor-pointer transition-colors' 
                                             : demandeur.hasProperty
-                                                ? 'border-b hover:bg-muted/50 cursor-pointer'
-                                                : 'border-b hover:bg-amber-50 dark:hover:bg-amber-950/30 bg-amber-50/30 dark:bg-amber-950/20 cursor-pointer';
+                                                ? 'hover:bg-muted/30 cursor-pointer transition-colors'
+                                                : 'hover:bg-amber-50/50 dark:hover:bg-amber-950/20 bg-amber-50/30 dark:bg-amber-950/10 cursor-pointer transition-colors';
                                         
                                         return (
                                             <tr 
@@ -188,28 +207,41 @@ export default function DemandeursIndex({
                                                 className={rowClass} 
                                                 onClick={() => handleSelectDemandeur(demandeur)}
                                             >
-                                                <td className="px-4 py-3 text-sm font-medium">
+                                                <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
-                                                        {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500" />}
+                                                        <span className="font-medium">
+                                                            {demandeur.titre_demandeur} {demandeur.nom_demandeur} {demandeur.prenom_demandeur}
+                                                        </span>
+                                                        {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />}
                                                         {hasAcquiredProperty && (
-                                                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                                                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400">
                                                                 <Archive className="mr-1 h-3 w-3" />
-                                                                Lot(s) acquis: {acquiredLots.join(', ')}
+                                                                Lot(s): {acquiredLots.join(', ')}
                                                             </Badge>
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3 text-sm font-mono">{demandeur.cin}</td>
-                                                <td className="px-4 py-3 text-sm">{demandeur.domiciliation || '-'}</td>
-                                                <td className="px-4 py-3 text-sm">{demandeur.situation_familiale || '-'}</td>
-                                                <td className="px-4 py-3 text-sm">{demandeur.telephone || '-'}</td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    <Badge variant={demandeur.hasProperty ? "default" : "secondary"} className="text-xs">
+                                                <td className="px-6 py-4 font-mono text-sm text-muted-foreground">
+                                                    {demandeur.cin}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-muted-foreground">
+                                                    {demandeur.domiciliation || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-muted-foreground">
+                                                    {demandeur.situation_familiale || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-muted-foreground">
+                                                    {demandeur.telephone || '-'}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <Badge 
+                                                        variant={demandeur.hasProperty ? "default" : "secondary"} 
+                                                        className="text-xs"
+                                                    >
                                                         {demandeur.hasProperty ? "Avec propriété" : "Sans propriété"}
                                                     </Badge>
                                                 </td>
-                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon">
@@ -265,7 +297,6 @@ export default function DemandeursIndex({
                 </CardContent>
             </Card>
 
-            {/* Modals de détails avec navigation entre eux */}
             <DemandeurDetailDialog
                 demandeur={selectedDemandeur}
                 open={showDemandeurDetail}

@@ -42,6 +42,40 @@ class Demander extends Model
         return $this->belongsTo(User::class, 'id_user');
     }
 
+    // ✅ NOUVEAU : Vérifier si peut être dissociée
+    public function canBeDissociated(): bool
+    {
+        // Ne peut pas dissocier si archivée
+        if ($this->status === 'archive') {
+            return false;
+        }
+
+        // Vérifier si la propriété est archivée
+        if ($this->propriete && $this->propriete->is_archived) {
+            return false;
+        }
+
+        // Vérifier si le dossier est fermé
+        if ($this->propriete && $this->propriete->dossier && $this->propriete->dossier->is_closed) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // ✅ AMÉLIORATION : Vérifier si peut être modifiée
+    public function canBeModified(): bool
+    {
+        if ($this->status === 'archive') {
+            return false;
+        }
+
+        if ($this->propriete && $this->propriete->dossier && $this->propriete->dossier->is_closed) {
+            return false;
+        }
+
+        return true;
+    }
     /**
      * Consorts liés à cette demande
      */
@@ -119,23 +153,7 @@ class Demander extends Model
         return number_format($this->total_prix, 0, ',', ' ') . ' Ar';
     }
 
-    /**
-     * Vérifier si la demande peut être modifiée
-     */
-    public function canBeModified(): bool
-    {
-        // Ne peut pas modifier si archivée
-        if ($this->status === 'archive') {
-            return false;
-        }
-
-        // Vérifier si le dossier est fermé
-        if ($this->propriete && $this->propriete->dossier && $this->propriete->dossier->is_closed) {
-            return false;
-        }
-
-        return true;
-    }
+ 
 
     // ============ MÉTHODES MÉTIER ============
 

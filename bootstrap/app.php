@@ -30,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'district.scope' => \App\Http\Middleware\EnsureDistrictScope::class,
             'check.dossier.closed' => CheckDossierClosed::class,
             'check.attachments' => \App\Http\Middleware\CheckAttachmentsAccess::class,
+            'check.dossier.not.closed' => \App\Http\Middleware\CheckDossierNotClosed::class,
         ]);;
     })
     ->withExceptions(function (Exceptions $exceptions) {

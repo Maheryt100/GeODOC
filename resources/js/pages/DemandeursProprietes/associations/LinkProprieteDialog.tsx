@@ -1,5 +1,5 @@
-// components/associations/LinkProprieteDialog.tsx
-import { useState } from 'react';
+// associations/LinkProprieteDialog.tsx
+import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -30,11 +30,19 @@ export function LinkProprieteDialog({
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // ✅ CORRECTION : Réinitialiser l'état à la fermeture
+    useEffect(() => {
+        if (!open) {
+            setSearchTerm('');
+            setSelectedPropriete(null);
+            setIsSubmitting(false);
+        }
+    }, [open]);
+
     // Filtrer les propriétés déjà liées à ce demandeur
     const proprietesDisponibles = proprietesDossier.filter(prop => {
         // Exclure les propriétés archivées
-        const isArchived = prop.demandes?.some(d => d.status === 'archive');
-        if (isArchived) return false;
+        if (prop.is_archived) return false;
 
         // Exclure les propriétés déjà liées
         const dejaLie = prop.demandeurs?.some(d => d.id === demandeur.id);
@@ -69,15 +77,13 @@ export function LinkProprieteDialog({
             onSuccess: () => {
                 toast.success('Propriété liée avec succès');
                 onOpenChange(false);
-                setSelectedPropriete(null);
-                setSearchTerm('');
             },
             onError: (errors) => {
                 toast.error('Erreur', {
                     description: Object.values(errors).join('\n')
                 });
-            },
-            onFinish: () => setIsSubmitting(false)
+                setIsSubmitting(false);
+            }
         });
     };
 
@@ -93,7 +99,7 @@ export function LinkProprieteDialog({
 
                 <div className="flex-1 overflow-y-auto space-y-4">
                     {/* Barre de recherche */}
-                    <div className="sticky top-0 bg-background pb-4 border-b">
+                    <div className="sticky top-0 bg-background pb-4 border-b z-10">
                         <Label>Rechercher par lot, titre ou propriétaire</Label>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -102,6 +108,7 @@ export function LinkProprieteDialog({
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="pl-10"
+                                disabled={isSubmitting}
                             />
                         </div>
                     </div>
@@ -130,8 +137,8 @@ export function LinkProprieteDialog({
                                         selectedPropriete?.id === prop.id
                                             ? 'border-primary bg-primary/5 shadow-sm'
                                             : 'border-border'
-                                    }`}
-                                    onClick={() => setSelectedPropriete(prop)}
+                                    } ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
+                                    onClick={() => !isSubmitting && setSelectedPropriete(prop)}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -145,7 +152,7 @@ export function LinkProprieteDialog({
                                                     <Badge variant="default">Sélectionné</Badge>
                                                 )}
                                                 {prop.is_incomplete && (
-                                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
+                                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400">
                                                         Incomplet
                                                     </Badge>
                                                 )}
@@ -182,11 +189,7 @@ export function LinkProprieteDialog({
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
-                            onClick={() => {
-                                onOpenChange(false);
-                                setSelectedPropriete(null);
-                                setSearchTerm('');
-                            }}
+                            onClick={() => onOpenChange(false)}
                             disabled={isSubmitting}
                         >
                             Annuler

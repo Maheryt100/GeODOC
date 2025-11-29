@@ -1,50 +1,25 @@
-// pages/dossiers/Show.tsx
+// pages/dossiers/Show.tsx - VERSION CORRIGÉE
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-    LandPlot, Pencil, Lock, LockOpen, FileOutput, 
-    MapPin, Calendar, Building2, 
-    FileText
-} from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useState, useCallback } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
-import { CloseDossierDialog } from '@/components/CloseDossierDialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { BaseDemandeur, BasePropriete } from '@/pages/PiecesJointes/pieces-jointes';
+import { CloseDossierDialog } from '@/pages/dossiers/components/CloseDossierDialog';
 
-// Import des nouveaux composants d'association
-import { LinkDemandeurDialog } from '@/components/associations/LinkDemandeurDialog';
-import { LinkProprieteDialog } from '@/components/associations/LinkProprieteDialog';
+import { LinkDemandeurDialog } from '../DemandeursProprietes/associations/LinkDemandeurDialog';
+import { LinkProprieteDialog } from '../DemandeursProprietes/associations/LinkProprieteDialog';
+import { DissociateDialog } from '../DemandeursProprietes/associations/DissociateDialog';
 
-// Import des composants de liste
+import DossierInfoSection from '@/pages/dossiers/components/DossierInfoSection';
 import DemandeursIndex from '@/pages/demandeurs/index';
 import ProprietesIndex from '@/pages/proprietes/index';
-
-import AttachmentsSection from '@/components/AttachmentsSection';
+import PiecesJointesIndex from '@/pages/PiecesJointes/Index';
 
 interface DemandeurWithProperty extends Demandeur {
     hasProperty: boolean;
-}
-
-// Interface pour les demandeurs de base (pour AttachmentsSection)
-interface BaseDemandeur {
-    id: number;
-    nom_demandeur: string;
-    prenom_demandeur: string;
-    cin: string;
-   
-}
-
-// Interface pour les propriétés de base (pour AttachmentsSection)
-interface BasePropriete {
-    id: number;
-    lot: string;
-    titre: string | null;
 }
 
 interface PageProps {
@@ -67,6 +42,9 @@ export default function Show() {
     const { dossier, permissions } = usePage<PageProps>().props;
     const { flash } = usePage<SharedData>().props;
 
+    // ✅ CORRECTION : Déclarer proprietes AVANT de l'utiliser
+    const proprietes = dossier.proprietes || [];
+
     const userPermissions = permissions || {
         canEdit: true,
         canDelete: true,
@@ -81,11 +59,23 @@ export default function Show() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     
-    // États pour les dialogues d'association
+    // États pour la liaison
     const [linkDemandeurOpen, setLinkDemandeurOpen] = useState(false);
     const [linkProprieteOpen, setLinkProprieteOpen] = useState(false);
     const [selectedProprieteForLink, setSelectedProprieteForLink] = useState<Propriete | null>(null);
     const [selectedDemandeurForLink, setSelectedDemandeurForLink] = useState<Demandeur | null>(null);
+
+    // ✅ État pour la dissociation
+    const [dissociateDialogOpen, setDissociateDialogOpen] = useState(false);
+    const [dissociateData, setDissociateData] = useState<{
+        demandeurId: number;
+        proprieteId: number;
+        demandeurNom: string;
+        proprieteLot: string;
+        type: 'from-demandeur' | 'from-propriete';
+        autresDemandeurs?: number;
+    } | null>(null);
+    const [isDissociating, setIsDissociating] = useState(false);
 
     useEffect(() => {
         if (flash?.message) toast.info(flash.message);
@@ -93,18 +83,104 @@ export default function Show() {
         if (flash?.error) toast.error(flash.error);
     }, [flash?.message, flash?.success, flash?.error]);
 
-    // ========== HANDLERS D'ASSOCIATION ==========
-    const handleLinkDemandeur = (propriete: Propriete) => {
+    // Fonctions de réinitialisation
+    const resetLinkDemandeurDialog = useCallback(() => {
+        setLinkDemandeurOpen(false);
+        setSelectedProprieteForLink(null);
+    }, []);
+
+    const resetLinkProprieteDialog = useCallback(() => {
+        setLinkProprieteOpen(false);
+        setSelectedDemandeurForLink(null);
+    }, []);
+
+    // Gestionnaires de liaison
+    const handleLinkDemandeur = useCallback((propriete: Propriete) => {
+        if (dossier.is_closed) {
+            toast.error('Impossible de lier : le dossier est fermé');
+            return;
+        }
+        if (propriete.is_archived) {
+            toast.error('Impossible de lier : la propriété est archivée (acquise)');
+            return;
+        }
         setSelectedProprieteForLink(propriete);
         setLinkDemandeurOpen(true);
-    };
+    }, [dossier.is_closed]);
 
-    const handleLinkPropriete = (demandeur: Demandeur) => {
+    const handleLinkPropriete = useCallback((demandeur: Demandeur) => {
+        if (dossier.is_closed) {
+            toast.error('Impossible de lier : le dossier est fermé');
+            return;
+        }
         setSelectedDemandeurForLink(demandeur);
         setLinkProprieteOpen(true);
-    };
+    }, [dossier.is_closed]);
 
-    // ========== HANDLERS EXISTANTS ==========
+    // ✅ Gestionnaire de dissociation
+    const handleDissociate = useCallback((
+        demandeurId: number,
+        proprieteId: number,
+        demandeurNom: string,
+        proprieteLot: string,
+        type: 'from-demandeur' | 'from-propriete'
+    ) => {
+        if (dossier.is_closed) {
+            toast.error('Impossible de dissocier : le dossier est fermé');
+            return;
+        }
+
+        // Vérifier si la propriété est archivée
+        const propriete = proprietes.find(p => p.id === proprieteId);
+        if (propriete?.is_archived) {
+            toast.error('Impossible de dissocier : la propriété est archivée (acquise)');
+            return;
+        }
+
+        // ✅ Compter les autres demandeurs sur cette propriété
+        const autresDemandeurs = propriete?.demandes?.filter(
+            d => d.id_demandeur !== demandeurId && d.status === 'active'
+        ).length || 0;
+
+        setDissociateData({
+            demandeurId,
+            proprieteId,
+            demandeurNom,
+            proprieteLot,
+            type,
+            autresDemandeurs
+        });
+        setDissociateDialogOpen(true);
+    }, [dossier.is_closed, proprietes]);
+
+    // Confirmation de la dissociation
+    const confirmDissociate = useCallback(() => {
+        if (!dissociateData || isDissociating) return;
+
+        setIsDissociating(true);
+
+        router.post(route('association.dissociate'), {
+            id_demandeur: dissociateData.demandeurId,
+            id_propriete: dissociateData.proprieteId,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                const message = dissociateData.type === 'from-demandeur'
+                    ? `Propriété Lot ${dissociateData.proprieteLot} dissociée avec succès`
+                    : `${dissociateData.demandeurNom} dissocié de la propriété avec succès`;
+                toast.success(message);
+                setDissociateDialogOpen(false);
+                setDissociateData(null);
+            },
+            onError: (errors) => {
+                toast.error('Erreur', {
+                    description: Object.values(errors).join('\n')
+                });
+            },
+            onFinish: () => setIsDissociating(false)
+        });
+    }, [dissociateData, isDissociating]);
+
     const handleDeleteDemandeur = (id: number) => {
         setItemToDelete({ type: 'demandeur', id });
         setDeleteType('dossier');
@@ -184,7 +260,6 @@ export default function Show() {
         }
     };
 
-    // ========== HELPERS ==========
     const getAllDemandeurs = (): DemandeurWithProperty[] => {
         const demandeursMap = new Map<number, DemandeurWithProperty>();
         
@@ -198,11 +273,12 @@ export default function Show() {
         
         if (dossier.proprietes) {
             dossier.proprietes.forEach((prop: Propriete) => {
-                if (prop.demandeurs) {
-                    prop.demandeurs.forEach((d: Demandeur) => {
-                        if (!demandeursMap.has(d.id)) {
+                if (prop.demandes) {
+                    prop.demandes.forEach((demande) => {
+                        const d = demande.demandeur;
+                        if (d && !demandeursMap.has(d.id)) {
                             demandeursMap.set(d.id, { ...d, hasProperty: true });
-                        } else {
+                        } else if (d) {
                             const existing = demandeursMap.get(d.id);
                             if (existing) {
                                 demandeursMap.set(d.id, { ...existing, hasProperty: true });
@@ -217,7 +293,6 @@ export default function Show() {
     };
 
     const allDemandeurs = getAllDemandeurs();
-    const proprietes = dossier.proprietes || [];
 
     const isPropertyIncomplete = (prop: Propriete): boolean => {
         return !prop.titre || !prop.contenance || !prop.proprietaire || !prop.nature || !prop.vocation || !prop.situation;
@@ -228,7 +303,6 @@ export default function Show() {
                !dem.lieu_delivrance || !dem.domiciliation || !dem.occupation || !dem.nom_mere;
     };
 
-    // Convertir les demandeurs et propriétés pour AttachmentsSection
     const baseDemandeursForAttachments: BaseDemandeur[] = allDemandeurs.map(d => ({
         id: d.id,
         nom_demandeur: d.nom_demandeur,
@@ -252,155 +326,15 @@ export default function Show() {
             <Head title={`Dossier ${dossier.nom_dossier}`} />
             <Toaster position="top-right" richColors />
 
-            <div className="flex flex-col gap-6 p-6">
-                {/* Alerte si dossier fermé */}
-                {dossier.is_closed && (
-                    <Alert variant="destructive" className="border-orange-500 bg-orange-50 dark:bg-orange-950/20">
-                        <Lock className="h-4 w-4" />
-                        <AlertTitle>Dossier fermé</AlertTitle>
-                        <AlertDescription className="space-y-2">
-                            <p>
-                                Fermé le <strong>{new Date(dossier.date_fermeture!).toLocaleDateString('fr-FR')}</strong>
-                                {dossier.closedBy && <> par <strong>{dossier.closedBy.name}</strong></>}
-                            </p>
-                            {dossier.motif_fermeture && (
-                                <p className="text-sm italic">Motif : {dossier.motif_fermeture}</p>
-                            )}
-                            <p className="text-sm">
-                                Aucune modification possible. Seuls les administrateurs peuvent rouvrir ce dossier.
-                            </p>
-                        </AlertDescription>
-                    </Alert>
-                )}
+            <div className="container mx-auto p-6 max-w-[1600px] space-y-6">
+                
+                <DossierInfoSection
+                    dossier={dossier}
+                    demandeursCount={allDemandeurs.length}
+                    proprietesCount={proprietes.length}
+                    onCloseToggle={() => setCloseDialogOpen(true)}
+                />
 
-                {/* Section Informations du Dossier */}
-                <Card className="border-2">
-                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div>
-                                <div className="flex items-center gap-3">
-                                    <CardTitle className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                                        {dossier.nom_dossier}
-                                    </CardTitle>
-                                    {dossier.is_closed ? (
-                                        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
-                                            <Lock className="mr-1 h-3 w-3" />
-                                            Fermé
-                                        </Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
-                                            <LockOpen className="mr-1 h-3 w-3" />
-                                            Ouvert
-                                        </Badge>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex gap-2 flex-wrap">
-                                {dossier.can_close && (
-                                    <Button
-                                        variant={dossier.is_closed ? "default" : "destructive"}
-                                        size="sm"
-                                        onClick={() => setCloseDialogOpen(true)}
-                                        className={dossier.is_closed 
-                                            ? "bg-green-600 hover:bg-green-700" 
-                                            : "bg-orange-600 hover:bg-orange-700"
-                                        }
-                                    >
-                                        {dossier.is_closed ? (
-                                            <>
-                                                <LockOpen className="mr-2 h-4 w-4" />
-                                                Rouvrir
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Lock className="mr-2 h-4 w-4" />
-                                                Fermer
-                                            </>
-                                        )}
-                                    </Button>
-                                )}
-
-                                {dossier.can_modify && (
-                                    <Button asChild variant="outline" size="sm" disabled={dossier.is_closed && !dossier.can_close}>
-                                        <Link href={route('dossiers.edit', dossier.id)}>
-                                            <Pencil className="mr-2 h-4 w-4" />
-                                            Modifier
-                                        </Link>
-                                    </Button>
-                                )}
-                                
-                                {!dossier.is_closed && (
-                                    <Button asChild variant="default" size="sm">
-                                        <Link href={route('nouveau-lot.create', dossier.id)}>
-                                            <LandPlot className="mr-2 h-4 w-4" />
-                                            Nouvelle entrée
-                                        </Link>
-                                    </Button>
-                                )}
-                                
-                                <Button asChild size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                                    <Link href={route('documents.generate', dossier.id)}>
-                                        <FileOutput className="mr-2 h-4 w-4" />
-                                        Générer documents
-                                    </Link>
-                                </Button>
-                                <Button asChild size="sm" variant="outline">
-                                    <Link href={route('demandes.resume', dossier.id)}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        Résumé des demandes
-                                    </Link>
-                                </Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Circonscription</p>
-                                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mt-1">{dossier.circonscription}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                <MapPin className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Commune</p>
-                                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mt-1">{dossier.type_commune} {dossier.commune}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                <MapPin className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Fokontany</p>
-                                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mt-1">{dossier.fokontany}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg md:col-span-2 lg:col-span-3">
-                                <Calendar className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Période de descente</p>
-                                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                                        Du {new Date(dossier.date_descente_debut).toLocaleDateString('fr-FR')} au {new Date(dossier.date_descente_fin).toLocaleDateString('fr-FR')}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex gap-4 mt-6 pt-4 border-t">
-                            <Badge variant="secondary">{allDemandeurs.length} Demandeur{allDemandeurs.length > 1 ? 's' : ''}</Badge>
-                            <Badge variant="secondary">{proprietes.length} Propriété{proprietes.length > 1 ? 's' : ''}</Badge>
-                            <Badge variant="outline">Ouvert le {new Date(dossier.date_ouverture).toLocaleDateString('fr-FR')}</Badge>
-                            {dossier.is_closed && dossier.date_fermeture && (
-                                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300">
-                                    <Lock className="mr-1 h-3 w-3" />
-                                    Fermé le {new Date(dossier.date_fermeture).toLocaleDateString('fr-FR')}
-                                </Badge>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Listes avec boutons d'association */}
                 <DemandeursIndex
                     demandeurs={allDemandeurs}
                     dossier={dossier}
@@ -408,6 +342,7 @@ export default function Show() {
                     onSelectDemandeur={(dem) => console.log('Sélectionné:', dem)}
                     onDeleteDemandeur={handleDeleteDemandeur}
                     onLinkPropriete={handleLinkPropriete}
+                    onDissociate={handleDissociate}
                     isDemandeurIncomplete={isDemandeurIncomplete}
                 />
 
@@ -420,31 +355,33 @@ export default function Show() {
                     onArchivePropriete={handleArchivePropriete}
                     onUnarchivePropriete={handleUnarchivePropriete}
                     onLinkDemandeur={handleLinkDemandeur}
+                    onDissociate={handleDissociate}
                     isPropertyIncomplete={isPropertyIncomplete}
                 />
                 
-                {/* Section Pièces Jointes - Corrigée */}
-                <div className="mt-6">
-                    <AttachmentsSection
-                        attachableType="Dossier"
-                        attachableId={dossier.id}
-                        title="Documents du Dossier"
-                        canUpload={userPermissions.canEdit && !dossier.is_closed}
-                        canDelete={userPermissions.canDelete && !dossier.is_closed}
-                        canVerify={userPermissions.canClose}
-                        initialCount={dossier.pieces_jointes_count || 0}
-                        demandeurs={baseDemandeursForAttachments}
-                        proprietes={baseProprietesForAttachments}
-                        showRelated={true}
-                    />
-                </div>
+                <PiecesJointesIndex
+                    attachableType="Dossier"
+                    attachableId={dossier.id}
+                    title="Documents du Dossier"
+                    canUpload={userPermissions.canEdit && !dossier.is_closed}
+                    canDelete={userPermissions.canDelete && !dossier.is_closed}
+                    canVerify={userPermissions.canClose}
+                    initialCount={dossier.pieces_jointes_count || 0}
+                    demandeurs={baseDemandeursForAttachments}
+                    proprietes={baseProprietesForAttachments}
+                    showRelated={true}
+                />
             </div>
 
-            {/* Dialogues d'association */}
+            {/* Dialogues de liaison */}
             {selectedProprieteForLink && (
                 <LinkDemandeurDialog
                     open={linkDemandeurOpen}
-                    onOpenChange={setLinkDemandeurOpen}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            resetLinkDemandeurDialog();
+                        }
+                    }}
                     propriete={selectedProprieteForLink}
                     demandeursDossier={allDemandeurs}
                     dossierId={dossier.id}
@@ -454,14 +391,26 @@ export default function Show() {
             {selectedDemandeurForLink && (
                 <LinkProprieteDialog
                     open={linkProprieteOpen}
-                    onOpenChange={setLinkProprieteOpen}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            resetLinkProprieteDialog();
+                        }
+                    }}
                     demandeur={selectedDemandeurForLink}
                     proprietesDossier={proprietes}
                     dossierId={dossier.id}
                 />
             )}
 
-            {/* Dialog fermeture/réouverture */}
+            {/* Dialogue de dissociation */}
+            <DissociateDialog
+                open={dissociateDialogOpen}
+                onOpenChange={setDissociateDialogOpen}
+                data={dissociateData}
+                isProcessing={isDissociating}
+                onConfirm={confirmDissociate}
+            />
+
             <CloseDossierDialog
                 dossier={{
                     ...dossier,
@@ -471,7 +420,7 @@ export default function Show() {
                 onOpenChange={setCloseDialogOpen}
             />
 
-            {/* AlertDialog suppression demandeur */}
+            {/* Dialogue de suppression de demandeur */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -480,7 +429,7 @@ export default function Show() {
                     </AlertDialogHeader>
                     <div className="space-y-4 py-4">
                         <div 
-                            className={`p-4 border-2 rounded-lg cursor-pointer ${
+                            className={`p-4 border-2 rounded-lg cursor-pointer transition ${
                                 deleteType === 'dossier' ? 'border-primary bg-primary/5' : ''
                             }`}
                             onClick={() => setDeleteType('dossier')}
@@ -489,13 +438,13 @@ export default function Show() {
                             <strong>Retirer du dossier uniquement</strong>
                         </div>
                         <div 
-                            className={`p-4 border-2 rounded-lg cursor-pointer ${
-                                deleteType === 'definitif' ? 'border-red-500 bg-red-50' : ''
+                            className={`p-4 border-2 rounded-lg cursor-pointer transition ${
+                                deleteType === 'definitif' ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : ''
                             }`}
                             onClick={() => setDeleteType('definitif')}
                         >
                             <input type="radio" checked={deleteType === 'definitif'} onChange={() => setDeleteType('definitif')} className="mr-3" />
-                            <strong className="text-red-600">Supprimer définitivement</strong>
+                            <strong className="text-red-600 dark:text-red-400">Supprimer définitivement</strong>
                         </div>
                     </div>
                     <AlertDialogFooter>
@@ -503,7 +452,7 @@ export default function Show() {
                         <AlertDialogAction
                             onClick={confirmDeleteDemandeur}
                             disabled={isDeleting}
-                            className={deleteType === 'definitif' ? 'bg-red-600' : ''}
+                            className={deleteType === 'definitif' ? 'bg-red-600 hover:bg-red-700' : ''}
                         >
                             {isDeleting ? 'Suppression...' : deleteType === 'dossier' ? 'Retirer' : 'Supprimer'}
                         </AlertDialogAction>

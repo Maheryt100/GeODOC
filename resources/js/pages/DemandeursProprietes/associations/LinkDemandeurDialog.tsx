@@ -1,5 +1,5 @@
 // components/associations/LinkDemandeurDialog.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -30,13 +30,20 @@ export function LinkDemandeurDialog({
     const [selectedDemandeur, setSelectedDemandeur] = useState<Demandeur | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Filtrer les demandeurs déjà liés à cette propriété
+    // ✅ CORRECTION : Réinitialiser l'état à la fermeture
+    useEffect(() => {
+        if (!open) {
+            setSearchTerm('');
+            setSelectedDemandeur(null);
+            setIsSubmitting(false);
+        }
+    }, [open]);
+
     const demandeursDisponibles = demandeursDossier.filter(dem => {
         const dejaLie = propriete.demandeurs?.some(d => d.id === dem.id);
         return !dejaLie;
     });
 
-    // Recherche
     const demandeursFiltres = demandeursDisponibles.filter(dem => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
@@ -64,15 +71,13 @@ export function LinkDemandeurDialog({
             onSuccess: () => {
                 toast.success('Demandeur lié avec succès');
                 onOpenChange(false);
-                setSelectedDemandeur(null);
-                setSearchTerm('');
             },
             onError: (errors) => {
                 toast.error('Erreur', {
                     description: Object.values(errors).join('\n')
                 });
-            },
-            onFinish: () => setIsSubmitting(false)
+                setIsSubmitting(false);
+            }
         });
     };
 
@@ -82,13 +87,12 @@ export function LinkDemandeurDialog({
                 <DialogHeader>
                     <DialogTitle>Lier un demandeur existant</DialogTitle>
                     <DialogDescription>
-                        Propriété : Lot {propriete.lot} - {propriete.titre ? `TNº${propriete.titre}` : 'Sans titre'}
+                        Propriété : Lot {propriete.lot} {propriete.titre ? `- TNº${propriete.titre}` : ''}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto space-y-4">
-                    {/* Barre de recherche */}
-                    <div className="sticky top-0 bg-background pb-4 border-b">
+                    <div className="sticky top-0 bg-background pb-4 border-b z-10">
                         <Label>Rechercher par nom ou CIN</Label>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -97,11 +101,11 @@ export function LinkDemandeurDialog({
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="pl-10"
+                                disabled={isSubmitting}
                             />
                         </div>
                     </div>
 
-                    {/* Liste des demandeurs */}
                     {demandeursDisponibles.length === 0 ? (
                         <Alert>
                             <AlertCircle className="h-4 w-4" />
@@ -125,8 +129,8 @@ export function LinkDemandeurDialog({
                                         selectedDemandeur?.id === dem.id
                                             ? 'border-primary bg-primary/5 shadow-sm'
                                             : 'border-border'
-                                    }`}
-                                    onClick={() => setSelectedDemandeur(dem)}
+                                    } ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
+                                    onClick={() => !isSubmitting && setSelectedDemandeur(dem)}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -153,7 +157,6 @@ export function LinkDemandeurDialog({
                     )}
                 </div>
 
-                {/* Footer avec actions */}
                 <div className="flex justify-between items-center pt-4 border-t">
                     <p className="text-sm text-muted-foreground">
                         {demandeursFiltres.length} demandeur(s) disponible(s)
@@ -161,11 +164,7 @@ export function LinkDemandeurDialog({
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
-                            onClick={() => {
-                                onOpenChange(false);
-                                setSelectedDemandeur(null);
-                                setSearchTerm('');
-                            }}
+                            onClick={() => onOpenChange(false)}
                             disabled={isSubmitting}
                         >
                             Annuler

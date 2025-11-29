@@ -2,18 +2,20 @@ import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
     Folder,
     Folders,
-    Coins,
+    MapPin,
     LayoutGrid,
     Settings,
     UserCog,
     Activity,
-    BarChart3
+    BarChart3,
+    Shield
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -34,7 +36,7 @@ export function AppSidebar() {
             icon: Folders,
         },
         {
-            title: 'Statistiques', // ✅ REMPLACE "Consorts"
+            title: 'Statistiques',
             href: '/statistiques',
             icon: BarChart3,
         },
@@ -43,12 +45,12 @@ export function AppSidebar() {
     // ============ CONFIGURATION (Admin uniquement) ============
     const configNavItems: NavItem[] = [];
 
-    // Prix du terrain - accessible aux super_admin et admin_district
+    // Gestion des localisations - accessible aux super_admin et admin_district
     if (user && (user.role === 'super_admin' || user.role === 'admin_district')) {
         configNavItems.push({
-            title: 'Prix du terrain',
-            href: '/circonscription',
-            icon: Coins,
+            title: 'Localisations',
+            href: '/location',
+            icon: MapPin,
         });
         
         // Logs d'activité
@@ -82,6 +84,27 @@ export function AppSidebar() {
         },
     ];
 
+    // Déterminer le badge de rôle
+    const getRoleBadge = () => {
+        if (!user) return null;
+        
+        const roleConfig = {
+            super_admin: { label: 'Super Admin', color: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20' },
+            admin_district: { label: 'Admin District', color: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20' },
+            user: { label: 'Utilisateur', color: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20' },
+        };
+
+        const config = roleConfig[user.role as keyof typeof roleConfig];
+        if (!config) return null;
+
+        return (
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${config.color}`}>
+                <Shield className="h-3 w-3" />
+                {config.label}
+            </div>
+        );
+    };
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -94,18 +117,35 @@ export function AppSidebar() {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
+                
+                {/* Badge de rôle sous le logo */}
+                <div className="px-3 pt-2 pb-1 group-data-[collapsible=icon]:hidden">
+                    {getRoleBadge()}
+                </div>
             </SidebarHeader>
 
             <SidebarContent>
                 {/* Navigation principale */}
+                <div className="px-3 py-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        Menu Principal
+                    </div>
+                </div>
                 <NavMain items={mainNavItems} />
+                
+                {/* Séparateur si items de configuration */}
+                {configNavItems.length > 0 && (
+                    <div className="px-3 py-3">
+                        <Separator />
+                    </div>
+                )}
                 
                 {/* Section Configuration (si items disponibles) */}
                 {configNavItems.length > 0 && (
-                    <div className="mt-4">
+                    <div>
                         <div className="px-3 py-2">
                             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <Settings className="h-3 w-3" />
+                                <Settings className="h-3.5 w-3.5" />
                                 Configuration
                             </div>
                         </div>

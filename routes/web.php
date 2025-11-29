@@ -15,7 +15,7 @@ use App\Http\Controllers\StatController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
-use App\Http\Controllers\GlobalSearchController; // ✅ NOUVEAU
+use App\Http\Controllers\GlobalSearchController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -43,7 +43,6 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     // ============================================================================
     
     Route::get('/dashboard', [StatController::class, 'index'])->name('dashboard');
-    Route::get('/statistiques', [StatController::class, 'statistics'])->name('statistiques.index');
 
     // ============================================================================
     // STATISTIQUES
@@ -185,7 +184,6 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             ->middleware('dossier.access:dossierId')
             ->name('index');
         
-        // Route de résumé
         Route::get('/resume/{dossierId}', [DemandeController::class, 'resume'])
             ->middleware('dossier.access:dossierId')
             ->name('resume');
@@ -216,6 +214,8 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     // ASSOCIATIONS DEMANDEUR-PROPRIÉTÉ
     // ============================================================================
     
+
+    
     Route::middleware(['district.access:create', 'check.dossier.closed:modify'])->group(function () {
         Route::post('/association/link', [AssociationController::class, 'link'])->name('association.link');
     });
@@ -229,32 +229,43 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     // ============================================================================
     
     Route::middleware(['district.access:create', 'check.dossier.closed:modify'])->group(function () {
-        // Création nouveau lot avec demandeur
         Route::get('/nouveau-lot/{id}', [DemandeurProprieteController::class, 'create'])->name('nouveau-lot.create');
         Route::post('/nouveau-lot', [DemandeurProprieteController::class, 'store'])->name('nouveau-lot.store');
         
-        // Anciens formulaires de liaison
         Route::get('/lier-demandeur/{id}/{id_demandeur?}/{id_propriete?}', [DemandeurProprieteController::class, 'linkExisting'])->name('lier-demandeur.create');
         Route::post('/lier-demandeur/search', [DemandeurProprieteController::class, 'searchToLink'])->name('lier-demandeur.search');
         Route::post('/lier-demandeur/store', [DemandeurProprieteController::class, 'storeLink'])->name('lier-demandeur.store');
         
-        // Anciens formulaires d'ajout à propriété
         Route::get('/ajouter-demandeur/{id}/{id_propriete?}', [DemandeurProprieteController::class, 'addToProperty'])->name('ajouter-demandeur.create');
         Route::post('/ajouter-demandeur/store', [DemandeurProprieteController::class, 'storeToProperty'])->name('ajouter-demandeur.store');
     });
 
     // ============================================================================
-    // CONFIGURATION DES PRIX (Districts)
+    // ✅ GESTION DES LOCALISATIONS ET PRIX (ROUTES CORRIGÉES)
     // ============================================================================
     
-    Route::prefix('circonscription')->name('circonscription.')
+    Route::prefix('location')->name('location.')
         ->middleware('district.access:configure_prices')
         ->group(function () {
+            // Vue principale
             Route::get('/', [DistrictController::class, 'index'])->name('index');
+            
+            // Mise à jour des prix
             Route::post('/update', [DistrictController::class, 'update'])->name('update');
             Route::post('/bulk-update', [DistrictController::class, 'bulkUpdate'])->name('bulkUpdate');
             Route::post('/reset', [DistrictController::class, 'resetPrices'])->name('reset');
+            
+            // ✅ NOUVEAU : Routes supplémentaires
+            Route::get('/export', [DistrictController::class, 'export'])->name('export');
+            Route::get('/search', [DistrictController::class, 'search'])->name('search');
+            Route::get('/{id}', [DistrictController::class, 'show'])->name('show');
         });
+
+    // ✅ Routes de compatibilité pour "circonscription" (redirection vers location)
+    Route::redirect('/circonscription', '/location')->name('circonscription.index');
+    Route::post('/circonscription/update', [DistrictController::class, 'update'])->name('circonscription.update');
+    Route::post('/circonscription/bulk-update', [DistrictController::class, 'bulkUpdate'])->name('circonscription.bulkUpdate');
+    Route::post('/circonscription/reset', [DistrictController::class, 'resetPrices'])->name('circonscription.reset');
 
     // ============================================================================
     // GESTION DES UTILISATEURS
@@ -282,16 +293,12 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             ->middleware('dossier.access:id_dossier')
             ->name('generate');
         
-        // ✅ Routes de génération/téléchargement unifiées
         Route::get('/recu', [DocumentGenerationController::class, 'generateRecu'])->name('recu');
         Route::get('/acte-vente', [DocumentGenerationController::class, 'generateActeVente'])->name('acte-vente');
         Route::get('/csf', [DocumentGenerationController::class, 'generateCsf'])->name('csf');
         Route::get('/requisition', [DocumentGenerationController::class, 'generateRequisition'])->name('requisition');
         
-        // ✅ Téléchargement d'un document existant (par ID)
         Route::get('/recu/{id}/download', [DocumentGenerationController::class, 'downloadRecu'])->name('recu.download');
-        
-        // ✅ Historique des documents
         Route::get('/recu/history/{id_propriete}', [DocumentGenerationController::class, 'getRecuHistory'])->name('recu.history');
     });
 
@@ -300,41 +307,30 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     // ============================================================================
     
     Route::prefix('pieces-jointes')->name('pieces-jointes.')->group(function () {
-        // Lister les pièces jointes d'une entité
-        Route::get('/', [PieceJointeController::class, 'index'])
-            ->name('index');
+        Route::get('/', [PieceJointeController::class, 'index'])->name('index');
         
-        // Upload de fichiers
         Route::post('/upload', [PieceJointeController::class, 'upload'])
             ->middleware('district.access:create')
             ->name('upload');
         
-        // Télécharger un fichier
-        Route::get('/{id}/download', [PieceJointeController::class, 'download'])
-            ->name('download');
+        Route::get('/{id}/download', [PieceJointeController::class, 'download'])->name('download');
+        Route::get('/{id}/view', [PieceJointeController::class, 'view'])->name('view');
         
-        // Visualiser un fichier (inline)
-        Route::get('/{id}/view', [PieceJointeController::class, 'view'])
-            ->name('view');
-        
-        // Mettre à jour les métadonnées
         Route::put('/{id}', [PieceJointeController::class, 'update'])
             ->middleware('district.access:update')
             ->name('update');
         
-        // Supprimer un fichier
         Route::delete('/{id}', [PieceJointeController::class, 'destroy'])
             ->middleware('district.access:delete')
             ->name('destroy');
         
-        // Vérifier un document (admin uniquement)
         Route::post('/{id}/verify', [PieceJointeController::class, 'verify'])
             ->middleware('district.access:manage_users')
             ->name('verify');
     });
     
     // ============================================================================
-    // LOGS D'ACTIVITÉ (Admin et Super Admin)
+    // LOGS D'ACTIVITÉ
     // ============================================================================
     
     Route::prefix('admin/activity-logs')->name('admin.activity-logs.')
@@ -366,15 +362,11 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             ->middleware('district.access:delete')
             ->name('dissociate');
 
-        // ============================================================================
-        // RECHERCHE GLOBALE (API)
-        // ============================================================================
-        
-        Route::get('/api/global-search', [GlobalSearchController::class, 'search'])
-            ->name('api.global-search');
-        Route::get('/api/search-suggestions', [GlobalSearchController::class, 'suggestions'])
-            ->name('api.search-suggestions');
-
+        // Recherche globale
+        Route::get('/global-search', [GlobalSearchController::class, 'search'])
+            ->name('global-search');
+        Route::get('/search-suggestions', [GlobalSearchController::class, 'suggestions'])
+            ->name('search-suggestions');
     });
 
     // ============================================================================

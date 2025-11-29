@@ -285,7 +285,7 @@ export default function NouveauLot() {
                                                 Lot + Demandeur(s)
                                             </Label>
                                             <p className="text-sm text-muted-foreground mt-1">
-                                                Créer une propriété avec plusieurs demandeurs
+                                                Créer une propriété avec un ou plusieurs demandeurs
                                             </p>
                                         </div>
                                     </div>
