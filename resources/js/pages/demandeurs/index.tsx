@@ -21,7 +21,6 @@ interface DemandeursIndexProps {
     onSelectDemandeur?: (demandeur: DemandeurWithProperty) => void;
     onLinkPropriete?: (demandeur: Demandeur) => void;
     isDemandeurIncomplete: (dem: Demandeur) => boolean;
-    // ✅ CORRECTION : Nouvelle signature
     onDissociate: (
         demandeurId: number,
         proprieteId: number,
@@ -38,7 +37,7 @@ export default function DemandeursIndex({
     onDeleteDemandeur,
     isDemandeurIncomplete,
     onLinkPropriete,
-    onDissociate 
+    onDissociate
 }: DemandeursIndexProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -61,21 +60,62 @@ export default function DemandeursIndex({
         return lots;
     };
 
+    // ✅ Handler pour ouvrir le dialogue de demandeur
     const handleSelectDemandeur = (demandeur: DemandeurWithProperty) => {
-        setSelectedDemandeur(demandeur);
-        setShowDemandeurDetail(true);
+        // ✅ Fermer l'autre dialogue d'abord
+        setShowProprieteDetail(false);
+        
+        // ✅ Ouvrir après un court délai
+        setTimeout(() => {
+            setSelectedDemandeur(demandeur);
+            setShowDemandeurDetail(true);
+        }, 100);
     };
 
+    // ✅ Handler pour ouvrir le dialogue de propriété
     const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
-        setSelectedPropriete(propriete);
-        setShowProprieteDetail(true);
+        // ✅ Fermer le dialogue de demandeur d'abord
+        setShowDemandeurDetail(false);
+        
+        // ✅ Ouvrir le dialogue de propriété après un délai
+        setTimeout(() => {
+            setSelectedPropriete(propriete);
+            setShowProprieteDetail(true);
+        }, 100);
     };
 
+    // ✅ Handler pour revenir au dialogue de demandeur
     const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
+        // ✅ Fermer le dialogue de propriété d'abord
+        setShowProprieteDetail(false);
+        
         const demandeurWithProperty = demandeurs.find(d => d.id === demandeur.id);
         if (demandeurWithProperty) {
-            setSelectedDemandeur(demandeurWithProperty);
-            setShowDemandeurDetail(true);
+            // ✅ Ouvrir le dialogue de demandeur après un délai
+            setTimeout(() => {
+                setSelectedDemandeur(demandeurWithProperty);
+                setShowDemandeurDetail(true);
+            }, 100);
+        }
+    };
+
+    // ✅ Fermeture propre du dialogue de demandeur
+    const handleCloseDemandeurDialog = (open: boolean) => {
+        setShowDemandeurDetail(open);
+        if (!open) {
+            setTimeout(() => {
+                setSelectedDemandeur(null);
+            }, 300);
+        }
+    };
+
+    // ✅ Fermeture propre du dialogue de propriété
+    const handleCloseProprieteDialog = (open: boolean) => {
+        setShowProprieteDetail(open);
+        if (!open) {
+            setTimeout(() => {
+                setSelectedPropriete(null);
+            }, 300);
         }
     };
 
@@ -125,7 +165,6 @@ export default function DemandeursIndex({
     return (
         <>
             <Card className="border-0 shadow-lg">
-                {/* Header transparent avec gradient subtil */}
                 <div className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 p-6 border-b">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -140,7 +179,6 @@ export default function DemandeursIndex({
                             </div>
                         </div>
                         
-                        {/* Légende */}
                         <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground">
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-red-200 dark:bg-red-900/50 rounded border border-red-300 dark:border-red-800"></div>
@@ -159,24 +197,12 @@ export default function DemandeursIndex({
                         <table className="w-full">
                             <thead className="bg-muted/30 border-b">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Nom complet
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        CIN
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Domiciliation
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Situation
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Téléphone
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Statut
-                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nom complet</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">CIN</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Domiciliation</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Situation</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Téléphone</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Statut</th>
                                     <th className="px-6 py-4 w-[50px]"></th>
                                 </tr>
                             </thead>
@@ -234,10 +260,7 @@ export default function DemandeursIndex({
                                                     {demandeur.telephone || '-'}
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <Badge 
-                                                        variant={demandeur.hasProperty ? "default" : "secondary"} 
-                                                        className="text-xs"
-                                                    >
+                                                    <Badge variant={demandeur.hasProperty ? "default" : "secondary"} className="text-xs">
                                                         {demandeur.hasProperty ? "Avec propriété" : "Sans propriété"}
                                                     </Badge>
                                                 </td>
@@ -276,10 +299,7 @@ export default function DemandeursIndex({
                                                                 </>
                                                             )}
                                                             <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                className="text-red-500"
-                                                                onClick={() => onDeleteDemandeur(demandeur.id)}
-                                                            >
+                                                            <DropdownMenuItem className="text-red-500" onClick={() => onDeleteDemandeur(demandeur.id)}>
                                                                 <Trash className="mr-2 h-4 w-4" />
                                                                 Supprimer
                                                             </DropdownMenuItem>
@@ -297,22 +317,25 @@ export default function DemandeursIndex({
                 </CardContent>
             </Card>
 
+            {/* ✅ Dialogues avec gestion stricte de fermeture */}
             <DemandeurDetailDialog
                 demandeur={selectedDemandeur}
                 open={showDemandeurDetail}
-                onOpenChange={setShowDemandeurDetail}
+                onOpenChange={handleCloseDemandeurDialog}
                 proprietes={proprietes}
                 onSelectPropriete={handleSelectProprieteFromDemandeur}
                 dossierId={dossier.id}
                 dossierClosed={dossier.is_closed}
+                onDissociate={onDissociate}
             />
 
             <ProprieteDetailDialog
                 propriete={selectedPropriete}
                 open={showProprieteDetail}
-                onOpenChange={setShowProprieteDetail}
+                onOpenChange={handleCloseProprieteDialog}
                 onSelectDemandeur={handleSelectDemandeurFromPropriete}
                 dossierClosed={dossier.is_closed}
+                onDissociate={onDissociate}
             />
         </>
     );

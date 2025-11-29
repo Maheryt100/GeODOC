@@ -1,4 +1,4 @@
-// components/DissociateDialog.tsx - NOUVEAU COMPOSANT
+// associations/DissociateDialog.tsx - NOUVEAU COMPOSANT
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

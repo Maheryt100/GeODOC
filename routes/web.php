@@ -211,18 +211,18 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     });
 
     // ============================================================================
-    // ASSOCIATIONS DEMANDEUR-PROPRIÉTÉ
+    // ✅ ASSOCIATIONS DEMANDEUR-PROPRIÉTÉ - ROUTES CORRIGÉES
     // ============================================================================
     
-
+    // ✅ LIAISON (CREATE)
+    Route::post('/association/link', [AssociationController::class, 'link'])
+        ->middleware(['district.access:create', 'check.dossier.closed:modify'])
+        ->name('association.link');
     
-    Route::middleware(['district.access:create', 'check.dossier.closed:modify'])->group(function () {
-        Route::post('/association/link', [AssociationController::class, 'link'])->name('association.link');
-    });
-    
-    Route::middleware(['district.access:delete', 'check.dossier.closed:modify'])->group(function () {
-        Route::post('/association/dissociate', [AssociationController::class, 'dissociate'])->name('association.dissociate');
-    });
+    // ✅ DISSOCIATION (DELETE) - MIDDLEWARES CORRIGÉS
+    Route::post('/association/dissociate', [AssociationController::class, 'dissociate'])
+        ->middleware(['auth', 'district.scope']) // ✅ Pas besoin de check.dossier.closed ici, géré dans le controller
+        ->name('association.dissociate');
 
     // ============================================================================
     // ROUTES DE COMPATIBILITÉ (anciennes routes)
@@ -241,27 +241,21 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     });
 
     // ============================================================================
-    // ✅ GESTION DES LOCALISATIONS ET PRIX (ROUTES CORRIGÉES)
+    // GESTION DES LOCALISATIONS ET PRIX
     // ============================================================================
     
     Route::prefix('location')->name('location.')
         ->middleware('district.access:configure_prices')
         ->group(function () {
-            // Vue principale
             Route::get('/', [DistrictController::class, 'index'])->name('index');
-            
-            // Mise à jour des prix
             Route::post('/update', [DistrictController::class, 'update'])->name('update');
             Route::post('/bulk-update', [DistrictController::class, 'bulkUpdate'])->name('bulkUpdate');
             Route::post('/reset', [DistrictController::class, 'resetPrices'])->name('reset');
-            
-            // ✅ NOUVEAU : Routes supplémentaires
             Route::get('/export', [DistrictController::class, 'export'])->name('export');
             Route::get('/search', [DistrictController::class, 'search'])->name('search');
             Route::get('/{id}', [DistrictController::class, 'show'])->name('show');
         });
 
-    // ✅ Routes de compatibilité pour "circonscription" (redirection vers location)
     Route::redirect('/circonscription', '/location')->name('circonscription.index');
     Route::post('/circonscription/update', [DistrictController::class, 'update'])->name('circonscription.update');
     Route::post('/circonscription/bulk-update', [DistrictController::class, 'bulkUpdate'])->name('circonscription.bulkUpdate');
@@ -357,10 +351,8 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
         Route::get('/demandeur/search-by-cin/{cin}', [DemandeurController::class, 'searchByCin'])
             ->name('demandeur.search-by-cin');
         
-        // Dissociation
-        Route::post('/dissociate', [AssociationController::class, 'dissociate'])
-            ->middleware('district.access:delete')
-            ->name('dissociate');
+        // ✅ Dissociation API (déjà définie ci-dessus, pas besoin de dupliquer)
+        // Route::post('/dissociate', ...) - SUPPRIMÉE car dupliquée
 
         // Recherche globale
         Route::get('/global-search', [GlobalSearchController::class, 'search'])

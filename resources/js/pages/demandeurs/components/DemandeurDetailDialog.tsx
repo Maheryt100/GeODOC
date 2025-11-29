@@ -1,4 +1,4 @@
-// components/DemandeurDetailDialog.tsx - VERSION AMÉLIORÉE
+// components/DemandeurDetailDialog.tsx - VERSION CORRIGÉE FERMETURE
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,23 +39,54 @@ export default function DemandeurDetailDialog({
 }: DemandeurDetailDialogProps) {
     if (!demandeur) return null;
 
-    // ✅ CORRECTION : Filtrer via demandes au lieu de demandeurs
+    // Filtrer via demandes avec vérification stricte
     const proprietesAssociees = proprietes.filter(prop => {
-        if (!prop.demandes || prop.demandes.length === 0) return false;
-        return prop.demandes.some(d => d.id_demandeur === demandeur.id);
+        if (!prop.demandes || !Array.isArray(prop.demandes) || prop.demandes.length === 0) {
+            return false;
+        }
+        
+        return prop.demandes.some(d => {
+            const demandeIdDemandeur = typeof d.id_demandeur === 'number' 
+                ? d.id_demandeur 
+                : parseInt(d.id_demandeur);
+            const currentDemandeurId = typeof demandeur.id === 'number'
+                ? demandeur.id
+                : parseInt(demandeur.id);
+                
+            return demandeIdDemandeur === currentDemandeurId;
+        });
     });
 
-    const proprietesActives = proprietesAssociees.filter(p => 
-        p.demandes?.some(d => 
-            d.id_demandeur === demandeur.id && d.status === 'active'
-        )
-    );
+    // Séparer actives et acquises
+    const proprietesActives = proprietesAssociees.filter(p => {
+        if (!p.demandes) return false;
+        
+        return p.demandes.some(d => {
+            const demandeIdDemandeur = typeof d.id_demandeur === 'number' 
+                ? d.id_demandeur 
+                : parseInt(d.id_demandeur);
+            const currentDemandeurId = typeof demandeur.id === 'number'
+                ? demandeur.id
+                : parseInt(demandeur.id);
+                
+            return demandeIdDemandeur === currentDemandeurId && d.status === 'active';
+        });
+    });
 
-    const proprietesAcquises = proprietesAssociees.filter(p => 
-        p.demandes?.some(d => 
-            d.id_demandeur === demandeur.id && d.status === 'archive'
-        )
-    );
+    const proprietesAcquises = proprietesAssociees.filter(p => {
+        if (!p.demandes) return false;
+        
+        return p.demandes.some(d => {
+            const demandeIdDemandeur = typeof d.id_demandeur === 'number' 
+                ? d.id_demandeur 
+                : parseInt(d.id_demandeur);
+            const currentDemandeurId = typeof demandeur.id === 'number'
+                ? demandeur.id
+                : parseInt(demandeur.id);
+                
+            return demandeIdDemandeur === currentDemandeurId && d.status === 'archive';
+        });
+    });
 
     const formatNomComplet = (): string => {
         return [
@@ -65,26 +96,89 @@ export default function DemandeurDetailDialog({
         ].filter(Boolean).join(' ');
     };
 
-    // ✅ NOUVEAU : Handler de dissociation
+    // ✅ Handler de dissociation avec fermeture du dialogue
     const handleDissociate = (propriete: Propriete, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!onDissociate || dossierClosed) return;
         
-        onDissociate(
-            demandeur.id,
-            propriete.id,
-            formatNomComplet(),
-            propriete.lot,
-            'from-demandeur'
-        );
+        console.log('🔗 Dissociation demandée (depuis demandeur):', {
+            demandeur_id: demandeur.id,
+            propriete_id: propriete.id,
+        });
+        
+        if (!onDissociate || dossierClosed) {
+            console.warn('⚠️ Dissociation bloquée');
+            return;
+        }
+        
+        if (!canDissociate(propriete)) {
+            console.warn('⚠️ Ne peut pas dissocier cette propriété');
+            return;
+        }
+        
+        // ✅ FERMER CE DIALOGUE AVANT D'OUVRIR LE DIALOGUE DE DISSOCIATION
+        onOpenChange(false);
+        
+        // ✅ DÉLAI POUR ÉVITER LES CONFLITS
+        setTimeout(() => {
+            onDissociate(
+                demandeur.id,
+                propriete.id,
+                formatNomComplet(),
+                propriete.lot,
+                'from-demandeur'
+            );
+        }, 100);
     };
 
-    // ✅ Vérifier si une propriété peut être dissociée
+    // Vérification améliorée
     const canDissociate = (propriete: Propriete): boolean => {
-        if (dossierClosed || propriete.is_archived) return false;
+        if (dossierClosed || propriete.is_archived) {
+            return false;
+        }
         
-        const demande = propriete.demandes?.find(d => d.id_demandeur === demandeur.id);
-        return demande?.status === 'active';
+        if (!propriete.demandes || !Array.isArray(propriete.demandes)) {
+            return false;
+        }
+        
+        const demande = propriete.demandes.find(d => {
+            const demandeIdDemandeur = typeof d.id_demandeur === 'number' 
+                ? d.id_demandeur 
+                : parseInt(d.id_demandeur);
+            const currentDemandeurId = typeof demandeur.id === 'number'
+                ? demandeur.id
+                : parseInt(demandeur.id);
+                
+            return demandeIdDemandeur === currentDemandeurId;
+        });
+        
+        if (!demande) {
+            return false;
+        }
+        
+        return demande.status === 'active';
+    };
+
+    // ✅ Handler pour sélection de propriété
+    const handleSelectPropriete = (propriete: Propriete) => {
+        if (onSelectPropriete) {
+            // ✅ Fermer ce dialogue
+            onOpenChange(false);
+            // ✅ Ouvrir le dialogue de la propriété après un délai
+            setTimeout(() => {
+                onSelectPropriete(propriete);
+            }, 100);
+        }
+    };
+
+    // ✅ Handler pour le bouton Modifier
+    const handleModifier = () => {
+        onOpenChange(false);
+        setTimeout(() => {
+            window.location.href = route('demandeurs.edit', { 
+                id_dossier: dossierId, 
+                id_demandeur: demandeur.id 
+            });
+        }, 100);
     };
 
     const InfoRow = ({ icon: Icon, label, value, highlight = false }: any) => {
@@ -102,7 +196,13 @@ export default function DemandeurDetailDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent 
+                className="max-w-4xl max-h-[90vh] overflow-y-auto"
+                // ✅ Permettre la fermeture normale
+                onPointerDownOutside={(e) => {
+                    // Permettre la fermeture en cliquant à l'extérieur
+                }}
+            >
                 <DialogHeader>
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
@@ -223,7 +323,7 @@ export default function DemandeurDetailDialog({
                         </div>
                     </section>
 
-                    {/* ✅ Propriétés associées avec bouton dissocier */}
+                    {/* Propriétés associées avec bouton dissocier */}
                     {proprietesAssociees.length > 0 ? (
                         <section>
                             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -241,11 +341,8 @@ export default function DemandeurDetailDialog({
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <button
-                                                        onClick={() => {
-                                                            onOpenChange(false);
-                                                            onSelectPropriete?.(prop);
-                                                        }}
-                                                        className="flex-1 text-left"
+                                                        onClick={() => handleSelectPropriete(prop)}
+                                                        className="flex-1 text-left hover:text-primary transition-colors"
                                                     >
                                                         <p className="font-medium">Lot {prop.lot}</p>
                                                         <p className="text-sm text-muted-foreground">
@@ -280,10 +377,7 @@ export default function DemandeurDetailDialog({
                                         {proprietesAcquises.map((prop) => (
                                             <button
                                                 key={prop.id}
-                                                onClick={() => {
-                                                    onOpenChange(false);
-                                                    onSelectPropriete?.(prop);
-                                                }}
+                                                onClick={() => handleSelectPropriete(prop)}
                                                 className="w-full p-4 border rounded-lg hover:bg-muted/50 transition text-left bg-green-50/50"
                                             >
                                                 <div className="flex items-center justify-between">
@@ -316,15 +410,7 @@ export default function DemandeurDetailDialog({
 
                 {!dossierClosed && (
                     <Button 
-                        onClick={() => {
-                            onOpenChange(false);
-                            setTimeout(() => {
-                                window.location.href = route('demandeurs.edit', { 
-                                    id_dossier: dossierId, 
-                                    id_demandeur: demandeur.id 
-                                });
-                            }, 100);
-                        }} 
+                        onClick={handleModifier}
                         size="sm"
                     >
                         <Pencil className="mr-2 h-4 w-4" />

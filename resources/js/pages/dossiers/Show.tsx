@@ -1,5 +1,5 @@
-// pages/dossiers/Show.tsx - VERSION CORRIGÉE
-import { Head, Link, router, usePage } from '@inertiajs/react';
+// pages/dossiers/Show.tsx - VERSION CORRIGÉE GESTION DIALOGUES
+import { Head, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -42,7 +42,6 @@ export default function Show() {
     const { dossier, permissions } = usePage<PageProps>().props;
     const { flash } = usePage<SharedData>().props;
 
-    // ✅ CORRECTION : Déclarer proprietes AVANT de l'utiliser
     const proprietes = dossier.proprietes || [];
 
     const userPermissions = permissions || {
@@ -59,7 +58,7 @@ export default function Show() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     
-    // États pour la liaison
+    // ✅ États pour la liaison - AVEC GESTION STRICTE
     const [linkDemandeurOpen, setLinkDemandeurOpen] = useState(false);
     const [linkProprieteOpen, setLinkProprieteOpen] = useState(false);
     const [selectedProprieteForLink, setSelectedProprieteForLink] = useState<Propriete | null>(null);
@@ -83,18 +82,24 @@ export default function Show() {
         if (flash?.error) toast.error(flash.error);
     }, [flash?.message, flash?.success, flash?.error]);
 
-    // Fonctions de réinitialisation
-    const resetLinkDemandeurDialog = useCallback(() => {
+    // ✅ CORRECTION MAJEURE : Fermeture complète des dialogues de liaison
+    const handleCloseLinkDemandeurDialog = useCallback(() => {
         setLinkDemandeurOpen(false);
-        setSelectedProprieteForLink(null);
+        // ✅ Délai pour éviter les conflits d'état
+        setTimeout(() => {
+            setSelectedProprieteForLink(null);
+        }, 300);
     }, []);
 
-    const resetLinkProprieteDialog = useCallback(() => {
+    const handleCloseLinkProprieteDialog = useCallback(() => {
         setLinkProprieteOpen(false);
-        setSelectedDemandeurForLink(null);
+        // ✅ Délai pour éviter les conflits d'état
+        setTimeout(() => {
+            setSelectedDemandeurForLink(null);
+        }, 300);
     }, []);
 
-    // Gestionnaires de liaison
+    // ✅ Gestionnaires de liaison avec vérifications strictes
     const handleLinkDemandeur = useCallback((propriete: Propriete) => {
         if (dossier.is_closed) {
             toast.error('Impossible de lier : le dossier est fermé');
@@ -104,8 +109,16 @@ export default function Show() {
             toast.error('Impossible de lier : la propriété est archivée (acquise)');
             return;
         }
-        setSelectedProprieteForLink(propriete);
-        setLinkDemandeurOpen(true);
+        
+        // ✅ FERMER TOUS LES AUTRES DIALOGUES D'ABORD
+        setLinkProprieteOpen(false);
+        setDissociateDialogOpen(false);
+        
+        // ✅ Ouvrir le dialogue après un court délai
+        setTimeout(() => {
+            setSelectedProprieteForLink(propriete);
+            setLinkDemandeurOpen(true);
+        }, 100);
     }, [dossier.is_closed]);
 
     const handleLinkPropriete = useCallback((demandeur: Demandeur) => {
@@ -113,11 +126,19 @@ export default function Show() {
             toast.error('Impossible de lier : le dossier est fermé');
             return;
         }
-        setSelectedDemandeurForLink(demandeur);
-        setLinkProprieteOpen(true);
+        
+        // ✅ FERMER TOUS LES AUTRES DIALOGUES D'ABORD
+        setLinkDemandeurOpen(false);
+        setDissociateDialogOpen(false);
+        
+        // ✅ Ouvrir le dialogue après un court délai
+        setTimeout(() => {
+            setSelectedDemandeurForLink(demandeur);
+            setLinkProprieteOpen(true);
+        }, 100);
     }, [dossier.is_closed]);
 
-    // ✅ Gestionnaire de dissociation
+    // ✅ Gestionnaire de dissociation avec fermeture des autres dialogues
     const handleDissociate = useCallback((
         demandeurId: number,
         proprieteId: number,
@@ -125,37 +146,90 @@ export default function Show() {
         proprieteLot: string,
         type: 'from-demandeur' | 'from-propriete'
     ) => {
-        if (dossier.is_closed) {
-            toast.error('Impossible de dissocier : le dossier est fermé');
-            return;
-        }
-
-        // Vérifier si la propriété est archivée
-        const propriete = proprietes.find(p => p.id === proprieteId);
-        if (propriete?.is_archived) {
-            toast.error('Impossible de dissocier : la propriété est archivée (acquise)');
-            return;
-        }
-
-        // ✅ Compter les autres demandeurs sur cette propriété
-        const autresDemandeurs = propriete?.demandes?.filter(
-            d => d.id_demandeur !== demandeurId && d.status === 'active'
-        ).length || 0;
-
-        setDissociateData({
+        console.log('🔗 handleDissociate appelé:', {
             demandeurId,
             proprieteId,
             demandeurNom,
             proprieteLot,
             type,
-            autresDemandeurs
+            dossierClosed: dossier.is_closed
         });
-        setDissociateDialogOpen(true);
+
+        if (dossier.is_closed) {
+            console.warn('⚠️ Dissociation bloquée : dossier fermé');
+            toast.error('Impossible de dissocier : le dossier est fermé');
+            return;
+        }
+
+        const propriete = proprietes.find(p => {
+            const pId = typeof p.id === 'number' ? p.id : parseInt(p.id);
+            const propId = typeof proprieteId === 'number' ? proprieteId : parseInt(proprieteId);
+            return pId === propId;
+        });
+
+        if (!propriete) {
+            console.error('❌ Propriété introuvable:', proprieteId);
+            toast.error('Propriété introuvable');
+            return;
+        }
+
+        if (propriete.is_archived) {
+            console.warn('⚠️ Dissociation bloquée : propriété archivée');
+            toast.error('Impossible de dissocier : la propriété est archivée (acquise)');
+            return;
+        }
+
+        const autresDemandeurs = propriete.demandes?.filter(d => {
+            const demandeIdDemandeur = typeof d.id_demandeur === 'number' 
+                ? d.id_demandeur 
+                : parseInt(d.id_demandeur);
+            const currentDemandeurId = typeof demandeurId === 'number'
+                ? demandeurId
+                : parseInt(demandeurId);
+                
+            const isOtherDemandeur = demandeIdDemandeur !== currentDemandeurId;
+            const isActive = d.status === 'active';
+            
+            return isOtherDemandeur && isActive;
+        }).length || 0;
+
+        console.log('📊 Comptage des autres demandeurs:', {
+            total_demandes: propriete.demandes?.length || 0,
+            autres_actifs: autresDemandeurs,
+            demandeur_courant: demandeurId
+        });
+
+        // ✅ FERMER TOUS LES AUTRES DIALOGUES
+        setLinkDemandeurOpen(false);
+        setLinkProprieteOpen(false);
+        
+        // ✅ Ouvrir le dialogue de dissociation après un délai
+        setTimeout(() => {
+            setDissociateData({
+                demandeurId,
+                proprieteId,
+                demandeurNom,
+                proprieteLot,
+                type,
+                autresDemandeurs
+            });
+            setDissociateDialogOpen(true);
+        }, 100);
+
+        console.log('✅ Dialogue de dissociation ouvert');
     }, [dossier.is_closed, proprietes]);
 
-    // Confirmation de la dissociation
+    // ✅ Confirmation de la dissociation
     const confirmDissociate = useCallback(() => {
-        if (!dissociateData || isDissociating) return;
+        if (!dissociateData || isDissociating) {
+            console.warn('⚠️ Confirmation ignorée:', { 
+                hasDissociateData: !!dissociateData, 
+                isDissociating 
+            });
+            return;
+        }
+
+        console.log('🚀 Envoi de la demande de dissociation:', dissociateData);
 
         setIsDissociating(true);
 
@@ -168,16 +242,26 @@ export default function Show() {
                 const message = dissociateData.type === 'from-demandeur'
                     ? `Propriété Lot ${dissociateData.proprieteLot} dissociée avec succès`
                     : `${dissociateData.demandeurNom} dissocié de la propriété avec succès`;
+                
+                console.log('✅ Dissociation réussie');
                 toast.success(message);
+                
+                // ✅ Fermer et nettoyer
                 setDissociateDialogOpen(false);
-                setDissociateData(null);
+                setTimeout(() => {
+                    setDissociateData(null);
+                }, 300);
             },
             onError: (errors) => {
+                console.error('❌ Erreur dissociation:', errors);
                 toast.error('Erreur', {
                     description: Object.values(errors).join('\n')
                 });
             },
-            onFinish: () => setIsDissociating(false)
+            onFinish: () => {
+                console.log('🏁 Requête terminée');
+                setIsDissociating(false);
+            }
         });
     }, [dissociateData, isDissociating]);
 
@@ -203,7 +287,7 @@ export default function Show() {
                     onSuccess: () => {
                         toast.success('Demandeur retiré du dossier');
                         setDeleteDialogOpen(false);
-                        setItemToDelete(null);
+                        setTimeout(() => setItemToDelete(null), 300);
                     },
                     onError: (errors) => {
                         toast.error('Erreur', { description: Object.values(errors).join('\n') });
@@ -219,7 +303,7 @@ export default function Show() {
                     onSuccess: () => {
                         toast.success('Demandeur supprimé définitivement');
                         setDeleteDialogOpen(false);
-                        setItemToDelete(null);
+                        setTimeout(() => setItemToDelete(null), 300);
                     },
                     onError: (errors) => {
                         toast.error('Erreur', { description: Object.values(errors).join('\n') });
@@ -373,39 +457,37 @@ export default function Show() {
                 />
             </div>
 
-            {/* Dialogues de liaison */}
+            {/* ✅ Dialogue de liaison demandeur - AVEC GESTION STRICTE */}
             {selectedProprieteForLink && (
                 <LinkDemandeurDialog
                     open={linkDemandeurOpen}
-                    onOpenChange={(open) => {
-                        if (!open) {
-                            resetLinkDemandeurDialog();
-                        }
-                    }}
+                    onOpenChange={handleCloseLinkDemandeurDialog}
                     propriete={selectedProprieteForLink}
                     demandeursDossier={allDemandeurs}
                     dossierId={dossier.id}
                 />
             )}
 
+            {/* ✅ Dialogue de liaison propriété - AVEC GESTION STRICTE */}
             {selectedDemandeurForLink && (
                 <LinkProprieteDialog
                     open={linkProprieteOpen}
-                    onOpenChange={(open) => {
-                        if (!open) {
-                            resetLinkProprieteDialog();
-                        }
-                    }}
+                    onOpenChange={handleCloseLinkProprieteDialog}
                     demandeur={selectedDemandeurForLink}
                     proprietesDossier={proprietes}
                     dossierId={dossier.id}
                 />
             )}
 
-            {/* Dialogue de dissociation */}
+            {/* ✅ Dialogue de dissociation */}
             <DissociateDialog
                 open={dissociateDialogOpen}
-                onOpenChange={setDissociateDialogOpen}
+                onOpenChange={(open) => {
+                    setDissociateDialogOpen(open);
+                    if (!open) {
+                        setTimeout(() => setDissociateData(null), 300);
+                    }
+                }}
                 data={dissociateData}
                 isProcessing={isDissociating}
                 onConfirm={confirmDissociate}

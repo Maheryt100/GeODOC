@@ -1,4 +1,4 @@
-// components/associations/LinkDemandeurDialog.tsx
+// associations/LinkDemandeurDialog.tsx - VERSION CORRIGÉE
 import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -30,7 +30,7 @@ export function LinkDemandeurDialog({
     const [selectedDemandeur, setSelectedDemandeur] = useState<Demandeur | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // ✅ CORRECTION : Réinitialiser l'état à la fermeture
+    // ✅ Réinitialiser l'état à la fermeture
     useEffect(() => {
         if (!open) {
             setSearchTerm('');
@@ -70,6 +70,7 @@ export function LinkDemandeurDialog({
             preserveScroll: true,
             onSuccess: () => {
                 toast.success('Demandeur lié avec succès');
+                // ✅ Fermeture propre du dialogue
                 onOpenChange(false);
             },
             onError: (errors) => {
@@ -77,13 +78,39 @@ export function LinkDemandeurDialog({
                     description: Object.values(errors).join('\n')
                 });
                 setIsSubmitting(false);
+            },
+            onFinish: () => {
+                // ✅ Reset après succès ou erreur
+                if (!isSubmitting) {
+                    setIsSubmitting(false);
+                }
             }
         });
     };
 
+    // ✅ Gestionnaire d'annulation propre
+    const handleCancel = () => {
+        if (!isSubmitting) {
+            onOpenChange(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+            <DialogContent 
+                className="max-w-3xl max-h-[80vh] flex flex-col"
+                // ✅ Empêcher la fermeture pendant la soumission
+                onInteractOutside={(e) => {
+                    if (isSubmitting) {
+                        e.preventDefault();
+                    }
+                }}
+                onEscapeKeyDown={(e) => {
+                    if (isSubmitting) {
+                        e.preventDefault();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Lier un demandeur existant</DialogTitle>
                     <DialogDescription>
@@ -164,7 +191,7 @@ export function LinkDemandeurDialog({
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
-                            onClick={() => onOpenChange(false)}
+                            onClick={handleCancel}
                             disabled={isSubmitting}
                         >
                             Annuler
@@ -173,8 +200,17 @@ export function LinkDemandeurDialog({
                             onClick={handleSubmit}
                             disabled={!selectedDemandeur || isSubmitting}
                         >
-                            <Link2 className="mr-2 h-4 w-4" />
-                            {isSubmitting ? 'Liaison...' : 'Lier le demandeur'}
+                            {isSubmitting ? (
+                                <>
+                                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    Liaison...
+                                </>
+                            ) : (
+                                <>
+                                    <Link2 className="mr-2 h-4 w-4" />
+                                    Lier le demandeur
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>

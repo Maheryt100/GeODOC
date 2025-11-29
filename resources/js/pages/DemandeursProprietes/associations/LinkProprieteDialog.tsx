@@ -1,4 +1,4 @@
-// associations/LinkProprieteDialog.tsx
+// associations/LinkProprieteDialog.tsx - VERSION CORRIGÉE
 import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -30,7 +30,7 @@ export function LinkProprieteDialog({
     const [selectedPropriete, setSelectedPropriete] = useState<Propriete | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // ✅ CORRECTION : Réinitialiser l'état à la fermeture
+    // ✅ Réinitialiser l'état à la fermeture
     useEffect(() => {
         if (!open) {
             setSearchTerm('');
@@ -76,6 +76,7 @@ export function LinkProprieteDialog({
             preserveScroll: true,
             onSuccess: () => {
                 toast.success('Propriété liée avec succès');
+                // ✅ Fermeture propre du dialogue
                 onOpenChange(false);
             },
             onError: (errors) => {
@@ -83,13 +84,39 @@ export function LinkProprieteDialog({
                     description: Object.values(errors).join('\n')
                 });
                 setIsSubmitting(false);
+            },
+            onFinish: () => {
+                // ✅ Reset après succès ou erreur
+                if (!isSubmitting) {
+                    setIsSubmitting(false);
+                }
             }
         });
     };
 
+    // ✅ Gestionnaire d'annulation propre
+    const handleCancel = () => {
+        if (!isSubmitting) {
+            onOpenChange(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+            <DialogContent 
+                className="max-w-4xl max-h-[80vh] flex flex-col"
+                // ✅ Empêcher la fermeture pendant la soumission
+                onInteractOutside={(e) => {
+                    if (isSubmitting) {
+                        e.preventDefault();
+                    }
+                }}
+                onEscapeKeyDown={(e) => {
+                    if (isSubmitting) {
+                        e.preventDefault();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Lier à une propriété existante</DialogTitle>
                     <DialogDescription>
@@ -189,7 +216,7 @@ export function LinkProprieteDialog({
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
-                            onClick={() => onOpenChange(false)}
+                            onClick={handleCancel}
                             disabled={isSubmitting}
                         >
                             Annuler
@@ -198,8 +225,17 @@ export function LinkProprieteDialog({
                             onClick={handleSubmit}
                             disabled={!selectedPropriete || isSubmitting}
                         >
-                            <Link2 className="mr-2 h-4 w-4" />
-                            {isSubmitting ? 'Liaison...' : 'Lier la propriété'}
+                            {isSubmitting ? (
+                                <>
+                                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    Liaison...
+                                </>
+                            ) : (
+                                <>
+                                    <Link2 className="mr-2 h-4 w-4" />
+                                    Lier la propriété
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>

@@ -19,7 +19,6 @@ interface ProprietesIndexProps {
     onUnarchivePropriete: (id: number) => void;
     onLinkDemandeur?: (propriete: Propriete) => void;
     isPropertyIncomplete: (prop: Propriete) => boolean;
-    // ✅ CORRECTION : Nouvelle signature
     onDissociate: (
         demandeurId: number,
         proprieteId: number,
@@ -38,7 +37,7 @@ export default function ProprietesIndex({
     onUnarchivePropriete,
     isPropertyIncomplete,
     onLinkDemandeur,
-    onDissociate 
+    onDissociate
 }: ProprietesIndexProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -56,19 +55,60 @@ export default function ProprietesIndex({
         return prop.is_archived === true;
     };
 
+    // ✅ Handler pour ouvrir le dialogue de propriété
     const handleSelectPropriete = (propriete: Propriete) => {
-        setSelectedPropriete(propriete);
-        setShowProprieteDetail(true);
+        // ✅ Fermer l'autre dialogue d'abord
+        setShowDemandeurDetail(false);
+        
+        // ✅ Ouvrir après un court délai
+        setTimeout(() => {
+            setSelectedPropriete(propriete);
+            setShowProprieteDetail(true);
+        }, 100);
     };
 
+    // ✅ Handler pour ouvrir le dialogue de demandeur
     const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
-        setSelectedDemandeur(demandeur);
-        setShowDemandeurDetail(true);
+        // ✅ Fermer le dialogue de propriété d'abord
+        setShowProprieteDetail(false);
+        
+        // ✅ Ouvrir le dialogue de demandeur après un délai
+        setTimeout(() => {
+            setSelectedDemandeur(demandeur);
+            setShowDemandeurDetail(true);
+        }, 100);
     };
 
+    // ✅ Handler pour revenir au dialogue de propriété
     const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
-        setSelectedPropriete(propriete);
-        setShowProprieteDetail(true);
+        // ✅ Fermer le dialogue de demandeur d'abord
+        setShowDemandeurDetail(false);
+        
+        // ✅ Ouvrir le dialogue de propriété après un délai
+        setTimeout(() => {
+            setSelectedPropriete(propriete);
+            setShowProprieteDetail(true);
+        }, 100);
+    };
+
+    // ✅ Fermeture propre du dialogue de propriété
+    const handleCloseProprieteDialog = (open: boolean) => {
+        setShowProprieteDetail(open);
+        if (!open) {
+            setTimeout(() => {
+                setSelectedPropriete(null);
+            }, 300);
+        }
+    };
+
+    // ✅ Fermeture propre du dialogue de demandeur
+    const handleCloseDemandeurDialog = (open: boolean) => {
+        setShowDemandeurDetail(open);
+        if (!open) {
+            setTimeout(() => {
+                setSelectedDemandeur(null);
+            }, 300);
+        }
     };
 
     const paginateProprietes = () => {
@@ -117,7 +157,6 @@ export default function ProprietesIndex({
     return (
         <>
             <Card className="border-0 shadow-lg">
-                {/* Header transparent avec gradient subtil */}
                 <div className="bg-gradient-to-r from-violet-50/50 to-purple-50/50 dark:from-violet-950/20 dark:to-purple-950/20 p-6 border-b">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -132,7 +171,6 @@ export default function ProprietesIndex({
                             </div>
                         </div>
                         
-                        {/* Légende */}
                         <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground">
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-red-200 dark:bg-red-900/50 rounded border border-red-300 dark:border-red-800"></div>
@@ -155,24 +193,12 @@ export default function ProprietesIndex({
                         <table className="w-full">
                             <thead className="bg-muted/30 border-b">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Lot
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Titre
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Dep/Vol
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Contenance
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Nature
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Statut
-                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lot</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Titre</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dep/Vol</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contenance</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nature</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Statut</th>
                                     <th className="px-6 py-4 w-[50px]"></th>
                                 </tr>
                             </thead>
@@ -207,9 +233,7 @@ export default function ProprietesIndex({
                                             >
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-medium">
-                                                            {propriete.lot}
-                                                        </span>
+                                                        <span className="font-medium">{propriete.lot}</span>
                                                         {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />}
                                                         {isArchived && <Archive className="h-4 w-4 text-gray-500 flex-shrink-0" />}
                                                     </div>
@@ -228,10 +252,7 @@ export default function ProprietesIndex({
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        <Badge 
-                                                            variant={hasDemandeurs ? "default" : "secondary"} 
-                                                            className="text-xs"
-                                                        >
+                                                        <Badge variant={hasDemandeurs ? "default" : "secondary"} className="text-xs">
                                                             {hasDemandeurs ? "Avec demandeur" : "Sans demandeur"}
                                                         </Badge>
                                                         {isArchived && (
@@ -256,10 +277,7 @@ export default function ProprietesIndex({
                                                             {!dossier.is_closed && (
                                                                 <>
                                                                     <DropdownMenuItem asChild>
-                                                                        <Link
-                                                                            href={route('proprietes.edit', propriete.id)}
-                                                                            className="flex items-center"
-                                                                        >
+                                                                        <Link href={route('proprietes.edit', propriete.id)} className="flex items-center">
                                                                             <Pencil className="mr-2 h-4 w-4" />
                                                                             Modifier
                                                                         </Link>
@@ -270,26 +288,17 @@ export default function ProprietesIndex({
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuSeparator />
                                                                     {isArchived ? (
-                                                                        <DropdownMenuItem
-                                                                            className="text-blue-600"
-                                                                            onClick={() => onUnarchivePropriete(propriete.id)}
-                                                                        >
+                                                                        <DropdownMenuItem className="text-blue-600" onClick={() => onUnarchivePropriete(propriete.id)}>
                                                                             <ArchiveRestore className="mr-2 h-4 w-4" />
                                                                             Désarchiver
                                                                         </DropdownMenuItem>
                                                                     ) : (
-                                                                        <DropdownMenuItem
-                                                                            className="text-green-600"
-                                                                            onClick={() => onArchivePropriete(propriete.id)}
-                                                                        >
+                                                                        <DropdownMenuItem className="text-green-600" onClick={() => onArchivePropriete(propriete.id)}>
                                                                             <Archive className="mr-2 h-4 w-4" />
                                                                             Archiver (acquise)
                                                                         </DropdownMenuItem>
                                                                     )}
-                                                                    <DropdownMenuItem
-                                                                        className="text-red-500"
-                                                                        onClick={() => onDeletePropriete(propriete.id)}
-                                                                    >
+                                                                    <DropdownMenuItem className="text-red-500" onClick={() => onDeletePropriete(propriete.id)}>
                                                                         <Trash className="mr-2 h-4 w-4" />
                                                                         Supprimer
                                                                     </DropdownMenuItem>
@@ -309,22 +318,25 @@ export default function ProprietesIndex({
                 </CardContent>
             </Card>
 
+            {/* ✅ Dialogues avec gestion stricte de fermeture */}
             <ProprieteDetailDialog
                 propriete={selectedPropriete}
                 open={showProprieteDetail}
-                onOpenChange={setShowProprieteDetail}
+                onOpenChange={handleCloseProprieteDialog}
                 onSelectDemandeur={handleSelectDemandeurFromPropriete}
                 dossierClosed={dossier.is_closed}
+                onDissociate={onDissociate}
             />
 
             <DemandeurDetailDialog
                 demandeur={selectedDemandeur}
                 open={showDemandeurDetail}
-                onOpenChange={setShowDemandeurDetail}
+                onOpenChange={handleCloseDemandeurDialog}
                 proprietes={proprietes}
                 onSelectPropriete={handleSelectProprieteFromDemandeur}
                 dossierId={dossier.id}
                 dossierClosed={dossier.is_closed}
+                onDissociate={onDissociate}
             />
         </>
     );
