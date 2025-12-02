@@ -11,14 +11,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
-
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class DemandeurProprieteController extends Controller
 {
     /**
-     * 1. NOUVEAU LOT : Afficher le formulaire pour créer Propriété + Demandeurs
+     * 1. NOUVEAU LOT : Afficher le formulaire
      */
     public function create($id)
     {
@@ -30,12 +29,10 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * 1. NOUVEAU LOT : Enregistrer le nouveau lot (propriété + demandeurs)
-     * CORRECTION MAJEURE : Nettoyage des données et validation stricte
+     * 1. NOUVEAU LOT : Enregistrer
      */
     public function store(Request $request)
     {
-        // Décoder les demandeurs JSON
         $demandeurs = json_decode($request->demandeurs_json, true);
         
         if (!$demandeurs || !is_array($demandeurs) || count($demandeurs) === 0) {
@@ -47,7 +44,6 @@ class DemandeurProprieteController extends Controller
             'demandeurs_count' => count($demandeurs),
         ]);
         
-        // Validation de la propriété
         $request->validate([
             'lot' => 'required|string|max:15',
             'nature' => 'required|in:Urbaine,Suburbaine,Rurale',
@@ -56,11 +52,8 @@ class DemandeurProprieteController extends Controller
             'id_dossier' => 'required|numeric|exists:dossiers,id',
         ]);
         
-        // Validation des demandeurs
         foreach ($demandeurs as $index => $demandeur) {
             $num = $index + 1;
-            
-            // Nettoyer les valeurs vides
             $demandeur = array_map(fn($v) => $v === '' ? null : $v, $demandeur);
             
             if (empty($demandeur['titre_demandeur'])) {
@@ -82,7 +75,6 @@ class DemandeurProprieteController extends Controller
                 return back()->withErrors(['demandeurs' => "Demandeur $num: Le CIN doit contenir 12 chiffres"]);
             }
             
-            // Vérifier les doublons de CIN DANS LA REQUÊTE ACTUELLE
             $cinDuplicates = array_filter($demandeurs, fn($d, $idx) => 
                 $idx !== $index && ($d['cin'] ?? '') === $demandeur['cin']
             , ARRAY_FILTER_USE_BOTH);
@@ -99,7 +91,6 @@ class DemandeurProprieteController extends Controller
         try {
             $id_user = Auth::id();
             
-            // Créer la propriété
             $proprieteData = [
                 'lot' => $request->lot,
                 'propriete_mere' => $request->propriete_mere ?: null,
@@ -120,13 +111,11 @@ class DemandeurProprieteController extends Controller
                 'type_operation' => $request->type_operation,
                 'id_dossier' => $request->id_dossier,
                 'id_user' => $id_user,
-                'status' => true,
             ];
 
             Log::info('Création propriété', $proprieteData);
             $propriete = Propriete::create($proprieteData);
 
-            // Traiter chaque demandeur (créer OU mettre à jour)
             $demandeursTraites = [];
             
             foreach ($demandeurs as $index => $demandeurData) {
@@ -136,14 +125,11 @@ class DemandeurProprieteController extends Controller
                     'nom' => $demandeurData['nom_demandeur'],
                 ]);
 
-                // Nettoyer les données
                 $cleanData = array_map(fn($v) => ($v === '' || $v === null) ? null : $v, $demandeurData);
 
-                // CORRECTION MAJEURE : Vérifier si le demandeur existe déjà
                 $demandeurExistant = Demandeur::where('cin', $cleanData['cin'])->first();
                 
                 if ($demandeurExistant) {
-                    // METTRE À JOUR les informations si modifiées
                     Log::info("Demandeur existant trouvé, mise à jour", [
                         'id' => $demandeurExistant->id,
                         'cin' => $demandeurExistant->cin
@@ -176,7 +162,6 @@ class DemandeurProprieteController extends Controller
                     $demandeur = $demandeurExistant;
                     
                 } else {
-                    // CRÉER un nouveau demandeur
                     Log::info("Création nouveau demandeur", [
                         'cin' => $cleanData['cin'],
                         'nom' => $cleanData['nom_demandeur']
@@ -214,13 +199,11 @@ class DemandeurProprieteController extends Controller
                     'action' => $demandeurExistant ? 'mis à jour' : 'créé'
                 ]);
 
-                //  Ajouter au dossier (si pas déjà présent)
                 Contenir::firstOrCreate([
                     'id_demandeur' => $demandeur->id,
                     'id_dossier' => $request->id_dossier,
                 ]);
 
-                //  Lier à la propriété (vérifier les doublons)
                 $liaisonExistante = Demander::where('id_demandeur', $demandeur->id)
                     ->where('id_propriete', $propriete->id)
                     ->exists();
@@ -232,7 +215,7 @@ class DemandeurProprieteController extends Controller
                         'id_user' => $id_user,
                         'status' => 'active',
                         'status_consort' => count($demandeurs) > 1,
-                        'total_prix' => 0,
+                        'total_prix' => 0, // ✅ L'Observer calculera automatiquement
                     ]);
                 }
                 
@@ -265,8 +248,9 @@ class DemandeurProprieteController extends Controller
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
     }
+
     /**
-     * Vérifier si une propriété est archivée
+     * ✅ CORRECTION : Vérifier via demandes
      */
     private function isPropertyArchived(Propriete $propriete): bool
     {
@@ -281,12 +265,9 @@ class DemandeurProprieteController extends Controller
         return $demandesArchivees > 0 && $demandesActives === 0;
     }
 
-    /**
-     * Message bloqué pour propriété archivée
-     */
     private function getBlockedActionMessage(Propriete $propriete, string $action): string
     {
-        return " Impossible d'effectuer l'action '{$action}' : la propriété Lot {$propriete->lot} est archivée (acquise).";
+        return "Impossible d'effectuer l'action '{$action}' : la propriété Lot {$propriete->lot} est archivée (acquise).";
     }
 
     /**
@@ -318,7 +299,7 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * LIER EXISTANT : Rechercher le demandeur
+     * LIER EXISTANT : Rechercher
      */
     public function searchToLink(Request $request)
     {
@@ -361,7 +342,7 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * LIER EXISTANT : Enregistrer la liaison
+     * LIER EXISTANT : Enregistrer
      */
     public function storeLink(Request $request)
     {
@@ -443,10 +424,10 @@ class DemandeurProprieteController extends Controller
                 'id_user' => $id_user,
                 'status' => 'active',
                 'status_consort' => $demandeursCount > 0,
-                'total_prix' => 0,
+                'total_prix' => 0, // ✅ Observer calculera
             ]);
 
-            Propriete::where('id', $request->id_propriete)->update(['status' => true]);
+            // ✅ SUPPRIMÉ : Propriete::update(['status' => true])
 
             DB::commit();
 
@@ -460,7 +441,7 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * AJOUTER DEMANDEUR : Afficher le formulaire
+     * AJOUTER DEMANDEUR : Afficher
      */
     public function addToProperty($id, $id_propriete = null)
     {
@@ -574,10 +555,10 @@ class DemandeurProprieteController extends Controller
                 'id_user' => $id_user,
                 'status' => 'active',
                 'status_consort' => $demandeursCount > 0,
-                'total_prix' => 0,
+                'total_prix' => 0, // ✅ Observer calculera
             ]);
 
-            Propriete::where('id', $request->id_propriete)->update(['status' => true]);
+            // ✅ SUPPRIMÉ : Propriete::update(['status' => true])
 
             DB::commit();
             
@@ -591,7 +572,7 @@ class DemandeurProprieteController extends Controller
     }
 
     /**
-     * DISSOCIER : Retirer un demandeur d'une propriété
+     * DISSOCIER
      */
     public function dissociate(Request $request)
     {
@@ -618,13 +599,7 @@ class DemandeurProprieteController extends Controller
                 return back()->withErrors(['error' => 'Liaison introuvable']);
             }
 
-            $remainingDemandeurs = Demander::where('id_propriete', $request->id_propriete)
-                ->where('status', 'active')
-                ->count();
-
-            if ($remainingDemandeurs === 0) {
-                Propriete::where('id', $request->id_propriete)->update(['status' => false]);
-            }
+            // ✅ SUPPRIMÉ : Plus de gestion de propriete.status
 
             DB::commit();
             

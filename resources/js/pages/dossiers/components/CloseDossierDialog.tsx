@@ -1,4 +1,4 @@
-// resources/js/components/CloseDossierDialog.tsx
+// resources/js/pages/dossiers/components/CloseDossierDialog.tsx
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

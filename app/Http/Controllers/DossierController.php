@@ -26,9 +26,6 @@ class DossierController extends Controller
         $this->middleware('check.dossier.closed:modify')->only(['update', 'destroy']);
     }
 
-    /**
-     * Liste des dossiers
-     */
     public function index(Request $request)
     {
         /** @var User $user */
@@ -37,10 +34,8 @@ class DossierController extends Controller
         $query = Dossier::withCount(['demandeurs', 'proprietes'])
             ->with(['closedBy:id,name']);
 
-        // CRITIQUE : Appliquer le filtre de district
         $query = $this->applyDistrictFilter($query);
 
-        // Filtrer par statut
         if ($request->filled('status')) {
             if ($request->status === 'open') {
                 $query->whereNull('date_fermeture');
@@ -51,7 +46,6 @@ class DossierController extends Controller
 
         $dossiers = $query->orderBy('date_descente_debut', 'desc')->get();
         
-        // CRITIQUE : Utiliser les méthodes sécurisées du trait
         return Inertia::render('dossiers/index', [
             'dossiers' => $dossiers->map(function($dossier) use ($user) {
                 return array_merge($dossier->toArray(), [
@@ -71,9 +65,6 @@ class DossierController extends Controller
         ]);
     }
     
-    /**
-     * Formulaire de création
-     */
     public function create()
     {
         $this->authorizeDistrictAccess('create');
@@ -90,9 +81,6 @@ class DossierController extends Controller
         ]);
     }
 
-    /**
-     * Enregistrement d'un nouveau dossier
-     */
     public function store(Request $request)
     {
         $this->authorizeDistrictAccess('create');
@@ -143,111 +131,57 @@ class DossierController extends Controller
     }
 
     /**
-     * ✅ CORRECTION CRITIQUE : Affichage d'un dossier avec TOUTES les relations
+     * ✅ CORRECTION MAJEURE : Affichage avec permissions correctement calculées
      */
     public function show($id)
     {
         /** @var User $user */
         $user = Auth::user();
-        
-        // ✅ CHARGER AVEC TOUTES LES RELATIONS NÉCESSAIRES POUR LA DISSOCIATION
+
         $dossier = Dossier::with([
-            'demandeurs', // Tous les demandeurs du dossier
-            'closedBy:id,name,email',
-            'district:id,nom_district', // ✅ NOUVEAU : Pour les infos du district
-            'piecesJointes' => function($q) {
-                $q->orderBy('created_at', 'desc')->limit(50);
+            'demandeurs' => function($query) {
+                $query->with(['demandes' => function($q) {
+                    $q->with('propriete');
+                }]);
             },
-            'proprietes' => function ($query) {
-                $query->with([
-                    // ✅ CORRECTION : Charger demandeurs ET demandes ensemble
-                    'demandeurs:id,titre_demandeur,nom_demandeur,prenom_demandeur,cin,domiciliation',
-                    'piecesJointes' => function($q) {
-                        $q->orderBy('created_at', 'desc')->limit(20);
-                    },
-                    // ✅ CRITIQUE : Charger les demandes avec TOUS les champs nécessaires
-                    'demandes' => function ($q) {
-                        $q->select('id', 'id_propriete', 'id_demandeur', 'status', 'status_consort', 'total_prix', 'created_at')
-                          ->with([
-                              'demandeur' => function($subQ) {
-                                  $subQ->select('id', 'titre_demandeur', 'nom_demandeur', 'prenom_demandeur', 'cin', 'domiciliation', 'telephone', 'occupation');
-                              }
-                          ])
-                          ->orderBy('created_at', 'desc'); // Les plus récentes en premier
-                    }
-                ]);
-            }
+            'proprietes' => function($query) {
+                $query->with(['demandes' => function($q) {
+                    $q->with(['demandeur' => function($subq) {
+                        $subq->with(['demandes' => function($subsubq) {
+                            $subsubq->with('propriete');
+                        }]);
+                    }]);
+                }]);
+            },
+            'district',
+            'closedBy'
         ])->findOrFail($id);
-        
-        // Compter les pièces jointes
-        $dossier->pieces_jointes_count = $dossier->piecesJointes->count();
 
-        // Vérifier l'accès
-        if (!$user->canAccessDossier($dossier)) {
-            abort(403, 'Accès refusé à ce dossier');
-        }
+        // ✅ CORRECTION : Calcul CORRECT des permissions
+        $permissions = [
+            'canEdit' => $this->canModifyDossier($dossier, $user),
+            'canDelete' => $this->canDeleteDossier($dossier, $user),
+            'canClose' => $this->canCloseDossier($dossier, $user), // ✅ UTILISÉ DANS DossierInfoSection
+            'canArchive' => $this->canModifyDossier($dossier, $user),
+            'canExport' => $this->canExportDossier($dossier, $user),
+        ];
 
-        // ✅ TRAITEMENT AMÉLIORÉ : Enrichir les propriétés avec les statuts
-        foreach ($dossier->proprietes as $propriete) {
-            // Compter les demandes actives et archivées
-            $activeCount = $propriete->demandes->where('status', 'active')->count();
-            $archivedCount = $propriete->demandes->where('status', 'archive')->count();
-            
-            // ✅ Marquer comme archivée si TOUTES les demandes sont archivées
-            $propriete->is_archived = ($archivedCount > 0 && $activeCount === 0);
-            
-            // ✅ CORRECTION : Enrichir les demandeurs avec leurs statuts
-            if ($propriete->demandeurs) {
-                foreach ($propriete->demandeurs as $demandeur) {
-                    // Trouver la demande correspondante
-                    $demande = $propriete->demandes->firstWhere('id_demandeur', $demandeur->id);
-                    if ($demande) {
-                        $demandeur->status = $demande->status;
-                        $demandeur->id_demande = $demande->id;
-                    }
-                }
-            }
-        }
-
-        // ✅ LOG POUR DEBUG
-        Log::info('Dossier chargé pour affichage', [
-            'dossier_id' => $id,
-            'proprietes_count' => $dossier->proprietes->count(),
-            'demandeurs_count' => $dossier->demandeurs->count(),
-            'premiere_propriete' => $dossier->proprietes->first() ? [
-                'id' => $dossier->proprietes->first()->id,
-                'lot' => $dossier->proprietes->first()->lot,
-                'demandes_count' => $dossier->proprietes->first()->demandes->count(),
-                'demandes' => $dossier->proprietes->first()->demandes->map(fn($d) => [
-                    'id' => $d->id,
-                    'id_demandeur' => $d->id_demandeur,
-                    'status' => $d->status,
-                    'has_demandeur' => !!$d->demandeur,
-                    'demandeur_nom' => $d->demandeur ? $d->demandeur->nom_demandeur : null
-                ])
-            ] : null
+        Log::info('🔍 Permissions calculées pour dossier', [
+            'dossier_id' => $dossier->id,
+            'user_id' => $user->id,
+            'user_role' => $user->role,
+            'user_district' => $user->id_district,
+            'dossier_district' => $dossier->id_district,
+            'permissions' => $permissions,
+            'is_closed' => $dossier->is_closed,
         ]);
 
-        $this->logAction('view', 'dossier', $id);
-
         return Inertia::render('dossiers/Show', [
-            'dossier' => array_merge($dossier->toArray(), [
-                'can_close' => $this->canCloseDossier($dossier, $user),
-                'can_modify' => $this->canModifyDossier($dossier, $user),
-            ]),
-            'permissions' => [
-                'canEdit' => $this->canModifyDossier($dossier, $user),
-                'canDelete' => $user->canDelete() && $this->canModifyDossier($dossier, $user),
-                'canClose' => $this->canCloseDossier($dossier, $user),
-                'canArchive' => $user->canArchive(),
-                'canExport' => $user->canExportData(),
-            ],
+            'dossier' => $dossier,
+            'permissions' => $permissions,
         ]);
     }
 
-    /**
-     * Édition
-     */
     public function edit($id)
     {
         $this->authorizeDistrictAccess('update');
@@ -266,10 +200,8 @@ class DossierController extends Controller
         
         $districts = $this->getAvailableDistricts($user);
         
-        // ✅ Formater les dates pour les inputs HTML
         $dossierData = $dossier->toArray();
         
-        // Formater les dates au format Y-m-d
         if (isset($dossierData['date_descente_debut'])) {
             $dossierData['date_descente_debut'] = \Carbon\Carbon::parse($dossierData['date_descente_debut'])->format('Y-m-d');
         }
@@ -287,9 +219,6 @@ class DossierController extends Controller
         ]);
     }
 
-    /**
-     * Mise à jour
-     */
     public function update(Request $request, $id)
     {
         $this->authorizeDistrictAccess('update');
@@ -334,8 +263,37 @@ class DossierController extends Controller
     }
 
     /**
-     * Fermer un dossier
+     * ✅ CORRECTION CRITIQUE : Méthode canCloseDossier
+     * RÈGLE : Seuls super_admin ET admin_district peuvent fermer/rouvrir
      */
+    private function canCloseDossier(Dossier $dossier, User $user): bool
+    {
+        // ✅ Super admin peut TOUJOURS fermer/rouvrir (tous districts)
+        if ($user->isSuperAdmin()) {
+            Log::info('✅ canClose: super_admin détecté', ['user_id' => $user->id]);
+            return true;
+        }
+
+        // ✅ Admin district peut fermer/rouvrir DANS SON DISTRICT
+        if ($user->isAdminDistrict()) {
+            $canClose = $user->id_district === $dossier->id_district;
+            Log::info('🔍 canClose: admin_district', [
+                'user_id' => $user->id,
+                'user_district' => $user->id_district,
+                'dossier_district' => $dossier->id_district,
+                'result' => $canClose
+            ]);
+            return $canClose;
+        }
+
+        // ❌ Central user et user_district NE PEUVENT PAS fermer
+        Log::info('❌ canClose: rôle non autorisé', [
+            'user_id' => $user->id,
+            'role' => $user->role
+        ]);
+        return false;
+    }
+
     public function close(Request $request, $id)
     {
         /** @var User $user */
@@ -389,9 +347,6 @@ class DossierController extends Controller
         }
     }
 
-    /**
-     * Rouvrir un dossier
-     */
     public function reopen($id)
     {
         /** @var User $user */
@@ -440,9 +395,6 @@ class DossierController extends Controller
         }
     }
 
-    /**
-     * Suppression
-     */
     public function destroy($id)
     {
         $this->authorizeDistrictAccess('delete');
@@ -472,28 +424,9 @@ class DossierController extends Controller
         }
     }
 
-    /**
-     * Vérifier si un utilisateur peut fermer/rouvrir un dossier
-     */
-    private function canCloseDossier(Dossier $dossier, User $user): bool
+    private function canDeleteDossier(Dossier $dossier, User $user): bool
     {
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        if ($user->isAdminDistrict() && $user->id_district === $dossier->id_district) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Vérifier si un dossier peut être modifié
-     */
-    private function canModifyDossier(Dossier $dossier, User $user): bool
-    {
-        if ($dossier->date_fermeture) {
+        if ($dossier->is_closed) {
             return false;
         }
 
@@ -501,12 +434,37 @@ class DossierController extends Controller
             return false;
         }
 
-        return true;
+        return $user->isSuperAdmin() || $user->isAdminDistrict();
     }
 
-    /**
-     * Statistiques du district
-     */
+    private function canExportDossier(Dossier $dossier, User $user): bool
+    {
+        if (!$user->canAccessAllDistricts() && $user->id_district !== $dossier->id_district) {
+            return false;
+        }
+
+        return $user->isSuperAdmin() 
+            || $user->isCentralUser() 
+            || $user->isAdminDistrict();
+    }
+
+    private function canModifyDossier(Dossier $dossier, User $user): bool
+    {
+        if ($dossier->is_closed) {
+            return false;
+        }
+
+        if (!$user->canAccessAllDistricts() && $user->id_district !== $dossier->id_district) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin() || $user->isAdminDistrict() || $user->isCentralUser()) {
+            return true;
+        }
+
+        return $user->isUserDistrict() && $user->id_district === $dossier->id_district;
+    }
+
     private function getDistrictStatsLocal(): array
     {
         /** @var User $user */

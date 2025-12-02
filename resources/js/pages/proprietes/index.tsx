@@ -1,3 +1,5 @@
+// ✅ CORRECTION MAJEURE : Gestion correcte des propriétés archivées
+
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
@@ -9,25 +11,6 @@ import type { Propriete, Dossier, Demandeur } from '@/types';
 import ProprieteDetailDialog from '@/pages/proprietes/components/ProprieteDetailDialog';
 import DemandeurDetailDialog from '@/pages/demandeurs/components/DemandeurDetailDialog';
 
-interface ProprietesIndexProps {
-    proprietes: Propriete[];
-    dossier: Dossier;
-    demandeurs: Demandeur[];
-    onDeletePropriete: (id: number) => void;
-    onSelectPropriete?: (propriete: Propriete) => void;
-    onArchivePropriete: (id: number) => void;
-    onUnarchivePropriete: (id: number) => void;
-    onLinkDemandeur?: (propriete: Propriete) => void;
-    isPropertyIncomplete: (prop: Propriete) => boolean;
-    onDissociate: (
-        demandeurId: number,
-        proprieteId: number,
-        demandeurNom: string,
-        proprieteLot: string,
-        type: 'from-demandeur' | 'from-propriete'
-    ) => void;
-}
-
 export default function ProprietesIndex({
     proprietes,
     dossier,
@@ -38,7 +21,7 @@ export default function ProprietesIndex({
     isPropertyIncomplete,
     onLinkDemandeur,
     onDissociate
-}: ProprietesIndexProps) {
+}: any) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -47,67 +30,90 @@ export default function ProprietesIndex({
     const [selectedDemandeur, setSelectedDemandeur] = useState<Demandeur | null>(null);
     const [showDemandeurDetail, setShowDemandeurDetail] = useState(false);
 
+    /**
+     * ✅ CORRECTION FINALE : Vérifier les demandeurs ACTIFS uniquement
+     * LOGIQUE : Une propriété a des demandeurs SI au moins UNE demande est ACTIVE
+     */
     const hasLinkedDemandeurs = (prop: Propriete): boolean => {
+        if (prop.demandes && Array.isArray(prop.demandes) && prop.demandes.length > 0) {
+            // ✅ Vérifier qu'il y a au moins UNE demande ACTIVE
+            return prop.demandes.some(d => d.status === 'active');
+        }
+        
+        // Fallback : ancien système (pour compatibilité)
         return prop.demandeurs !== undefined && prop.demandeurs.length > 0;
     };
 
+    /**
+     * ✅ CORRECTION FINALE : Détecter si acquise (toutes demandes archivées)
+     * LOGIQUE : 
+     * - Propriété ACQUISE = AU MOINS 1 demande archivée ET AUCUNE demande active
+     * - Propriété VIDE = Aucune demande du tout
+     * - Propriété ACTIVE = Au moins 1 demande active
+     */
     const isPropertyArchived = (prop: Propriete): boolean => {
-        return prop.is_archived === true;
+        // 1. Vérifier d'abord is_archived calculé côté serveur
+        if (prop.is_archived === true) {
+            return true;
+        }
+        
+        // 2. Vérifier via les demandes locales
+        if (prop.demandes && Array.isArray(prop.demandes) && prop.demandes.length > 0) {
+            const hasActiveDemandes = prop.demandes.some(d => d.status === 'active');
+            const hasArchivedDemandes = prop.demandes.some(d => d.status === 'archive');
+            
+            // ✅ LOGIQUE CORRECTE : Acquise = AUCUNE active ET au moins UNE archivée
+            return !hasActiveDemandes && hasArchivedDemandes;
+        }
+        
+        // 3. Aucune demande = pas archivée (juste vide)
+        return false;
     };
 
-    // ✅ Handler pour ouvrir le dialogue de propriété
+    /**
+     * ✅ NOUVEAU : Vérifier si propriété est complètement vide (jamais liée)
+     */
+    const isPropertyEmpty = (prop: Propriete): boolean => {
+        return !prop.demandes || prop.demandes.length === 0;
+    };
+
+    // Handlers
     const handleSelectPropriete = (propriete: Propriete) => {
-        // ✅ Fermer l'autre dialogue d'abord
         setShowDemandeurDetail(false);
-        
-        // ✅ Ouvrir après un court délai
         setTimeout(() => {
             setSelectedPropriete(propriete);
             setShowProprieteDetail(true);
         }, 100);
     };
 
-    // ✅ Handler pour ouvrir le dialogue de demandeur
     const handleSelectDemandeurFromPropriete = (demandeur: Demandeur) => {
-        // ✅ Fermer le dialogue de propriété d'abord
         setShowProprieteDetail(false);
-        
-        // ✅ Ouvrir le dialogue de demandeur après un délai
+        const demandeurComplet = demandeurs.find((d: { id: number; }) => d.id === demandeur.id) || demandeur;
         setTimeout(() => {
-            setSelectedDemandeur(demandeur);
+            setSelectedDemandeur(demandeurComplet);
             setShowDemandeurDetail(true);
         }, 100);
     };
 
-    // ✅ Handler pour revenir au dialogue de propriété
     const handleSelectProprieteFromDemandeur = (propriete: Propriete) => {
-        // ✅ Fermer le dialogue de demandeur d'abord
         setShowDemandeurDetail(false);
-        
-        // ✅ Ouvrir le dialogue de propriété après un délai
         setTimeout(() => {
             setSelectedPropriete(propriete);
             setShowProprieteDetail(true);
         }, 100);
     };
 
-    // ✅ Fermeture propre du dialogue de propriété
     const handleCloseProprieteDialog = (open: boolean) => {
         setShowProprieteDetail(open);
         if (!open) {
-            setTimeout(() => {
-                setSelectedPropriete(null);
-            }, 300);
+            setTimeout(() => setSelectedPropriete(null), 300);
         }
     };
 
-    // ✅ Fermeture propre du dialogue de demandeur
     const handleCloseDemandeurDialog = (open: boolean) => {
         setShowDemandeurDetail(open);
         if (!open) {
-            setTimeout(() => {
-                setSelectedDemandeur(null);
-            }, 300);
+            setTimeout(() => setSelectedDemandeur(null), 300);
         }
     };
 
@@ -121,7 +127,6 @@ export default function ProprietesIndex({
 
     const Pagination = () => {
         if (totalPages <= 1) return null;
-
         return (
             <div className="flex justify-center items-center gap-2 mt-6 pb-4">
                 <Button
@@ -171,6 +176,7 @@ export default function ProprietesIndex({
                             </div>
                         </div>
                         
+                        {/* ✅ LÉGENDE AMÉLIORÉE */}
                         <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground">
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-red-200 dark:bg-red-900/50 rounded border border-red-300 dark:border-red-800"></div>
@@ -181,7 +187,7 @@ export default function ProprietesIndex({
                                 <span>Sans demandeur</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-gray-300 dark:bg-gray-700 rounded border border-gray-400 dark:border-gray-600"></div>
+                                <div className="w-3 h-3 bg-green-200 dark:bg-green-900/50 rounded border border-green-300 dark:border-green-800"></div>
                                 <span>Acquise</span>
                             </div>
                         </div>
@@ -212,13 +218,14 @@ export default function ProprietesIndex({
                                         </td>
                                     </tr>
                                 ) : (
-                                    paginateProprietes().map((propriete) => {
+                                    paginateProprietes().map((propriete: Propriete) => {
                                         const isIncomplete = isPropertyIncomplete(propriete);
                                         const hasDemandeurs = hasLinkedDemandeurs(propriete);
                                         const isArchived = isPropertyArchived(propriete);
                                         
+                                        // ✅ CORRECTION : Classes CSS selon statut
                                         const rowClass = isArchived
-                                            ? 'hover:bg-gray-100/50 dark:hover:bg-gray-800/30 bg-gray-50/50 dark:bg-gray-900/30 cursor-pointer transition-colors'
+                                            ? 'hover:bg-green-50/50 dark:hover:bg-green-900/20 bg-green-50/30 dark:bg-green-900/10 cursor-pointer transition-colors'
                                             : isIncomplete 
                                                 ? 'hover:bg-red-50/50 dark:hover:bg-red-950/20 bg-red-50/30 dark:bg-red-950/10 cursor-pointer transition-colors'
                                                 : hasDemandeurs
@@ -235,7 +242,7 @@ export default function ProprietesIndex({
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-medium">{propriete.lot}</span>
                                                         {isIncomplete && <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />}
-                                                        {isArchived && <Archive className="h-4 w-4 text-gray-500 flex-shrink-0" />}
+                                                        {isArchived && <Archive className="h-4 w-4 text-green-600 flex-shrink-0" />}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-muted-foreground">
@@ -252,12 +259,19 @@ export default function ProprietesIndex({
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant={hasDemandeurs ? "default" : "secondary"} className="text-xs">
-                                                            {hasDemandeurs ? "Avec demandeur" : "Sans demandeur"}
-                                                        </Badge>
-                                                        {isArchived && (
-                                                            <Badge variant="outline" className="text-xs bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-900 dark:text-gray-400">
+                                                        {/* ✅ CORRECTION CRITIQUE : Badge selon statut */}
+                                                        {isArchived ? (
+                                                            <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300 dark:bg-green-900 dark:text-green-400">
+                                                                <Archive className="mr-1 h-3 w-3" />
                                                                 Acquise
+                                                            </Badge>
+                                                        ) : hasDemandeurs ? (
+                                                            <Badge variant="default" className="text-xs">
+                                                                Avec demandeur
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary" className="text-xs">
+                                                                Sans demandeur
                                                             </Badge>
                                                         )}
                                                     </div>
@@ -282,10 +296,12 @@ export default function ProprietesIndex({
                                                                             Modifier
                                                                         </Link>
                                                                     </DropdownMenuItem>
-                                                                    <DropdownMenuItem onClick={() => onLinkDemandeur?.(propriete)}>
-                                                                        <Link2 className="mr-2 h-4 w-4" />
-                                                                        Lier un demandeur
-                                                                    </DropdownMenuItem>
+                                                                    {!isArchived && (
+                                                                        <DropdownMenuItem onClick={() => onLinkDemandeur?.(propriete)}>
+                                                                            <Link2 className="mr-2 h-4 w-4" />
+                                                                            Lier un demandeur
+                                                                        </DropdownMenuItem>
+                                                                    )}
                                                                     <DropdownMenuSeparator />
                                                                     {isArchived ? (
                                                                         <DropdownMenuItem className="text-blue-600" onClick={() => onUnarchivePropriete(propriete.id)}>
@@ -318,7 +334,7 @@ export default function ProprietesIndex({
                 </CardContent>
             </Card>
 
-            {/* ✅ Dialogues avec gestion stricte de fermeture */}
+            {/* Dialogues */}
             <ProprieteDetailDialog
                 propriete={selectedPropriete}
                 open={showProprieteDetail}
@@ -326,6 +342,7 @@ export default function ProprietesIndex({
                 onSelectDemandeur={handleSelectDemandeurFromPropriete}
                 dossierClosed={dossier.is_closed}
                 onDissociate={onDissociate}
+                demandeursDossier={demandeurs}
             />
 
             <DemandeurDetailDialog

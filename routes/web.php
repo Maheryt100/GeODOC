@@ -11,7 +11,8 @@ use App\Http\Controllers\DossierController;
 use App\Http\Controllers\DocumentGenerationController;
 use App\Http\Controllers\PieceJointeController;
 use App\Http\Controllers\ProprieteController;
-use App\Http\Controllers\StatController;
+use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Dashboard\StatisticsController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -38,20 +39,17 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware(['auth', 'district.scope'])->group(function () {
     
-    // ============================================================================
-    // DASHBOARD
-    // ============================================================================
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
     
-    Route::get('/dashboard', [StatController::class, 'index'])->name('dashboard');
-
-    // ============================================================================
-    // STATISTIQUES
-    // ============================================================================
-    
+    // Statistiques
     Route::prefix('statistiques')->name('statistiques.')->group(function () {
-        Route::get('/', [StatController::class, 'statistics'])->name('index');
-        Route::get('/export-pdf', [StatController::class, 'exportPDF'])->name('export-pdf');
-    });
+    Route::get('/', [StatisticsController::class, 'index'])
+        ->name('index');
+    Route::post('/export-pdf', [StatisticsController::class, 'exportPDF'])
+        ->name('export-pdf');
+});
 
     // ============================================================================
     // PARAMÈTRES UTILISATEUR (Settings)
@@ -283,17 +281,32 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
     // ============================================================================
     
     Route::prefix('documents')->name('documents.')->group(function () {
+        // Page d'index
         Route::get('/generate/{id_dossier}', [DocumentGenerationController::class, 'index'])
             ->middleware('dossier.access:id_dossier')
             ->name('generate');
         
-        Route::get('/recu', [DocumentGenerationController::class, 'generateRecu'])->name('recu');
-        Route::get('/acte-vente', [DocumentGenerationController::class, 'generateActeVente'])->name('acte-vente');
-        Route::get('/csf', [DocumentGenerationController::class, 'generateCsf'])->name('csf');
-        Route::get('/requisition', [DocumentGenerationController::class, 'generateRequisition'])->name('requisition');
+        // ✅ IMPORTANT : Ces routes NE DOIVENT PAS avoir de middleware 'check.dossier.closed'
+        // car elles sont en lecture seule (téléchargement)
+        Route::get('/recu', [DocumentGenerationController::class, 'generateRecu'])
+            ->name('recu');
         
-        Route::get('/recu/{id}/download', [DocumentGenerationController::class, 'downloadRecu'])->name('recu.download');
-        Route::get('/recu/history/{id_propriete}', [DocumentGenerationController::class, 'getRecuHistory'])->name('recu.history');
+        Route::get('/acte-vente', [DocumentGenerationController::class, 'generateActeVente'])
+            ->name('acte-vente');
+        
+        Route::get('/csf', [DocumentGenerationController::class, 'generateCsf'])
+            ->name('csf');
+        
+        Route::get('/requisition', [DocumentGenerationController::class, 'generateRequisition'])
+            ->name('requisition');
+        
+        // Téléchargement de reçus existants
+        Route::get('/recu/{id}/download', [DocumentGenerationController::class, 'downloadRecu'])
+            ->name('recu.download');
+        
+        // Historique
+        Route::get('/recu/history/{id_propriete}', [DocumentGenerationController::class, 'getRecuHistory'])
+            ->name('recu.history');
     });
 
     // ============================================================================
@@ -359,6 +372,141 @@ Route::middleware(['auth', 'district.scope'])->group(function () {
             ->name('global-search');
         Route::get('/search-suggestions', [GlobalSearchController::class, 'suggestions'])
             ->name('search-suggestions');
+
+
+            /**
+             * ✅ NOUVEAU : Statistiques de génération de documents
+             */
+            Route::get('/dossier/{id_dossier}/documents/stats', function($id_dossier) {
+                $dossier = \App\Models\Dossier::findOrFail($id_dossier);
+                
+                // Statistiques des propriétés (basées sur demander.status)
+                $totalProprietes = $dossier->proprietes()->count();
+                
+                $proprietesAvecDemandeursArchives = $dossier->proprietes()
+                    ->whereHas('demandeurs', function($query) {
+                        $query->where('demander.status', 'archive');
+                    })
+                    ->whereDoesntHave('demandeurs', function($query) {
+                        $query->where('demander.status', 'active');
+                    })
+                    ->count();
+                
+                $proprietesSansDemandeur = $dossier->proprietes()
+                    ->whereDoesntHave('demandeurs', function($query) {
+                        $query->where('demander.status', 'active');
+                    })
+                    ->count();
+                
+                $proprietesDisponibles = $dossier->proprietes()
+                    ->whereHas('demandeurs', function($query) {
+                        $query->where('demander.status', 'active');
+                    })
+                    ->count();
+                
+                // Statistiques des documents générés
+                $recusGeneres = \App\Models\DocumentGenere::where('id_dossier', $id_dossier)
+                    ->where('type_document', \App\Models\DocumentGenere::TYPE_RECU)
+                    ->where('status', \App\Models\DocumentGenere::STATUS_ACTIVE)
+                    ->count();
+                
+                $advGeneres = \App\Models\DocumentGenere::where('id_dossier', $id_dossier)
+                    ->where('type_document', \App\Models\DocumentGenere::TYPE_ADV)
+                    ->where('status', \App\Models\DocumentGenere::STATUS_ACTIVE)
+                    ->count();
+                
+                $csfGeneres = \App\Models\DocumentGenere::where('id_dossier', $id_dossier)
+                    ->where('type_document', \App\Models\DocumentGenere::TYPE_CSF)
+                    ->where('status', \App\Models\DocumentGenere::STATUS_ACTIVE)
+                    ->count();
+                
+                $requisitionsGenerees = \App\Models\DocumentGenere::where('id_dossier', $id_dossier)
+                    ->where('type_document', \App\Models\DocumentGenere::TYPE_REQ)
+                    ->where('status', \App\Models\DocumentGenere::STATUS_ACTIVE)
+                    ->count();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'proprietes' => [
+                            'total' => $totalProprietes,
+                            'disponibles' => $proprietesDisponibles,
+                            'avec_demandeurs_archives' => $proprietesAvecDemandeursArchives,
+                            'sans_demandeur' => $proprietesSansDemandeur,
+                            'pourcentage_disponible' => $totalProprietes > 0 
+                                ? round(($proprietesDisponibles / $totalProprietes) * 100, 1) 
+                                : 0,
+                        ],
+                        'documents' => [
+                            'recus' => $recusGeneres,
+                            'actes_vente' => $advGeneres,
+                            'csf' => $csfGeneres,
+                            'requisitions' => $requisitionsGenerees,
+                            'total' => $recusGeneres + $advGeneres + $csfGeneres + $requisitionsGenerees,
+                        ],
+                        'progression' => [
+                            'recus_vs_proprietes' => $proprietesDisponibles > 0
+                                ? round(($recusGeneres / $proprietesDisponibles) * 100, 1)
+                                : 0,
+                            'adv_vs_recus' => $recusGeneres > 0
+                                ? round(($advGeneres / $recusGeneres) * 100, 1)
+                                : 0,
+                        ],
+                    ],
+                ]);
+            })->name('dossier.documents.stats');
+            
+            /**
+             * ✅ NOUVEAU : Vérifier la disponibilité d'une propriété
+             */
+            Route::get('/propriete/{id}/availability', function($id) {
+                $propriete = \App\Models\Propriete::with('dossier')->findOrFail($id);
+                
+                $demandeursActifs = \App\Models\Demander::where('id_propriete', $id)
+                    ->where('status', 'active')
+                    ->count();
+                
+                $demandeursArchives = \App\Models\Demander::where('id_propriete', $id)
+                    ->where('status', 'archive')
+                    ->count();
+                
+                $hasRecu = \App\Models\DocumentGenere::where('type_document', \App\Models\DocumentGenere::TYPE_RECU)
+                    ->where('id_propriete', $id)
+                    ->where('status', \App\Models\DocumentGenere::STATUS_ACTIVE)
+                    ->exists();
+                
+                $status = 'available';
+                $message = null;
+                
+                if ($demandeursActifs === 0 && $demandeursArchives > 0) {
+                    $status = 'all_archived';
+                    $message = "Tous les demandeurs ({$demandeursArchives}) ont été archivés";
+                } elseif ($demandeursActifs === 0) {
+                    $status = 'no_demandeur';
+                    $message = 'Aucun demandeur actif';
+                }
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'propriete_id' => $id,
+                        'status' => $status,
+                        'message' => $message,
+                        'has_recu' => $hasRecu,
+                        'demandeurs' => [
+                            'actifs' => $demandeursActifs,
+                            'archives' => $demandeursArchives,
+                            'total' => $demandeursActifs + $demandeursArchives,
+                        ],
+                        'can_generate' => [
+                            'recu' => $status === 'available' && !$hasRecu,
+                            'acte_vente' => $status === 'available' && $hasRecu,
+                            'csf' => $status === 'available',
+                            'requisition' => $demandeursActifs > 0, // ✅ Basé sur demandeurs actifs
+                        ],
+                    ],
+                ]);
+            })->name('propriete.availability');
     });
 
     // ============================================================================

@@ -1,4 +1,4 @@
-// resources/js/components/dossiers/DossierForm.tsx
+// resources/js/pages/dossiers/components/DossierForm.tsx
 import { useForm } from '@inertiajs/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';

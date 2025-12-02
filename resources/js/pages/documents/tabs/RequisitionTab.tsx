@@ -1,5 +1,5 @@
-// documents/tabs/RequisitionTab.tsx
 import React, { useState } from 'react';
+import { router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -8,9 +8,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { FileOutput, Download, AlertCircle } from 'lucide-react';
+import { FileOutput, Download, AlertCircle, Info, Loader2, Eye, FileCheck } from 'lucide-react';
 import { Dossier } from '@/types';
-import { ProprieteWithDemandeurs } from '../types';
+import { ProprieteWithDemandeurs, DocumentGenere } from '../types';
 import { canGenerateRequisition, getMissingProprieteFields } from '../validation';
 
 interface RequisitionTabProps {
@@ -20,11 +20,16 @@ interface RequisitionTabProps {
 
 export default function RequisitionTab({ proprietes, dossier }: RequisitionTabProps) {
     const [reqPropriete, setReqPropriete] = useState<string>('');
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const selectedProprieteData = proprietes.find(p => p.id === Number(reqPropriete));
+    
+    // ✅ NOUVEAU : Vérifier l'existence du document
+    const documentRequisition = selectedProprieteData?.document_requisition;
+    const hasRequisition = !!documentRequisition;
 
     const canGenerate = () => {
-        if (!reqPropriete) return false;
+        if (!reqPropriete || hasRequisition) return false;
         const prop = selectedProprieteData;
         if (!prop) return false;
         return canGenerateRequisition(prop);
@@ -46,11 +51,45 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
 
     const validationMessage = getValidationMessage();
 
-    const handleDownload = () => {
+    // ✅ NOUVEAU : Télécharger une réquisition existante
+    const handleDownloadExisting = async (document: DocumentGenere) => {
+        if (isGenerating) return;
+        
+        setIsGenerating(true);
+        try {
+            const url = route('documents.recu.download', document.id);
+            window.location.href = url;
+            
+            toast.success('Téléchargement de la réquisition en cours...');
+            
+            setTimeout(() => {
+                router.reload({ 
+                    only: ['proprietes'],
+                    preserveScroll: true,
+                    onFinish: () => setIsGenerating(false)
+                });
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Erreur téléchargement:', error);
+            toast.error('Erreur lors du téléchargement');
+            setIsGenerating(false);
+        }
+    };
+
+    // ✅ NOUVEAU : Générer une nouvelle réquisition
+    const handleGenerate = () => {
         if (!reqPropriete) {
             toast.warning('Veuillez sélectionner une propriété');
             return;
         }
+
+        if (isGenerating) {
+            toast.warning('Génération en cours...');
+            return;
+        }
+
+        setIsGenerating(true);
 
         try {
             const params = new URLSearchParams({
@@ -60,10 +99,27 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
             const url = `${route('documents.requisition')}?${params.toString()}`;
             window.location.href = url;
             
-            toast.success('Téléchargement de la réquisition en cours...');
+            toast.success('Génération de la réquisition en cours...');
+            
+            setTimeout(() => {
+                router.reload({ 
+                    only: ['proprietes'],
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        toast.success('Réquisition générée avec succès !');
+                        setIsGenerating(false);
+                    },
+                    onError: () => {
+                        toast.error('Erreur lors de la mise à jour');
+                        setIsGenerating(false);
+                    }
+                });
+            }, 2000);
+            
         } catch (error) {
-            console.error('Erreur lors de la génération de l\'URL:', error);
+            console.error('Erreur génération réquisition:', error);
             toast.error('Erreur lors de la préparation du téléchargement');
+            setIsGenerating(false);
         }
     };
 
@@ -75,26 +131,37 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
                     Réquisition
                 </CardTitle>
                 <CardDescription>
-                    Sélectionnez la propriété pour générer la réquisition (pas de demandeur requis)
+                    Sélectionnez la propriété pour générer la réquisition (aucun demandeur requis)
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {/* Sélection Propriété */}
                 <div className="space-y-2">
                     <Label>Propriété</Label>
-                    <Select value={reqPropriete} onValueChange={setReqPropriete}>
+                    <Select 
+                        value={reqPropriete} 
+                        onValueChange={setReqPropriete}
+                        disabled={isGenerating}
+                    >
                         <SelectTrigger>
                             <SelectValue placeholder="Sélectionner une propriété" />
                         </SelectTrigger>
                         <SelectContent>
                             {proprietes.map((prop) => {
                                 const isComplete = canGenerateRequisition(prop);
-                                const nbDemandeurs = prop.demandeurs_lies?.length || 0;
+                                const hasDoc = !!prop.document_requisition;
+                                
                                 return (
                                     <SelectItem key={prop.id} value={String(prop.id)}>
-                                        <div className="flex flex-col">
+                                        <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
-                                                <span>Lot {prop.lot} - TN°{prop.titre}</span>
+                                                <span className="font-medium">Lot {prop.lot} - TN°{prop.titre}</span>
+                                                {hasDoc && (
+                                                    <Badge variant="default" className="bg-green-500">
+                                                        <FileCheck className="h-3 w-3 mr-1" />
+                                                        Généré
+                                                    </Badge>
+                                                )}
                                                 {!isComplete && (
                                                     <AlertCircle className="h-3 w-3 text-red-500" />
                                                 )}
@@ -102,11 +169,9 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
                                                     {prop.type_operation === 'morcellement' ? 'Morcellement' : 'Immatriculation'}
                                                 </Badge>
                                             </div>
-                                            {nbDemandeurs > 0 && (
-                                                <span className="text-xs text-muted-foreground">
-                                                    {nbDemandeurs} demandeur{nbDemandeurs > 1 ? 's' : ''} associé{nbDemandeurs > 1 ? 's' : ''}
-                                                </span>
-                                            )}
+                                            <div className="text-xs text-muted-foreground">
+                                                {prop.proprietaire} - {prop.dossier?.commune || 'Commune N/A'}
+                                            </div>
                                         </div>
                                     </SelectItem>
                                 );
@@ -118,7 +183,7 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
                 {/* Affichage du type d'opération */}
                 {reqPropriete && selectedProprieteData && (
                     <Alert className="bg-blue-500/10 border-blue-500/50">
-                        <AlertCircle className="h-4 w-4 text-blue-500" />
+                        <Info className="h-4 w-4 text-blue-500" />
                         <AlertDescription className="text-blue-700 dark:text-blue-300">
                             <div className="space-y-1">
                                 <div>
@@ -135,10 +200,31 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
                     </Alert>
                 )}
 
+                {/* Statut du document */}
+                {reqPropriete && hasRequisition && (
+                    <Alert className="bg-green-500/10 border-green-500/50">
+                        <FileCheck className="h-4 w-4 text-green-500" />
+                        <AlertDescription className="text-green-700 dark:text-green-300">
+                            <div className="space-y-1">
+                                <div className="font-medium">
+                                    Réquisition déjà générée
+                                </div>
+                                <div className="text-xs opacity-75">
+                                    Généré le {documentRequisition?.generated_at}
+                                </div>
+                                <div className="text-xs opacity-75 flex items-center gap-2">
+                                    <Eye className="h-3 w-3" />
+                                    Téléchargé {documentRequisition?.download_count || 0} fois
+                                </div>
+                            </div>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 <Separator />
 
                 {/* Message de validation */}
-                {validationMessage && (
+                {validationMessage && !hasRequisition && (
                     <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>{validationMessage}</AlertDescription>
@@ -155,16 +241,44 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
                     </AlertDescription>
                 </Alert>
 
-                {/* Bouton de téléchargement */}
-                <Button
-                    onClick={handleDownload}
-                    disabled={!canGenerate()}
-                    className="w-full"
-                    size="lg"
-                >
-                    <Download className="h-4 w-4 mr-2" />
-                    Télécharger la Réquisition
-                </Button>
+                {/* Indicateur de génération */}
+                {isGenerating && (
+                    <Alert className="bg-blue-500/10 border-blue-500/50">
+                        <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                        <AlertDescription className="text-blue-700 dark:text-blue-300">
+                            {hasRequisition ? 'Téléchargement en cours...' : 'Génération en cours...'}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Bouton de téléchargement/génération */}
+                {reqPropriete && (
+                    hasRequisition ? (
+                        <Button
+                            onClick={() => handleDownloadExisting(documentRequisition!)}
+                            className="w-full"
+                            size="lg"
+                            disabled={isGenerating}
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Télécharger la Réquisition
+                            <Badge variant="secondary" className="ml-2">
+                                <Eye className="h-3 w-3 mr-1" />
+                                {documentRequisition?.download_count || 0}
+                            </Badge>
+                        </Button>
+                    ) : (
+                        <Button
+                            onClick={handleGenerate}
+                            disabled={!canGenerate() || isGenerating}
+                            className="w-full"
+                            size="lg"
+                        >
+                            <FileOutput className="h-4 w-4 mr-2" />
+                            Générer la Réquisition
+                        </Button>
+                    )
+                )}
             </CardContent>
         </Card>
     );

@@ -87,6 +87,8 @@ export interface Propriete {
     is_incomplete?: boolean;
     is_archived?: boolean;
     demandes?: Array<{
+        total_prix: number;
+        ordre: number;
         demandeur: any;
         id: number;
         id_demandeur: number;

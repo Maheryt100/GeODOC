@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[CollectedBy(DossierCollection::class)]
 class Dossier extends Model
@@ -92,6 +93,26 @@ class Dossier extends Model
         )->where('demander.status', 'active');
     }
 
+
+     // ❌ NE PAS FAIRE CECI (filtrage au niveau du modèle)
+    // public function proprietes(): HasMany
+    // {
+    //     return $this->hasMany(Propriete::class, 'id_dossier')
+    //         ->where('is_archived', false); // ❌ Mauvais
+    // }
+
+    // ✅ Si vous voulez filtrer, créez des relations séparées
+    public function proprietesActives(): HasMany
+    {
+        return $this->hasMany(Propriete::class, 'id_dossier')
+            ->where('is_archived', false);
+    }
+
+    public function proprietesArchivees(): HasMany
+    {
+        return $this->hasMany(Propriete::class, 'id_dossier')
+            ->where('is_archived', true);
+    }
     // ============ ACCESSORS ============
     
     public function getDemandeursCountAttribute()

@@ -8,7 +8,7 @@ export interface PieceJointe {
     taille: number;
     extension: string;
     type_document: string | null;
-    categorie: 'global' | 'demandeur' | 'propriete' | 'administratif';
+    categorie: 'global' | 'demandeur' | 'propriete';
     categorie_label: string;
     description: string | null;
     is_verified: boolean;
@@ -84,7 +84,6 @@ export const CATEGORIES = {
     global: { label: 'Document général', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
     demandeur: { label: 'Document demandeur', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
     propriete: { label: 'Document propriété', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
-    administratif: { label: 'Document administratif', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
 } as const;
 
 export const TYPES_DOCUMENTS = {
@@ -93,7 +92,5 @@ export const TYPES_DOCUMENTS = {
     'Acte de mariage': 'Acte de mariage',
     'Certificat de résidence': 'Certificat de résidence',
     'Plan du terrain': 'Plan du terrain',
-    'Titre foncier': 'Titre foncier',
-    'PV de bornage': 'PV de bornage',
     'Autre': 'Autre',
 } as const;

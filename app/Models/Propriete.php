@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 class Propriete extends Model
 {
     use HasPiecesJointes;
+    
     protected $fillable = [
         'lot',
         'propriete_mere',
@@ -28,9 +29,7 @@ class Propriete extends Model
         'date_requisition',
         'date_inscription',
         'dep_vol',
-        'numero_dep_vol', // ✅ NOUVEAU
-        'status',
-        'is_archived',
+        'numero_dep_vol',
         'id_dossier',
         'id_user',
     ];
@@ -38,14 +37,14 @@ class Propriete extends Model
     protected $casts = [
         'date_requisition' => 'date',
         'date_inscription' => 'date',
-        'status' => 'boolean',
-        'is_archived' => 'boolean',
         'contenance' => 'integer',
     ];
 
     protected $appends = [
-        'dep_vol_complet', // ✅ NOUVEAU: Format "Dep/Vol - Numéro"
+        'dep_vol_complet',
         'is_incomplete',
+        'is_archived', // ✅ Calculé dynamiquement
+        'has_active_demandes',
     ];
 
     // ============ RELATIONS ============
@@ -67,7 +66,7 @@ class Propriete extends Model
             'demander',
             'id_propriete',
             'id_demandeur'
-        )->withPivot(['status', 'status_consort', 'total_prix', 'motif_archive'])
+        )->withPivot(['id', 'status', 'status_consort', 'ordre', 'total_prix', 'motif_archive'])
           ->withTimestamps();
     }
 
@@ -78,7 +77,12 @@ class Propriete extends Model
 
     public function demandesActives()
     {
-        return $this->demandes()->where('status', 'active');
+        return $this->demandes()->where('status', Demander::STATUS_ACTIVE);
+    }
+
+    public function demandesArchivees()
+    {
+        return $this->demandes()->where('status', Demander::STATUS_ARCHIVE);
     }
 
     public function recuPaiements()
@@ -86,40 +90,34 @@ class Propriete extends Model
         return $this->hasMany(RecuPaiement::class, 'id_propriete');
     }
 
-    // ✅ NOUVEAU : Vérifier si peut être dissociée
-    public function canBeDissociated(): bool
-    {
-        // Ne peut pas dissocier si archivée
-        if ($this->is_archived) {
-            return false;
-        }
-
-        // Ne peut pas dissocier si le dossier est fermé
-        if ($this->dossier && $this->dossier->is_closed) {
-            return false;
-        }
-
-        return true;
-    }
-
-    // ✅ AMÉLIORATION : Vérifier si peut être modifiée
-    public function canBeModified(): bool
-    {
-        if ($this->is_archived) {
-            return false;
-        }
-
-        if ($this->dossier && $this->dossier->is_closed) {
-            return false;
-        }
-
-        return true;
-    }
     // ============ ACCESSORS ============
 
     /**
+     * ✅ CALCUL DYNAMIQUE : Une propriété est archivée SI :
+     * - Elle a au moins UNE demande archivée
+     * - ET aucune demande active
+     * 
+     * LOGIQUE : Toutes les demandes sont closes = propriété acquise
+     */
+    public function getIsArchivedAttribute(): bool
+    {
+        $demandesActives = $this->demandesActives()->count();
+        $demandesArchivees = $this->demandesArchivees()->count();
+        
+        // ✅ Propriété acquise = AU MOINS 1 archivée ET AUCUNE active
+        return $demandesArchivees > 0 && $demandesActives === 0;
+    }
+
+    /**
+     * ✅ Vérifier si a des demandes actives
+     */
+    public function getHasActiveDemandesAttribute(): bool
+    {
+        return $this->demandesActives()->exists();
+    }
+
+    /**
      * Format complet du dep/vol avec numéro
-     * Format: "299:041" ou "299" si pas de numéro
      */
     public function getDepVolCompletAttribute(): string
     {
@@ -190,21 +188,136 @@ class Propriete extends Model
         return "TNº{$this->titre}";
     }
 
+    // ============ MÉTHODES MÉTIER ============
+
+    /**
+     * ✅ Vérifier si peut être dissociée
+     */
+    public function canBeDissociated(): bool
+    {
+        // ✅ Ne peut pas dissocier si TOUTES les demandes sont archivées
+        if ($this->is_archived) {
+            return false;
+        }
+
+        // Ne peut pas dissocier si le dossier est fermé
+        if ($this->dossier && $this->dossier->is_closed) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * ✅ Vérifier si peut être modifiée
+     */
+    public function canBeModified(): bool
+    {
+        // ✅ Peut modifier SI au moins UNE demande est active
+        if ($this->is_archived) {
+            return false;
+        }
+
+        if ($this->dossier && $this->dossier->is_closed) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Obtenir le nombre de demandeurs actifs
+     */
+    public function getActiveDemandeursCount(): int
+    {
+        return $this->demandesActives()->count();
+    }
+
+    /**
+     * ✅ Obtenir le demandeur principal
+     */
+    public function getMainDemandeur(): ?Demandeur
+    {
+        $demande = $this->demandesActives()
+            ->where('ordre', 1)
+            ->with('demandeur')
+            ->first();
+
+        return $demande?->demandeur;
+    }
+
+    /**
+     * ✅ Obtenir tous les demandeurs actifs avec ordre
+     */
+    public function getActiveDemandeursWithOrder(): array
+    {
+        return $this->demandesActives()
+            ->orderBy('ordre')
+            ->with('demandeur')
+            ->get()
+            ->map(function ($demande) {
+                return [
+                    'demande_id' => $demande->id,
+                    'demandeur' => $demande->demandeur,
+                    'ordre' => $demande->ordre,
+                    'is_principal' => $demande->ordre === 1,
+                    'total_prix' => $demande->total_prix,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Obtenir les statistiques de la propriété
+     */
+    public function getStats(): array
+    {
+        return [
+            'total_demandes' => $this->demandes()->count(),
+            'demandes_actives' => $this->demandesActives()->count(),
+            'demandes_archivees' => $this->demandesArchivees()->count(),
+            'is_archived' => $this->is_archived,
+            'has_active_demandes' => $this->has_active_demandes,
+            'prix_unitaire' => $this->getPrixUnitaire(),
+            'prix_total' => $this->getPrixTotal(),
+            'is_complete' => !$this->is_incomplete,
+            'demandeur_principal' => $this->getMainDemandeur()?->nom_complet,
+        ];
+    }
+
     // ============ SCOPES ============
     
-    public function scopeActive(Builder $query): Builder
+    /**
+     * ✅ Propriétés avec au moins une demande active
+     */
+    public function scopeWithActiveDemandes(Builder $query): Builder
     {
-        return $query->where('status', true);
+        return $query->whereHas('demandesActives');
     }
 
+    /**
+     * ✅ Propriétés sans aucune demande active (vides OU archivées)
+     */
+    public function scopeWithoutActiveDemandes(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('demandesActives');
+    }
+
+    /**
+     * ✅ Propriétés archivées (toutes demandes archivées)
+     */
     public function scopeArchived(Builder $query): Builder
     {
-        return $query->where('is_archived', true);
+        return $query->whereHas('demandesArchivees')
+            ->whereDoesntHave('demandesActives');
     }
 
-    public function scopeNotArchived(Builder $query): Builder
+    /**
+     * ✅ Propriétés sans aucune demande (jamais liées)
+     */
+    public function scopeEmpty(Builder $query): Builder
     {
-        return $query->where('is_archived', false);
+        return $query->whereDoesntHave('demandes');
     }
 
     public function scopeByDossier(Builder $query, int $dossierId): Builder
@@ -222,16 +335,6 @@ class Propriete extends Model
         return $query->where('nature', 'ilike', "%{$nature}%");
     }
 
-    public function scopeWithDemandeurs(Builder $query): Builder
-    {
-        return $query->has('demandeurs');
-    }
-
-    public function scopeWithoutDemandeurs(Builder $query): Builder
-    {
-        return $query->doesntHave('demandeurs');
-    }
-
     public function scopeIncomplete(Builder $query): Builder
     {
         return $query->where(function ($q) {
@@ -244,134 +347,9 @@ class Propriete extends Model
         });
     }
 
-    /**
-     * Recherche par lot
-     */
     public function scopeByLot(Builder $query, string $lot): Builder
     {
         return $query->where('lot', 'like', "%{$lot}%");
-    }
-
-    /**
-     * Recherche par titre
-     */
-    public function scopeByTitre(Builder $query, string $titre): Builder
-    {
-        return $query->where('titre', 'like', "%{$titre}%");
-    }
-
-    /**
-     * Recherche par dep/vol complet
-     */
-    public function scopeByDepVol(Builder $query, string $depVol): Builder
-    {
-        return $query->where(function($q) use ($depVol) {
-            $q->where('dep_vol', 'like', "%{$depVol}%")
-              ->orWhere('numero_dep_vol', 'like', "%{$depVol}%");
-        });
-    }
-
-    // ============ MÉTHODES MÉTIER ============
-
-    /**
-     * Archiver la propriété
-     */
-    public function archive(): bool
-    {
-        return $this->update(['is_archived' => true]);
-    }
-
-    /**
-     * Désarchiver la propriété
-     */
-    public function unarchive(): bool
-    {
-        return $this->update(['is_archived' => false]);
-    }
-
-    /**
-     * Vérifier si la propriété a des demandeurs actifs
-     */
-    public function hasActiveDemandeurs(): bool
-    {
-        return $this->demandesActives()->exists();
-    }
-
-    /**
-     * Obtenir le nombre de demandeurs actifs
-     */
-    public function getActiveDemandeursCount(): int
-    {
-        return $this->demandesActives()->count();
-    }
-
-    
-  
-
-    /**
-     * Obtenir les statistiques de la propriété
-     */
-    public function getStats(): array
-    {
-        return [
-            'total_demandeurs' => $this->demandeurs()->count(),
-            'demandeurs_actifs' => $this->demandesActives()->count(),
-            'is_archived' => $this->is_archived,
-            'prix_unitaire' => $this->getPrixUnitaire(),
-            'prix_total' => $this->getPrixTotal(),
-            'is_complete' => !$this->is_incomplete,
-            'has_demandeurs' => $this->hasActiveDemandeurs(),
-        ];
-    }
-
-    /**
-     * Formater les informations pour l'export
-     */
-    public function toExportArray(): array
-    {
-        return [
-            'Lot' => $this->lot,
-            'Titre' => $this->titre_complet,
-            'Dep/Vol' => $this->dep_vol_complet,
-            'Contenance (m²)' => $this->contenance,
-            'Propriétaire' => $this->proprietaire,
-            'Nature' => ucfirst($this->nature ?? ''),
-            'Vocation' => ucfirst($this->vocation ?? ''),
-            'Situation' => $this->situation,
-            'Prix unitaire' => number_format($this->getPrixUnitaire(), 0, ',', ' ') . ' Ar',
-            'Prix total' => number_format($this->getPrixTotal(), 0, ',', ' ') . ' Ar',
-            'Statut' => $this->is_archived ? 'Acquise' : 'Active',
-            'Nb demandeurs' => $this->getActiveDemandeursCount(),
-        ];
-    }
-
-    // ============ VALIDATION HELPERS ============
-
-    /**
-     * Valider le format du dep/vol
-     */
-    public static function validateDepVolFormat(string $depVol): bool
-    {
-        // Format attendu: numéros (ex: 299)
-        return is_numeric($depVol) || preg_match('/^\d+$/', $depVol) === 1;
-    }
-
-    /**
-     * Valider le format du numéro dep/vol
-     */
-    public static function validateNumeroDepVolFormat(string $numero): bool
-    {
-        // Format attendu: numéros avec ou sans zéros devant (ex: 041, 41)
-        return is_numeric($numero) || preg_match('/^\d+$/', $numero) === 1;
-    }
-
-    /**
-     * Valider le numéro de lot
-     */
-    public static function validateLotFormat(string $lot): bool
-    {
-        // Le lot peut contenir lettres et chiffres
-        return preg_match('/^[A-Z0-9-]+$/i', $lot) === 1;
     }
 
     // ============ BOOT METHOD ============
@@ -380,19 +358,15 @@ class Propriete extends Model
     {
         parent::boot();
 
-        // Avant la sauvegarde, valider certains champs
         static::saving(function ($propriete) {
-            // Normaliser le format du lot (majuscules)
             if ($propriete->lot) {
                 $propriete->lot = strtoupper($propriete->lot);
             }
 
-            // Normaliser la nature
             if ($propriete->nature) {
                 $propriete->nature = ucfirst(strtolower($propriete->nature));
             }
 
-            // Normaliser la vocation
             if ($propriete->vocation) {
                 $propriete->vocation = ucfirst(strtolower($propriete->vocation));
             }

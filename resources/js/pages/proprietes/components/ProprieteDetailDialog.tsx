@@ -1,4 +1,4 @@
-// components/ProprieteDetailDialog.tsx - VERSION CORRIGÉE FERMETURE
+// components/ProprieteDetailDialog.tsx - VERSION CORRIGÉE POUR RÉSUMÉ
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ interface ProprieteDetailDialogProps {
         proprieteLot: string,
         type: 'from-demandeur' | 'from-propriete'
     ) => void;
+    demandeursDossier?: Demandeur[]; // ✅ Liste complète du dossier
 }
 
 export default function ProprieteDetailDialog({
@@ -30,25 +31,89 @@ export default function ProprieteDetailDialog({
     onOpenChange,
     onSelectDemandeur,
     dossierClosed = false,
-    onDissociate
+    onDissociate,
+    demandeursDossier = []
 }: ProprieteDetailDialogProps) {
     if (!propriete) return null;
 
-    // Récupérer demandeurs via demandes avec vérification stricte
-    const demandeurs = propriete.demandes
-        ?.map(d => d.demandeur)
-        .filter((demandeur): demandeur is Demandeur => {
-            return demandeur !== null && demandeur !== undefined && typeof demandeur === 'object';
-        }) || [];
+    // ✅ CORRECTION CRITIQUE : Récupération des demandeurs avec FALLBACK
+    const getDemandeurs = (): Demandeur[] => {
+        // CAS 1 : propriete.demandes existe ET contient des objets demandeur complets
+        if (propriete.demandes && Array.isArray(propriete.demandes) && propriete.demandes.length > 0) {
+            // Vérifier si les demandes ont des objets demandeur complets
+            const firstDemande = propriete.demandes[0];
+            if (firstDemande.demandeur && typeof firstDemande.demandeur === 'object') {
+                // ✅ Cas normal (depuis proprietes/index)
+                console.log('📍 Mode: Demandes avec relations chargées');
+                return propriete.demandes
+                    .map(d => d.demandeur)
+                    .filter((d): d is Demandeur => d !== null && d !== undefined);
+            }
+        }
 
-    const demandeursActifs = demandeurs.filter((d, index) => {
-        if (!propriete.demandes || !propriete.demandes[index]) return false;
-        return propriete.demandes[index].status === 'active';
+        // CAS 2 : Utiliser demandeursDossier avec les IDs de propriete.demandes
+        if (propriete.demandes && demandeursDossier.length > 0) {
+            const demandeursIds = propriete.demandes
+                .map(d => d.id_demandeur)
+                .filter(id => id !== null && id !== undefined);
+            
+            console.log('📍 Mode: Reconstruction depuis demandeursDossier', {
+                ids_recherches: demandeursIds,
+                demandeurs_disponibles: demandeursDossier.length
+            });
+
+            const demandeursTrouves = demandeursDossier.filter(d => 
+                demandeursIds.includes(d.id)
+            );
+
+            // ✅ IMPORTANT : Trier par ordre si disponible
+            const demandesAvecOrdre = propriete.demandes.filter(d => d.ordre !== undefined);
+            if (demandesAvecOrdre.length > 0) {
+                demandeursTrouves.sort((a, b) => {
+                    const ordreA = propriete.demandes?.find(d => d.id_demandeur === a.id)?.ordre ?? 999;
+                    const ordreB = propriete.demandes?.find(d => d.id_demandeur === b.id)?.ordre ?? 999;
+                    return ordreA - ordreB;
+                });
+            }
+
+            console.log('✅ Demandeurs trouvés:', demandeursTrouves.length);
+            return demandeursTrouves;
+        }
+
+        // CAS 3 : Ancien système (fallback) - utiliser propriete.demandeurs
+        if (propriete.demandeurs && Array.isArray(propriete.demandeurs)) {
+            console.log('📍 Mode: Fallback ancien système');
+            return propriete.demandeurs;
+        }
+
+        console.warn('⚠️ Aucun demandeur trouvé pour propriété', {
+            propriete_id: propriete.id,
+            lot: propriete.lot,
+            has_demandes: !!propriete.demandes,
+            demandes_count: propriete.demandes?.length ?? 0,
+            demandeurs_dossier_count: demandeursDossier.length
+        });
+
+        return [];
+    };
+
+    const demandeurs = getDemandeurs();
+
+    // ✅ Séparer actifs et archivés
+    const demandeursActifs = demandeurs.filter((d) => {
+        if (!propriete.demandes) return false;
+        const demande = propriete.demandes.find(dem => 
+            (typeof dem.id_demandeur === 'number' ? dem.id_demandeur : parseInt(dem.id_demandeur)) === d.id
+        );
+        return demande?.status === 'active';
     });
 
-    const demandeursArchives = demandeurs.filter((d, index) => {
-        if (!propriete.demandes || !propriete.demandes[index]) return false;
-        return propriete.demandes[index].status === 'archive';
+    const demandeursArchives = demandeurs.filter((d) => {
+        if (!propriete.demandes) return false;
+        const demande = propriete.demandes.find(dem => 
+            (typeof dem.id_demandeur === 'number' ? dem.id_demandeur : parseInt(dem.id_demandeur)) === d.id
+        );
+        return demande?.status === 'archive';
     });
 
     const formatNomComplet = (demandeur: Demandeur): string => {
@@ -59,31 +124,35 @@ export default function ProprieteDetailDialog({
         ].filter(Boolean).join(' ');
     };
 
-    // ✅ Handler de dissociation avec fermeture du dialogue parent
+    // ✅ Obtenir le rôle du demandeur (principal/consort)
+    const getDemandeurRole = (demandeur: Demandeur): { ordre: number; isPrincipal: boolean } => {
+        if (!propriete.demandes) return { ordre: 999, isPrincipal: false };
+        
+        const demande = propriete.demandes.find(d => 
+            (typeof d.id_demandeur === 'number' ? d.id_demandeur : parseInt(d.id_demandeur)) === demandeur.id
+        );
+        
+        const ordre = demande?.ordre ?? 999;
+        return {
+            ordre,
+            isPrincipal: ordre === 1
+        };
+    };
+
+    // Handler de dissociation
     const handleDissociate = (demandeur: Demandeur, e: React.MouseEvent) => {
         e.stopPropagation();
         
-        console.log('🔗 Dissociation demandée (depuis propriété):', {
-            demandeur_id: demandeur.id,
-            demandeur_nom: formatNomComplet(demandeur),
-            propriete_id: propriete.id,
-            propriete_lot: propriete.lot,
-        });
-        
         if (!onDissociate || dossierClosed || propriete.is_archived) {
-            console.warn('⚠️ Dissociation bloquée');
             return;
         }
         
         if (!canDissociate(demandeur)) {
-            console.warn('⚠️ Ne peut pas dissocier ce demandeur');
             return;
         }
         
-        // ✅ FERMER CE DIALOGUE AVANT D'OUVRIR LE DIALOGUE DE DISSOCIATION
         onOpenChange(false);
         
-        // ✅ DÉLAI POUR ÉVITER LES CONFLITS
         setTimeout(() => {
             onDissociate(
                 demandeur.id,
@@ -95,15 +164,9 @@ export default function ProprieteDetailDialog({
         }, 100);
     };
 
-    // Vérification améliorée
     const canDissociate = (demandeur: Demandeur): boolean => {
-        if (dossierClosed || propriete.is_archived) {
-            return false;
-        }
-        
-        if (!propriete.demandes || !Array.isArray(propriete.demandes)) {
-            return false;
-        }
+        if (dossierClosed || propriete.is_archived) return false;
+        if (!propriete.demandes || !Array.isArray(propriete.demandes)) return false;
         
         const demande = propriete.demandes.find(d => {
             const demandeIdDemandeur = typeof d.id_demandeur === 'number' 
@@ -112,30 +175,21 @@ export default function ProprieteDetailDialog({
             const currentDemandeurId = typeof demandeur.id === 'number'
                 ? demandeur.id
                 : parseInt(demandeur.id);
-                
             return demandeIdDemandeur === currentDemandeurId;
         });
         
-        if (!demande) {
-            return false;
-        }
-        
-        return demande.status === 'active';
+        return demande ? demande.status === 'active' : false;
     };
 
-    // ✅ Handler pour sélection de demandeur
     const handleSelectDemandeur = (demandeur: Demandeur) => {
         if (onSelectDemandeur) {
-            // ✅ Fermer ce dialogue
             onOpenChange(false);
-            // ✅ Ouvrir le dialogue du demandeur après un délai
             setTimeout(() => {
                 onSelectDemandeur(demandeur);
             }, 100);
         }
     };
 
-    // ✅ Handler pour le bouton Modifier
     const handleModifier = () => {
         onOpenChange(false);
         setTimeout(() => {
@@ -158,13 +212,7 @@ export default function ProprieteDetailDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent 
-                className="max-w-4xl max-h-[90vh] overflow-y-auto"
-                // ✅ Permettre la fermeture normale
-                onPointerDownOutside={(e) => {
-                    // Permettre la fermeture en cliquant à l'extérieur
-                }}
-            >
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
@@ -176,12 +224,8 @@ export default function ProprieteDetailDialog({
                                 {propriete.titre && (
                                     <Badge variant="outline">TNº{propriete.titre}</Badge>
                                 )}
-                                <Badge variant="default">
-                                    {propriete.nature}
-                                </Badge>
-                                <Badge variant="secondary">
-                                    {propriete.vocation}
-                                </Badge>
+                                <Badge variant="default">{propriete.nature}</Badge>
+                                <Badge variant="secondary">{propriete.vocation}</Badge>
                                 {demandeursArchives.length > 0 && demandeursActifs.length === 0 && (
                                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
                                         <Archive className="mr-1 h-3 w-3" />
@@ -207,12 +251,7 @@ export default function ProprieteDetailDialog({
                                 value={propriete.type_operation === 'morcellement' ? 'Morcellement' : 'Immatriculation'}
                                 highlight
                             />
-                            <InfoRow 
-                                icon={Home} 
-                                label="Lot" 
-                                value={propriete.lot}
-                                highlight 
-                            />
+                            <InfoRow icon={Home} label="Lot" value={propriete.lot} highlight />
                             <InfoRow icon={FileText} label="Titre" value={propriete.titre ? `TNº${propriete.titre}` : '-'} />
                             <InfoRow icon={FileText} label="Nature" value={propriete.nature} />
                             <InfoRow icon={FileText} label="Vocation" value={propriete.vocation} />
@@ -280,7 +319,7 @@ export default function ProprieteDetailDialog({
                         </div>
                     </section>
 
-                    {/* Demandeurs associés avec bouton dissocier */}
+                    {/* ✅ SECTION DEMANDEURS AMÉLIORÉE */}
                     {demandeurs.length > 0 ? (
                         <section>
                             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -291,44 +330,60 @@ export default function ProprieteDetailDialog({
                                 {demandeursActifs.length > 0 && (
                                     <>
                                         <p className="text-sm font-medium text-muted-foreground">Actifs</p>
-                                        {demandeursActifs.map((demandeur) => (
-                                            <div
-                                                key={demandeur.id}
-                                                className="p-4 border rounded-lg hover:bg-muted/50 transition"
-                                            >
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <button
-                                                        onClick={() => handleSelectDemandeur(demandeur)}
-                                                        className="flex-1 text-left hover:text-primary transition-colors"
-                                                    >
-                                                        <p className="font-medium">
-                                                            {formatNomComplet(demandeur)}
-                                                        </p>
-                                                        <p className="text-sm text-muted-foreground font-mono">
-                                                            CIN: {demandeur.cin}
-                                                        </p>
-                                                        {demandeur.domiciliation && (
-                                                            <p className="text-sm text-muted-foreground">
-                                                                {demandeur.domiciliation}
+                                        {demandeursActifs.map((demandeur) => {
+                                            const { ordre, isPrincipal } = getDemandeurRole(demandeur);
+                                            
+                                            return (
+                                                <div
+                                                    key={demandeur.id}
+                                                    className="p-4 border rounded-lg hover:bg-muted/50 transition"
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <button
+                                                            onClick={() => handleSelectDemandeur(demandeur)}
+                                                            className="flex-1 text-left hover:text-primary transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <p className="font-medium">
+                                                                    {formatNomComplet(demandeur)}
+                                                                </p>
+                                                                {/* ✅ Badge rôle */}
+                                                                {isPrincipal ? (
+                                                                    <Badge variant="default" className="text-xs">
+                                                                        Principal
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="secondary" className="text-xs">
+                                                                        Consort {ordre > 1 ? ordre - 1 : ''}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm text-muted-foreground font-mono">
+                                                                CIN: {demandeur.cin}
                                                             </p>
-                                                        )}
-                                                    </button>
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge variant="default">Actif</Badge>
-                                                        {!dossierClosed && canDissociate(demandeur) && onDissociate && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={(e) => handleDissociate(demandeur, e)}
-                                                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                                            >
-                                                                <Unlink className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
+                                                            {demandeur.domiciliation && (
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    {demandeur.domiciliation}
+                                                                </p>
+                                                            )}
+                                                        </button>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="default">Actif</Badge>
+                                                            {!dossierClosed && canDissociate(demandeur) && onDissociate && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={(e) => handleDissociate(demandeur, e)}
+                                                                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                                                >
+                                                                    <Unlink className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </>
                                 )}
                                 
@@ -336,33 +391,44 @@ export default function ProprieteDetailDialog({
                                     <>
                                         {demandeursActifs.length > 0 && <Separator className="my-3" />}
                                         <p className="text-sm font-medium text-muted-foreground">Ayant acquis</p>
-                                        {demandeursArchives.map((demandeur) => (
-                                            <button
-                                                key={demandeur.id}
-                                                onClick={() => handleSelectDemandeur(demandeur)}
-                                                className="w-full p-4 border rounded-lg hover:bg-muted/50 transition text-left bg-green-50/50"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium">
-                                                            {formatNomComplet(demandeur)}
-                                                        </p>
-                                                        <p className="text-sm text-muted-foreground font-mono">
-                                                            CIN: {demandeur.cin}
-                                                        </p>
-                                                        {demandeur.domiciliation && (
-                                                            <p className="text-sm text-muted-foreground">
-                                                                {demandeur.domiciliation}
+                                        {demandeursArchives.map((demandeur) => {
+                                            const { ordre, isPrincipal } = getDemandeurRole(demandeur);
+                                            
+                                            return (
+                                                <button
+                                                    key={demandeur.id}
+                                                    onClick={() => handleSelectDemandeur(demandeur)}
+                                                    className="w-full p-4 border rounded-lg hover:bg-muted/50 transition text-left bg-green-50/50"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <p className="font-medium">
+                                                                    {formatNomComplet(demandeur)}
+                                                                </p>
+                                                                {isPrincipal && (
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        Principal
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm text-muted-foreground font-mono">
+                                                                CIN: {demandeur.cin}
                                                             </p>
-                                                        )}
+                                                            {demandeur.domiciliation && (
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    {demandeur.domiciliation}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                                                            <Archive className="mr-1 h-3 w-3" />
+                                                            Acquis
+                                                        </Badge>
                                                     </div>
-                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                                                        <Archive className="mr-1 h-3 w-3" />
-                                                        Acquis
-                                                    </Badge>
-                                                </div>
-                                            </button>
-                                        ))}
+                                                </button>
+                                            );
+                                        })}
                                     </>
                                 )}
                             </div>
@@ -376,10 +442,7 @@ export default function ProprieteDetailDialog({
                 </div>
 
                 {!dossierClosed && demandeursActifs.length > 0 && (
-                    <Button 
-                        onClick={handleModifier}
-                        size="sm"
-                    >
+                    <Button onClick={handleModifier} size="sm">
                         <Pencil className="mr-2 h-4 w-4" />
                         Modifier
                     </Button>

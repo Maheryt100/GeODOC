@@ -468,19 +468,19 @@ class DemandeurController extends Controller
     }
     
     /**
-     * Remove the specified resource from the dossier only
+     * ✅ CORRECTION MAJEURE : Remove from dossier avec validation stricte
      */
     public function destroy($id_dossier, $id_demandeur)
     {
         try {
-            Log::info('Tentative de retirer du dossier', [
+            Log::info('🔍 Tentative de retrait du dossier', [
                 'id_dossier' => $id_dossier,
                 'id_demandeur' => $id_demandeur
             ]);
 
             DB::beginTransaction();
 
-            // Vérifier si le demandeur a des propriétés DANS CE DOSSIER
+            // ✅ ÉTAPE 1 : Vérifier les associations DANS CE DOSSIER
             $proprietesDansDossier = Demander::where('id_demandeur', (int)$id_demandeur)
                 ->whereHas('propriete', function($q) use ($id_dossier) {
                     $q->where('id_dossier', $id_dossier);
@@ -492,23 +492,30 @@ class DemandeurController extends Controller
                 $lots = $proprietesDansDossier->pluck('propriete.lot')->toArray();
                 $lotsStr = implode(', ', $lots);
                 
+                // ✅ Compter actives vs archivées
                 $actives = $proprietesDansDossier->where('status', 'active')->count();
                 $archivees = $proprietesDansDossier->where('status', 'archive')->count();
                 
-                $message = "Impossible de retirer ce demandeur. Il est associé à {$proprietesDansDossier->count()} propriété(s) : Lot(s) {$lotsStr}.";
+                $message = "❌ Impossible de retirer ce demandeur du dossier.";
+                $message .= "\n\n📊 Il est associé à {$proprietesDansDossier->count()} propriété(s) : Lot(s) {$lotsStr}.";
                 
                 if ($actives > 0) {
-                    $message .= " ({$actives} active(s))";
+                    $message .= "\n• {$actives} association(s) active(s)";
                 }
                 if ($archivees > 0) {
-                    $message .= " ({$archivees} archivée(s))";
+                    $message .= "\n• {$archivees} association(s) archivée(s) (acquises)";
                 }
                 
-                $message .= ". Veuillez d'abord dissocier le demandeur.";
+                $message .= "\n\n💡 Actions possibles :";
+                $message .= "\n1. Dissociez d'abord le demandeur des propriétés";
+                $message .= "\n2. Ou utilisez 'Supprimer définitivement' pour retirer de TOUS les dossiers";
                 
-                Log::warning('Impossible de retirer - propriétés liées', [
+                Log::warning('⚠️ Impossible de retirer - propriétés liées', [
                     'demandeur_id' => $id_demandeur,
                     'proprietes_count' => $proprietesDansDossier->count(),
+                    'actives' => $actives,
+                    'archivees' => $archivees,
+                    'lots' => $lotsStr
                 ]);
 
                 DB::rollBack();
@@ -517,29 +524,36 @@ class DemandeurController extends Controller
                     ->with('error', $message);
             }
 
-            // Si pas de propriétés, on peut supprimer
+            // ✅ ÉTAPE 2 : Vérifier que la relation existe
             $contenir = Contenir::where('id_dossier', (int)$id_dossier)
                 ->where('id_demandeur', (int)$id_demandeur)
                 ->first();
 
             if (!$contenir) {
-                Log::warning('Relation contenir introuvable');
+                Log::warning('⚠️ Relation contenir introuvable');
                 DB::rollBack();
                 return redirect()->route('dossiers.show', $id_dossier)
                     ->with('error', 'Demandeur introuvable dans ce dossier.');
             }
             
+            // ✅ ÉTAPE 3 : Supprimer la relation (le demandeur reste en base)
             $contenir->delete();
 
             DB::commit();
+            
+            Log::info('✅ Demandeur retiré du dossier', [
+                'demandeur_id' => $id_demandeur,
+                'dossier_id' => $id_dossier
+            ]);
             
             return redirect()->route('dossiers.show', $id_dossier)
                 ->with('success', 'Demandeur retiré du dossier avec succès.');
                 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur lors de la suppression', [
+            Log::error('❌ Erreur lors du retrait', [
                 'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             
             return redirect()->route('dossiers.show', $id_dossier)
@@ -548,12 +562,12 @@ class DemandeurController extends Controller
     }
     
     /**
-     * Remove the demandeur definitively from the database
+     * ✅ CORRECTION MAJEURE : Suppression définitive avec validation TOUS dossiers
      */
     public function destroyDefinitive($id_demandeur)
     {
         try {
-            Log::info('Tentative de suppression définitive', [
+            Log::info('🔍 Tentative de suppression DÉFINITIVE', [
                 'id_demandeur' => $id_demandeur,
             ]);
 
@@ -563,18 +577,19 @@ class DemandeurController extends Controller
             
             if (!$demandeur) {
                 DB::rollBack();
-                Log::warning('Demandeur introuvable');
+                Log::warning('⚠️ Demandeur introuvable');
                 return back()->with('error', 'Demandeur introuvable.');
             }
             
-            // Vérifier TOUTES les propriétés liées
-            $proprietesToutes = Demander::where('id_demandeur', (int)$id_demandeur)
+            // ✅ ÉTAPE 1 : Vérifier TOUTES les propriétés liées (TOUS dossiers)
+            $toutesLesProprietes = Demander::where('id_demandeur', (int)$id_demandeur)
                 ->with(['propriete', 'propriete.dossier'])
                 ->get();
             
-            if ($proprietesToutes->count() > 0) {
+            if ($toutesLesProprietes->count() > 0) {
+                // ✅ Grouper par dossier
                 $parDossier = [];
-                foreach ($proprietesToutes as $demande) {
+                foreach ($toutesLesProprietes as $demande) {
                     $dossierNom = $demande->propriete->dossier->nom_dossier ?? 'Inconnu';
                     if (!isset($parDossier[$dossierNom])) {
                         $parDossier[$dossierNom] = ['actives' => [], 'archivees' => []];
@@ -587,26 +602,55 @@ class DemandeurController extends Controller
                     }
                 }
                 
-                $message = "Impossible de supprimer. Associé à des propriétés dans " . count($parDossier) . " dossier(s). Dissociez d'abord.";
+                // ✅ Message détaillé
+                $message = "❌ Impossible de supprimer définitivement ce demandeur.";
+                $message .= "\n\n📊 Il est utilisé dans " . count($parDossier) . " dossier(s) :";
+                
+                foreach ($parDossier as $nomDossier => $infos) {
+                    $message .= "\n\n📁 {$nomDossier} :";
+                    if (!empty($infos['actives'])) {
+                        $message .= "\n  • " . count($infos['actives']) . " association(s) active(s) : Lot(s) " . implode(', ', $infos['actives']);
+                    }
+                    if (!empty($infos['archivees'])) {
+                        $message .= "\n  • " . count($infos['archivees']) . " association(s) archivée(s) : Lot(s) " . implode(', ', $infos['archivees']);
+                    }
+                }
+                
+                $message .= "\n\n💡 Action requise :";
+                $message .= "\nDissociez d'abord le demandeur de TOUTES les propriétés dans TOUS les dossiers.";
+                
+                Log::warning('⚠️ Impossible de supprimer définitivement', [
+                    'demandeur_id' => $id_demandeur,
+                    'proprietes_count' => $toutesLesProprietes->count(),
+                    'dossiers_concernes' => array_keys($parDossier)
+                ]);
                 
                 DB::rollBack();
                 return back()->with('error', $message);
             }
             
-            // Supprimer les relations contenir
+            // ✅ ÉTAPE 2 : Supprimer les relations contenir
             Contenir::where('id_demandeur', (int)$id_demandeur)->delete();
             
-            // Supprimer le demandeur
+            // ✅ ÉTAPE 3 : Supprimer définitivement le demandeur
+            $nomComplet = $demandeur->titre_demandeur . ' ' . $demandeur->nom_demandeur . ' ' . ($demandeur->prenom_demandeur ?? '');
             $demandeur->delete();
             
             DB::commit();
             
-            return back()->with('success', 'Demandeur supprimé définitivement.');
+            Log::info('✅ Demandeur supprimé définitivement', [
+                'demandeur_id' => $id_demandeur,
+                'nom_complet' => $nomComplet
+            ]);
+            
+            return back()->with('success', "Demandeur {$nomComplet} supprimé définitivement de la base de données.");
             
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur suppression définitive', [
+            Log::error('❌ Erreur suppression définitive', [
+                'demandeur_id' => $id_demandeur,
                 'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             return back()->with('error', 'Erreur : ' . $e->getMessage());
         }

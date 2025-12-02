@@ -1,3 +1,4 @@
+// resources/js/pages/dossiers/components/DossierInfoSection.tsx
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -70,34 +71,51 @@ export default function DossierInfoSection({
 
     return (
         <div className="space-y-6">
-            {/* Alerte si dossier fermé */}
+            {/* ✅ Alerte si dossier fermé - AVEC BOUTON ROUVRIR */}
             {dossier.is_closed && (
                 <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg">
                     <div className="flex items-start gap-3">
                         <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
                         <div className="flex-1">
-                            <h4 className="font-semibold text-orange-900 dark:text-orange-100 mb-1">
-                                Dossier fermé
-                            </h4>
-                            <p className="text-sm text-orange-800 dark:text-orange-300">
-                                Fermé le <strong>{formatDate(dossier.date_fermeture!)}</strong>
-                                {dossier.closedBy && <> par <strong>{dossier.closedBy.name}</strong></>}
-                            </p>
-                            {dossier.motif_fermeture && (
-                                <p className="text-sm text-orange-700 dark:text-orange-400 mt-2 italic">
-                                    Motif : {dossier.motif_fermeture}
-                                </p>
-                            )}
-                            <p className="text-sm text-orange-600 dark:text-orange-500 mt-2">
-                                Aucune modification possible. Seuls les administrateurs peuvent rouvrir ce dossier.
-                            </p>
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                    <h4 className="font-semibold text-orange-900 dark:text-orange-100 mb-1">
+                                        Dossier fermé
+                                    </h4>
+                                    <p className="text-sm text-orange-800 dark:text-orange-300">
+                                        Fermé le <strong>{formatDate(dossier.date_fermeture!)}</strong>
+                                        {dossier.closedBy && <> par <strong>{dossier.closedBy.name}</strong></>}
+                                    </p>
+                                    {dossier.motif_fermeture && (
+                                        <p className="text-sm text-orange-700 dark:text-orange-400 mt-2 italic">
+                                            Motif : {dossier.motif_fermeture}
+                                        </p>
+                                    )}
+                                    <p className="text-sm text-orange-600 dark:text-orange-500 mt-2">
+                                        Aucune modification possible. Seuls les administrateurs peuvent rouvrir ce dossier.
+                                    </p>
+                                </div>
+                                
+                                {/* ✅ BOUTON ROUVRIR dans l'alerte */}
+                                {dossier.can_close && (
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={onCloseToggle}
+                                        className="bg-green-600 hover:bg-green-700 shrink-0"
+                                    >
+                                        <LockOpen className="mr-2 h-4 w-4" />
+                                        Rouvrir
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
             <Card className="border-0 shadow-lg">
-                {/* Header transparent avec gradient subtil */}
+                {/* Header avec gradient et boutons d'action */}
                 <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 p-6 border-b">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         {/* Titre et informations */}
@@ -127,17 +145,9 @@ export default function DossierInfoSection({
                             </div>
                         </div>
 
-                        {/* Boutons d'action */}
+                        {/* ✅ Boutons d'action - AVEC BOUTON FERMER/ROUVRIR PRINCIPAL */}
                         <div className="flex flex-wrap gap-2">
-                            {!dossier.is_closed && (
-                                <Button asChild size="sm">
-                                    <Link href={`/nouveau-lot/${dossier.id}`}>
-                                        <LandPlot className="mr-2 h-4 w-4" />
-                                        Nouvelle entrée
-                                    </Link>
-                                </Button>
-                            )}
-
+                            {/* ✅ BOUTON FERMER/ROUVRIR - TOUJOURS VISIBLE SI PERMISSION */}
                             {dossier.can_close && (
                                 <Button
                                     variant={dossier.is_closed ? "default" : "destructive"}
@@ -151,17 +161,28 @@ export default function DossierInfoSection({
                                     {dossier.is_closed ? (
                                         <>
                                             <LockOpen className="mr-2 h-4 w-4" />
-                                            Rouvrir
+                                            Rouvrir le dossier
                                         </>
                                     ) : (
                                         <>
                                             <Lock className="mr-2 h-4 w-4" />
-                                            Fermer
+                                            Fermer le dossier
                                         </>
                                     )}
                                 </Button>
                             )}
 
+                            {/* Nouvelle entrée - seulement si ouvert */}
+                            {!dossier.is_closed && (
+                                <Button asChild size="sm">
+                                    <Link href={`/nouveau-lot/${dossier.id}`}>
+                                        <LandPlot className="mr-2 h-4 w-4" />
+                                        Nouvelle entrée
+                                    </Link>
+                                </Button>
+                            )}
+
+                            {/* Modifier - désactivé si fermé sans permission */}
                             {dossier.can_modify && (
                                 <Button 
                                     asChild 
@@ -176,6 +197,7 @@ export default function DossierInfoSection({
                                 </Button>
                             )}
                             
+                            {/* Documents - toujours accessible */}
                             <Button asChild size="sm" variant="outline">
                                 <Link href={`/documents/generate/${dossier.id}`}>
                                     <FileOutput className="mr-2 h-4 w-4" />
@@ -183,6 +205,7 @@ export default function DossierInfoSection({
                                 </Link>
                             </Button>
                             
+                            {/* Résumé - toujours accessible */}
                             <Button asChild size="sm" variant="outline">
                                 <Link href={`/demandes/resume/${dossier.id}`}>
                                     <FileText className="mr-2 h-4 w-4" />

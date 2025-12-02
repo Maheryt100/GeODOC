@@ -479,7 +479,7 @@ class User extends Authenticatable
             self::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
             self::ROLE_ADMIN_DISTRICT => 'Administrateur District',
             self::ROLE_USER_DISTRICT => 'Utilisateur District',
-            self::ROLE_USER => 'Utilisateur',
+           
         ];
 
         if (!$forUser) {
@@ -499,5 +499,154 @@ class User extends Authenticatable
         }
 
         return [];
+    }
+
+    // ============ COMPATIBILITÉ AVEC LARAVEL POLICIES ============
+    
+    /**
+     * ✅ NOUVEAU : Méthode compatible avec auth()->user()->can()
+     * Cette méthode permet d'utiliser Gate::allows() et $user->can()
+     */
+    public function can($ability, $arguments = []): bool
+    {
+        // Si c'est un modèle Dossier, vérifier les permissions spécifiques
+        if ($arguments instanceof \App\Models\Dossier) {
+            return $this->canManageDossier($ability, $arguments);
+        }
+
+        // Sinon, utiliser la vérification de permission standard
+        if (is_string($ability)) {
+            return $this->hasPermission($ability);
+        }
+
+        // Par défaut, retourner false
+        return false;
+    }
+
+    /**
+     * ✅ NOUVEAU : Vérifier les permissions spécifiques aux dossiers
+     */
+    private function canManageDossier(string $ability, \App\Models\Dossier $dossier): bool
+    {
+        switch ($ability) {
+            case 'update':
+                return $this->canUpdateDossier($dossier);
+            
+            case 'delete':
+                return $this->canDeleteDossier($dossier);
+            
+            case 'close':
+                return $this->canCloseDossier($dossier);
+            
+            case 'archive':
+                return $this->canArchiveDossier($dossier);
+            
+            case 'export':
+                return $this->canExportDossier($dossier);
+            
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * ✅ NOUVEAU : Peut modifier un dossier spécifique
+     */
+    public function canUpdateDossier(\App\Models\Dossier $dossier): bool
+    {
+        // Dossier fermé = non modifiable
+        if ($dossier->is_closed) {
+            return false;
+        }
+
+        // Vérifier l'accès au dossier
+        if (!$this->canAccessDossier($dossier)) {
+            return false;
+        }
+
+        // Super admin, admin district, central user peuvent modifier
+        if ($this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser()) {
+            return true;
+        }
+
+        // User district peut modifier ses propres dossiers dans son district
+        if ($this->isUserDistrict()) {
+            return $this->id === $dossier->id_user;
+        }
+
+        return false;
+    }
+
+    /**
+     * ✅ NOUVEAU : Peut supprimer un dossier spécifique
+     */
+    public function canDeleteDossier(\App\Models\Dossier $dossier): bool
+    {
+        // Dossier fermé = non supprimable
+        if ($dossier->is_closed) {
+            return false;
+        }
+
+        // Vérifier l'accès au dossier
+        if (!$this->canAccessDossier($dossier)) {
+            return false;
+        }
+
+        // Seuls super_admin et admin_district peuvent supprimer
+        return $this->isSuperAdmin() || $this->isAdminDistrict();
+    }
+
+    /**
+     * ✅ NOUVEAU : Peut fermer un dossier spécifique
+     */
+    public function canCloseDossier(\App\Models\Dossier $dossier): bool
+    {
+        // Déjà fermé
+        if ($dossier->is_closed) {
+            return false;
+        }
+
+        // Vérifier l'accès au dossier
+        if (!$this->canAccessDossier($dossier)) {
+            return false;
+        }
+
+        // Super admin, central user et admin district peuvent fermer
+        return $this->isSuperAdmin() 
+            || $this->isCentralUser() 
+            || $this->isAdminDistrict();
+    }
+
+    /**
+     * ✅ NOUVEAU : Peut archiver des éléments d'un dossier spécifique
+     */
+    public function canArchiveDossier(\App\Models\Dossier $dossier): bool
+    {
+        // Même logique que canUpdateDossier
+        return $this->canUpdateDossier($dossier);
+    }
+
+    /**
+     * ✅ NOUVEAU : Peut exporter un dossier spécifique
+     */
+    public function canExportDossier(\App\Models\Dossier $dossier): bool
+    {
+        // Vérifier l'accès au dossier
+        if (!$this->canAccessDossier($dossier)) {
+            return false;
+        }
+
+        // Super admin, central user et admin district peuvent exporter
+        return $this->isSuperAdmin() 
+            || $this->isCentralUser() 
+            || $this->isAdminDistrict();
+    }
+
+    /**
+     * ✅ NOUVEAU : Obtenir le label du rôle (pour compatibilité)
+     */
+    public function getRoleLabel(): string
+    {
+        return $this->role_name;
     }
 }

@@ -1,8 +1,9 @@
 <?php
-// this is the structure of the database
+// Migration complète de la base de données - Version consolidée
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -212,8 +213,10 @@ return new class extends Migration
             $table->date('date_inscription')->nullable();
             $table->string('dep_vol', 50)->nullable();
             $table->string('numero_dep_vol', 50)->nullable();
-            $table->boolean('status')->default(false);
-            $table->boolean('is_archived')->default(false);
+            
+            
+            // ✅ AMÉLIORATION: is_archived et status supprimés
+            // L'archivage est géré par demander.status = 'archive'
             
             $table->foreignId('id_dossier')->constrained('dossiers')->onDelete('cascade');
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
@@ -223,7 +226,6 @@ return new class extends Migration
             $table->index('id_dossier');
             $table->index('numero_dep_vol');
             $table->index(['dep_vol', 'numero_dep_vol']);
-            $table->index(['id_dossier', 'is_archived']);
         });
 
         // ========================================
@@ -276,8 +278,14 @@ return new class extends Migration
             $table->foreignId('id_demandeur')->constrained('demandeurs')->onDelete('cascade');
             $table->foreignId('id_propriete')->constrained('proprietes')->onDelete('cascade');
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
-            $table->string('status', 20)->default('active');
+            
+            // ✅ AMÉLIORATION: status avec valeurs enum explicites
+            $table->enum('status', ['active', 'archive', 'pending', 'cancelled'])->default('active');
             $table->boolean('status_consort')->default(false);
+
+            // ✅ Ordre du demandeur (1 = principal, 2+ = consorts)
+            $table->unsignedTinyInteger('ordre')->default(1);
+
             $table->text('motif_archive')->nullable();
             $table->unsignedBigInteger('total_prix')->default(0);
             $table->timestamps();
@@ -360,19 +368,73 @@ return new class extends Migration
             $table->foreignId('id_propriete')->constrained('proprietes')->onDelete('cascade');
             $table->foreignId('id_demandeur')->constrained('demandeurs')->onDelete('cascade');
             $table->foreignId('id_user')->constrained('users')->onDelete('cascade');
-            $table->string('numero_recu')->unique();
+            $table->string('numero_recu');
             $table->bigInteger('montant');
             $table->date('date_recu');
             $table->string('file_path')->nullable();
             $table->enum('status', ['draft', 'confirmed'])->default('draft');
             $table->timestamps();
             
+            // ✅ AMÉLIORATION: Contrainte unique sur (id_propriete, id_demandeur)
+            // au lieu de unique sur numero_recu seul
+            $table->unique(['id_propriete', 'id_demandeur'], 'recu_propriete_demandeur_unique');
+            
+            // Index pour recherches
+            $table->index('numero_recu');
             $table->index(['id_propriete', 'status']);
             $table->index('date_recu');
+            $table->index(['id_propriete', 'id_demandeur', 'status'], 'idx_recu_lookup');
         });
 
         // ========================================
-        // 7. ASSIGNATIONS UTILISATEURS
+        // 7. DOCUMENTS GÉNÉRÉS
+        // ========================================
+        
+        Schema::create('documents_generes', function (Blueprint $table) {
+            $table->id();
+            
+            // Type de document
+            $table->enum('type_document', ['RECU', 'ADV', 'CSF', 'REQ'])->index();
+            
+            // Références aux entités
+            $table->foreignId('id_propriete')->constrained('proprietes')->onDelete('cascade');
+            $table->foreignId('id_demandeur')->nullable()->constrained('demandeurs')->onDelete('cascade');
+            $table->foreignId('id_dossier')->constrained('dossiers')->onDelete('cascade');
+            $table->foreignId('id_district')->constrained('districts')->onDelete('cascade');
+            
+            // Informations du document
+            $table->string('numero_document', 100)->nullable(); // Numéro reçu, etc.
+            $table->string('file_path', 500);
+            $table->string('nom_fichier', 255);
+            $table->bigInteger('montant')->nullable(); // Pour les reçus
+            $table->date('date_document')->nullable();
+            
+            // Métadonnées
+            $table->boolean('has_consorts')->default(false);
+            $table->json('demandeurs_ids')->nullable(); // Liste des IDs demandeurs (pour ADV avec consorts)
+            $table->json('metadata')->nullable(); // Autres infos
+            
+            // Tracking
+            $table->foreignId('generated_by')->constrained('users')->onDelete('cascade');
+            $table->timestamp('generated_at');
+            $table->integer('download_count')->default(0);
+            $table->timestamp('last_downloaded_at')->nullable();
+            
+            // Status
+            $table->enum('status', ['active', 'archived', 'obsolete'])->default('active');
+            
+            $table->timestamps();
+            
+            // Index optimisés pour recherche rapide
+            $table->index(['type_document', 'id_propriete', 'status']);
+            $table->index(['type_document', 'id_propriete', 'id_demandeur', 'status']);
+            $table->index(['id_dossier', 'type_document']);
+            $table->index(['generated_at']);
+            $table->unique(['type_document', 'id_propriete', 'id_demandeur'], 'unique_document');
+        });
+
+        // ========================================
+        // 8. ASSIGNATIONS UTILISATEURS
         // ========================================
         
         Schema::create('user_districts', function (Blueprint $table) {
@@ -412,6 +474,18 @@ return new class extends Migration
             
             $table->unique(['id_user', 'id_demande']);
         });
+        
+        // ========================================
+        // 9. NETTOYAGE ET MIGRATION DES DONNÉES
+        // ========================================
+        
+        // Mettre à jour les valeurs nulles ou invalides dans demander.status
+        DB::statement("
+            UPDATE demander 
+            SET status = 'active' 
+            WHERE status IS NULL 
+            OR status NOT IN ('active', 'archive', 'pending', 'cancelled')
+        ");
     }
 
     /**
@@ -426,6 +500,9 @@ return new class extends Migration
         Schema::dropIfExists('user_demandes');
         Schema::dropIfExists('user_requisitions');
         Schema::dropIfExists('user_districts');
+        
+        // Documents générés
+        Schema::dropIfExists('documents_generes');
         
         // Paiements
         Schema::dropIfExists('recu_paiements');

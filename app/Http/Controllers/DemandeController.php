@@ -722,34 +722,69 @@ class DemandeController extends Controller
     private function groupeDemandes($demandes)
     {
         return $demandes->groupBy('id_propriete')->map(function ($groupe) {
-            $premiere = $groupe->first();
+            // ✅ IMPORTANT : Trier par ordre si la colonne existe
+            $groupeTrie = $groupe->sortBy(function($demande) {
+                return $demande->ordre ?? 999; // Les sans ordre à la fin
+            })->values();
             
-            // ✅ CORRECTION : Charger TOUS les demandeurs avec leurs relations
-            $tousLesDemandeurs = $groupe->map(function ($demande) {
+            $premiere = $groupeTrie->first();
+            
+            // ✅ LOG DE DEBUG
+            Log::info('🔍 Groupement demandes pour propriété', [
+                'propriete_id' => $premiere->id_propriete,
+                'propriete_lot' => $premiere->propriete->lot ?? 'N/A',
+                'nombre_demandeurs' => $groupe->count(),
+                'demandes_ids' => $groupe->pluck('id')->toArray(),
+                'demandeurs_ids' => $groupe->pluck('id_demandeur')->toArray(),
+            ]);
+            
+            // ✅ MAPPER TOUS LES DEMANDEURS avec vérification stricte
+            $tousLesDemandeurs = $groupeTrie->map(function ($demande, $index) {
+                // ✅ Vérifier que demandeur existe
+                if (!$demande->demandeur) {
+                    Log::warning('⚠️ Demandeur manquant pour demande', [
+                        'demande_id' => $demande->id,
+                        'id_demandeur' => $demande->id_demandeur,
+                    ]);
+                    return null; // Sera filtré
+                }
+                
                 return [
                     'id' => $demande->id,
                     'id_demandeur' => $demande->id_demandeur,
-                    'demandeur' => $demande->demandeur, // ✅ Relation chargée
+                    'demandeur' => $demande->demandeur, // ✅ Objet complet
                     'total_prix' => $demande->total_prix,
                     'status_consort' => $demande->status_consort,
                     'status' => $demande->status,
+                    'ordre' => $demande->ordre ?? ($index + 1), // ✅ Fallback
+                    'is_principal' => ($demande->ordre ?? ($index + 1)) === 1, // ✅ Flag helper
                 ];
-            })->values();
+            })->filter()->values(); // ✅ Retirer les null
+            
+            // ✅ LOG RÉSULTAT
+            Log::info('✅ Demandeurs mappés', [
+                'propriete_lot' => $premiere->propriete->lot ?? 'N/A',
+                'count' => $tousLesDemandeurs->count(),
+                'premiers_demandeurs' => $tousLesDemandeurs->take(3)->map(fn($d) => [
+                    'ordre' => $d['ordre'],
+                    'nom' => $d['demandeur']->nom_demandeur ?? 'N/A',
+                    'is_principal' => $d['is_principal']
+                ])->toArray()
+            ]);
             
             return [
                 'id' => $premiere->id,
                 'id_propriete' => $premiere->id_propriete,
                 'propriete' => $premiere->propriete,
-                'demandeurs' => $tousLesDemandeurs, // ✅ Tous les demandeurs
-                'demandeur' => $premiere->demandeur, // Premier pour affichage
+                'demandeurs' => $tousLesDemandeurs, // ✅ Tous les demandeurs triés
+                'demandeur' => $tousLesDemandeurs->first()['demandeur'] ?? null, // ✅ Principal pour affichage
                 'total_prix' => $premiere->total_prix,
                 'status_consort' => $groupe->count() > 1,
                 'status' => $premiere->status,
-                'nombre_demandeurs' => $groupe->count(),
+                'nombre_demandeurs' => $tousLesDemandeurs->count(), // ✅ Compte les non-null
             ];
         })->values();
     }
-
 
     /**
      * ✅ RÉSUMÉ DOSSIER - CORRIGÉ
@@ -758,31 +793,47 @@ class DemandeController extends Controller
     {
         // ✅ CHARGER LE DOSSIER AVEC TOUTES LES RELATIONS NÉCESSAIRES
         $dossier = Dossier::with([
-            'proprietes.demandes.demandeur', // ✅ Propriétés avec leurs demandeurs
+            'proprietes' => function($query) {
+                $query->with([
+                    'demandes' => function($q) {
+                        $q->with('demandeur') // ✅ CRITIQUE : Charger les demandeurs
+                        ->orderBy('ordre', 'asc'); // ✅ Trier par ordre
+                    }
+                ]);
+            },
             'demandeurs' // ✅ Tous les demandeurs du dossier
         ])->findOrFail($dossierId);
 
-        // ✅ CHARGER AVEC RELATIONS COMPLÈTES (identique à list())
+        // ✅ CHARGER AVEC RELATIONS COMPLÈTES
         $query = Demander::with([
-            'demandeur',
-            'propriete.demandes.demandeur'
+            'demandeur', // ✅ Relation complète du demandeur
+            'propriete' => function($q) {
+                $q->with([
+                    'demandes' => function($subQ) {
+                        $subQ->with('demandeur') // ✅ CRUCIAL
+                            ->orderBy('ordre', 'asc');
+                    }
+                ]);
+            }
         ])->whereHas('propriete', fn($q) => $q->where('id_dossier', $dossier->id));
 
         $demandes = $query->get();
 
-        // ✅ Log pour debug
-        Log::info('Resume demandes détaillées', [
+        // ✅ LOG POUR VÉRIFIER
+        Log::info('Resume - Données chargées', [
             'dossier_id' => $dossierId,
             'demandes_count' => $demandes->count(),
-            'premiere_demande' => $demandes->first() ? [
-                'id' => $demandes->first()->id,
-                'propriete_lot' => $demandes->first()->propriete->lot,
-                'demandeur_nom' => $demandes->first()->demandeur->nom_demandeur,
-                'has_demandeur' => (bool) $demandes->first()->demandeur,
+            'proprietes_count' => $dossier->proprietes->count(),
+            'demandeurs_dossier_count' => $dossier->demandeurs->count(),
+            'exemple_propriete' => $dossier->proprietes->first() ? [
+                'id' => $dossier->proprietes->first()->id,
+                'lot' => $dossier->proprietes->first()->lot,
+                'demandes_count' => $dossier->proprietes->first()->demandes->count(),
+                'premier_demandeur' => $dossier->proprietes->first()->demandes->first()?->demandeur?->nom_demandeur
             ] : null
         ]);
 
-        // ✅ Utiliser la même méthode helper
+        // ✅ Utiliser la méthode helper (déjà améliorée précédemment)
         $documentsGroupes = $this->groupeDemandes($demandes);
 
         // Pagination
@@ -802,7 +853,7 @@ class DemandeController extends Controller
         ];
 
         return Inertia::render('demandes/ResumeDossier', [
-            'dossier' => $dossier,
+            'dossier' => $dossier, // ✅ Maintenant avec proprietes.demandes.demandeur
             'documents' => $documents,
         ]);
     }

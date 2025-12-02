@@ -1,10 +1,13 @@
-// pages/dossiers/Show.tsx - VERSION CORRIGÉE GESTION DIALOGUES
-import { Head, router, usePage } from '@inertiajs/react';
+// ✅ AJOUT : Bouton Retour vers la liste
+
+import { Head, router, usePage, Link } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Toaster } from '@/components/ui/sonner';
+import { Button } from '@/components/ui/button'; // ✅ AJOUTÉ
 import { toast } from 'sonner';
 import { useEffect, useState, useCallback } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ArrowLeft } from 'lucide-react'; // ✅ AJOUTÉ
 import type { Dossier, Demandeur, Propriete, SharedData, BreadcrumbItem } from '@/types';
 import type { BaseDemandeur, BasePropriete } from '@/pages/PiecesJointes/pieces-jointes';
 import { CloseDossierDialog } from '@/pages/dossiers/components/CloseDossierDialog';
@@ -58,13 +61,13 @@ export default function Show() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     
-    // ✅ États pour la liaison - AVEC GESTION STRICTE
+    // États pour la liaison
     const [linkDemandeurOpen, setLinkDemandeurOpen] = useState(false);
     const [linkProprieteOpen, setLinkProprieteOpen] = useState(false);
     const [selectedProprieteForLink, setSelectedProprieteForLink] = useState<Propriete | null>(null);
     const [selectedDemandeurForLink, setSelectedDemandeurForLink] = useState<Demandeur | null>(null);
 
-    // ✅ État pour la dissociation
+    // État pour la dissociation
     const [dissociateDialogOpen, setDissociateDialogOpen] = useState(false);
     const [dissociateData, setDissociateData] = useState<{
         demandeurId: number;
@@ -82,10 +85,9 @@ export default function Show() {
         if (flash?.error) toast.error(flash.error);
     }, [flash?.message, flash?.success, flash?.error]);
 
-    // ✅ CORRECTION MAJEURE : Fermeture complète des dialogues de liaison
+    // Gestionnaires de liaison
     const handleCloseLinkDemandeurDialog = useCallback(() => {
         setLinkDemandeurOpen(false);
-        // ✅ Délai pour éviter les conflits d'état
         setTimeout(() => {
             setSelectedProprieteForLink(null);
         }, 300);
@@ -93,13 +95,11 @@ export default function Show() {
 
     const handleCloseLinkProprieteDialog = useCallback(() => {
         setLinkProprieteOpen(false);
-        // ✅ Délai pour éviter les conflits d'état
         setTimeout(() => {
             setSelectedDemandeurForLink(null);
         }, 300);
     }, []);
 
-    // ✅ Gestionnaires de liaison avec vérifications strictes
     const handleLinkDemandeur = useCallback((propriete: Propriete) => {
         if (dossier.is_closed) {
             toast.error('Impossible de lier : le dossier est fermé');
@@ -110,11 +110,9 @@ export default function Show() {
             return;
         }
         
-        // ✅ FERMER TOUS LES AUTRES DIALOGUES D'ABORD
         setLinkProprieteOpen(false);
         setDissociateDialogOpen(false);
         
-        // ✅ Ouvrir le dialogue après un court délai
         setTimeout(() => {
             setSelectedProprieteForLink(propriete);
             setLinkDemandeurOpen(true);
@@ -127,18 +125,15 @@ export default function Show() {
             return;
         }
         
-        // ✅ FERMER TOUS LES AUTRES DIALOGUES D'ABORD
         setLinkDemandeurOpen(false);
         setDissociateDialogOpen(false);
         
-        // ✅ Ouvrir le dialogue après un court délai
         setTimeout(() => {
             setSelectedDemandeurForLink(demandeur);
             setLinkProprieteOpen(true);
         }, 100);
     }, [dossier.is_closed]);
 
-    // ✅ Gestionnaire de dissociation avec fermeture des autres dialogues
     const handleDissociate = useCallback((
         demandeurId: number,
         proprieteId: number,
@@ -146,17 +141,7 @@ export default function Show() {
         proprieteLot: string,
         type: 'from-demandeur' | 'from-propriete'
     ) => {
-        console.log('🔗 handleDissociate appelé:', {
-            demandeurId,
-            proprieteId,
-            demandeurNom,
-            proprieteLot,
-            type,
-            dossierClosed: dossier.is_closed
-        });
-
         if (dossier.is_closed) {
-            console.warn('⚠️ Dissociation bloquée : dossier fermé');
             toast.error('Impossible de dissocier : le dossier est fermé');
             return;
         }
@@ -168,13 +153,11 @@ export default function Show() {
         });
 
         if (!propriete) {
-            console.error('❌ Propriété introuvable:', proprieteId);
             toast.error('Propriété introuvable');
             return;
         }
 
         if (propriete.is_archived) {
-            console.warn('⚠️ Dissociation bloquée : propriété archivée');
             toast.error('Impossible de dissocier : la propriété est archivée (acquise)');
             return;
         }
@@ -193,17 +176,9 @@ export default function Show() {
             return isOtherDemandeur && isActive;
         }).length || 0;
 
-        console.log('📊 Comptage des autres demandeurs:', {
-            total_demandes: propriete.demandes?.length || 0,
-            autres_actifs: autresDemandeurs,
-            demandeur_courant: demandeurId
-        });
-
-        // ✅ FERMER TOUS LES AUTRES DIALOGUES
         setLinkDemandeurOpen(false);
         setLinkProprieteOpen(false);
         
-        // ✅ Ouvrir le dialogue de dissociation après un délai
         setTimeout(() => {
             setDissociateData({
                 demandeurId,
@@ -215,21 +190,12 @@ export default function Show() {
             });
             setDissociateDialogOpen(true);
         }, 100);
-
-        console.log('✅ Dialogue de dissociation ouvert');
     }, [dossier.is_closed, proprietes]);
 
-    // ✅ Confirmation de la dissociation
     const confirmDissociate = useCallback(() => {
         if (!dissociateData || isDissociating) {
-            console.warn('⚠️ Confirmation ignorée:', { 
-                hasDissociateData: !!dissociateData, 
-                isDissociating 
-            });
             return;
         }
-
-        console.log('🚀 Envoi de la demande de dissociation:', dissociateData);
 
         setIsDissociating(true);
 
@@ -243,23 +209,19 @@ export default function Show() {
                     ? `Propriété Lot ${dissociateData.proprieteLot} dissociée avec succès`
                     : `${dissociateData.demandeurNom} dissocié de la propriété avec succès`;
                 
-                console.log('✅ Dissociation réussie');
                 toast.success(message);
                 
-                // ✅ Fermer et nettoyer
                 setDissociateDialogOpen(false);
                 setTimeout(() => {
                     setDissociateData(null);
                 }, 300);
             },
             onError: (errors) => {
-                console.error('❌ Erreur dissociation:', errors);
                 toast.error('Erreur', {
                     description: Object.values(errors).join('\n')
                 });
             },
             onFinish: () => {
-                console.log('🏁 Requête terminée');
                 setIsDissociating(false);
             }
         });
@@ -349,9 +311,10 @@ export default function Show() {
         
         if (dossier.demandeurs) {
             dossier.demandeurs.forEach((d: Demandeur) => {
-                if (!demandeursMap.has(d.id)) {
-                    demandeursMap.set(d.id, { ...d, hasProperty: false });
-                }
+                demandeursMap.set(d.id, { 
+                    ...d, 
+                    hasProperty: false 
+                });
             });
         }
         
@@ -359,13 +322,24 @@ export default function Show() {
             dossier.proprietes.forEach((prop: Propriete) => {
                 if (prop.demandes) {
                     prop.demandes.forEach((demande) => {
-                        const d = demande.demandeur;
-                        if (d && !demandeursMap.has(d.id)) {
-                            demandeursMap.set(d.id, { ...d, hasProperty: true });
-                        } else if (d) {
-                            const existing = demandeursMap.get(d.id);
+                        const demandeurId = demande.id_demandeur || demande.demandeur?.id;
+                        
+                        if (demandeurId) {
+                            const existing = demandeursMap.get(demandeurId);
+                            
                             if (existing) {
-                                demandeursMap.set(d.id, { ...existing, hasProperty: true });
+                                demandeursMap.set(demandeurId, { 
+                                    ...existing, 
+                                    hasProperty: true 
+                                });
+                            } else {
+                                const d = demande.demandeur;
+                                if (d) {
+                                    demandeursMap.set(d.id, { 
+                                        ...d, 
+                                        hasProperty: true 
+                                    });
+                                }
                             }
                         }
                     });
@@ -412,6 +386,21 @@ export default function Show() {
 
             <div className="container mx-auto p-6 max-w-[1600px] space-y-6">
                 
+                {/* ✅ AJOUT : BOUTON RETOUR */}
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="gap-2"
+                    >
+                        <Link href={route('dossiers')}>
+                            <ArrowLeft className="h-4 w-4" />
+                            Retour à la liste
+                        </Link>
+                    </Button>
+                </div>
+
                 <DossierInfoSection
                     dossier={dossier}
                     demandeursCount={allDemandeurs.length}
@@ -457,7 +446,7 @@ export default function Show() {
                 />
             </div>
 
-            {/* ✅ Dialogue de liaison demandeur - AVEC GESTION STRICTE */}
+            {/* Dialogues */}
             {selectedProprieteForLink && (
                 <LinkDemandeurDialog
                     open={linkDemandeurOpen}
@@ -468,7 +457,6 @@ export default function Show() {
                 />
             )}
 
-            {/* ✅ Dialogue de liaison propriété - AVEC GESTION STRICTE */}
             {selectedDemandeurForLink && (
                 <LinkProprieteDialog
                     open={linkProprieteOpen}
@@ -479,7 +467,6 @@ export default function Show() {
                 />
             )}
 
-            {/* ✅ Dialogue de dissociation */}
             <DissociateDialog
                 open={dissociateDialogOpen}
                 onOpenChange={(open) => {
@@ -502,7 +489,6 @@ export default function Show() {
                 onOpenChange={setCloseDialogOpen}
             />
 
-            {/* Dialogue de suppression de demandeur */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

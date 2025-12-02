@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Storage;
 class DocumentGenere extends Model
 {
     use HasFactory;
+    
     protected $table = 'documents_generes';
+    
     // Types de documents
     const TYPE_RECU = 'RECU';
     const TYPE_ADV = 'ADV';
@@ -112,18 +114,28 @@ class DocumentGenere extends Model
     }
 
     /**
-     * Récupérer ou créer un document
+     * ✅ CORRIGÉ : Récupérer un document existant avec vérification du district
      * 
      * @param string $type Type de document (RECU, ADV, CSF, REQ)
      * @param int $idPropriete
      * @param int|null $idDemandeur
+     * @param int|null $idDistrict Ajout du paramètre district
      * @return self|null
      */
-    public static function findExisting(string $type, int $idPropriete, ?int $idDemandeur = null): ?self
-    {
+    public static function findExisting(
+        string $type, 
+        int $idPropriete, 
+        ?int $idDemandeur = null,
+        ?int $idDistrict = null
+    ): ?self {
         $query = self::where('type_document', $type)
             ->where('id_propriete', $idPropriete)
             ->where('status', self::STATUS_ACTIVE);
+
+        // ✅ AJOUT : Vérification du district pour éviter les conflits
+        if ($idDistrict) {
+            $query->where('id_district', $idDistrict);
+        }
 
         // Pour REQ, pas besoin de demandeur
         if ($type === self::TYPE_REQ) {
@@ -141,6 +153,22 @@ class DocumentGenere extends Model
         }
 
         return $query->first();
+    }
+
+    /**
+     * ✅ NOUVEAU : Vérifier si un document existe pour une propriété (peu importe le demandeur)
+     */
+    public static function existsForPropriete(string $type, int $idPropriete, ?int $idDistrict = null): bool
+    {
+        $query = self::where('type_document', $type)
+            ->where('id_propriete', $idPropriete)
+            ->where('status', self::STATUS_ACTIVE);
+
+        if ($idDistrict) {
+            $query->where('id_district', $idDistrict);
+        }
+
+        return $query->exists();
     }
 
     /**
@@ -163,5 +191,21 @@ class DocumentGenere extends Model
     public function getFullPathAttribute(): string
     {
         return Storage::disk('public')->path($this->file_path);
+    }
+
+    /**
+     * ✅ NOUVEAU : Obtenir l'URL de téléchargement
+     */
+    public function getDownloadUrlAttribute(): string
+    {
+        return route('documents.recu.download', $this->id);
+    }
+
+    /**
+     * ✅ NOUVEAU : Marquer comme obsolète (soft delete)
+     */
+    public function markAsObsolete(): bool
+    {
+        return $this->update(['status' => self::STATUS_OBSOLETE]);
     }
 }

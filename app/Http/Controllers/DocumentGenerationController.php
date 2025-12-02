@@ -20,63 +20,125 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 use NumberFormatter;
 use PhpOffice\PhpWord\TemplateProcessor;
+use App\Helpers\DownloadDebugHelper;
 
 class DocumentGenerationController extends Controller
 {
     /**
-     * Page principale de génération de documents
+     * ✅ AMÉLIORÉ : Page principale avec chargement des documents existants
      */
     public function index($id_dossier)
     {
-        $dossier = Dossier::with(['proprietes', 'demandeurs', 'district'])->findOrFail($id_dossier);
+        $dossier = Dossier::with(['district'])->findOrFail($id_dossier);
         
-        // ✅ Enrichir les propriétés avec les demandeurs liés
-        $proprietes = $dossier->proprietes->map(function ($propriete) {
-            // Récupérer les demandeurs liés ACTIFS
-            $propriete->demandeurs_lies = Demander::with('demandeur')
-                ->where('id_propriete', $propriete->id)
-                ->where('status', 'active')
-                ->get()
-                ->map(function ($demande) {
+        Log::info('📋 Chargement page génération documents', [
+            'dossier_id' => $id_dossier,
+            'dossier_nom' => $dossier->nom_dossier,
+        ]);
+        
+        // ✅ Charger les propriétés avec leurs documents générés
+        $proprietes = Propriete::where('id_dossier', $id_dossier)
+            ->with([
+                'demandeurs' => function($query) {
+                    $query->where('demander.status', 'active')
+                        ->orderBy('demander.ordre', 'asc'); // ✅ Trier par ordre
+                }
+            ])
+            ->get()
+            ->map(function ($propriete) use ($dossier) {
+                // Récupérer les demandeurs liés ACTIFS via demander
+                $demandeursActifs = Demander::with('demandeur')
+                    ->where('id_propriete', $propriete->id)
+                    ->where('status', 'active')
+                    ->orderBy('ordre', 'asc') // ✅ Trier par ordre
+                    ->get();
+                
+                $propriete->demandeurs_lies = $demandeursActifs->map(function ($demande) {
                     return [
                         'id' => $demande->id_demandeur,
                         'id_demande' => $demande->id,
                         'nom' => $demande->demandeur->nom_demandeur,
                         'prenom' => $demande->demandeur->prenom_demandeur ?? '',
                         'cin' => $demande->demandeur->cin,
+                        'ordre' => $demande->ordre, // ✅ IMPORTANT
                         'status_consort' => $demande->status_consort,
+                        'is_archived' => false,
                     ];
                 });
-            
-            // ✅ Vérifier si un reçu existe
-            $recu = DocumentGenere::where('type_document', DocumentGenere::TYPE_RECU)
-                ->where('id_propriete', $propriete->id)
-                ->where('status', DocumentGenere::STATUS_ACTIVE)
-                ->first();
-            
-            $propriete->has_recu = $recu !== null;
-            $propriete->dernier_recu = $recu ? [
-                'id' => $recu->id,
-                'numero_recu' => $recu->numero_document,
-                'montant' => $recu->montant,
-                'date_recu' => $recu->date_document->format('d/m/Y'),
-                'generated_by' => $recu->generatedBy->name ?? 'Inconnu',
-                'generated_at' => $recu->generated_at->format('d/m/Y H:i'),
-                'download_count' => $recu->download_count,
-            ] : null;
-            
-            return $propriete;
-        });
+                
+                // ✅ NOUVEAU : Charger les documents générés
+                $propriete->document_recu = DocumentGenere::where('type_document', DocumentGenere::TYPE_RECU)
+                    ->where('id_propriete', $propriete->id)
+                    ->where('id_district', $dossier->id_district)
+                    ->where('status', DocumentGenere::STATUS_ACTIVE)
+                    ->first();
+                
+                $propriete->document_adv = DocumentGenere::where('type_document', DocumentGenere::TYPE_ADV)
+                    ->where('id_propriete', $propriete->id)
+                    ->where('id_district', $dossier->id_district)
+                    ->where('status', DocumentGenere::STATUS_ACTIVE)
+                    ->first();
+                
+                $propriete->document_requisition = DocumentGenere::where('type_document', DocumentGenere::TYPE_REQ)
+                    ->where('id_propriete', $propriete->id)
+                    ->where('id_district', $dossier->id_district)
+                    ->where('status', DocumentGenere::STATUS_ACTIVE)
+                    ->first();
+                
+                // ✅ Compatibilité avec ancien système
+                $propriete->has_recu = !!$propriete->document_recu;
+                if ($propriete->document_recu) {
+                    $propriete->dernier_recu = [
+                        'id' => $propriete->document_recu->id,
+                        'numero_recu' => $propriete->document_recu->numero_document,
+                        'montant' => $propriete->document_recu->montant,
+                        'date_recu' => $propriete->document_recu->date_document->format('d/m/Y'),
+                        'generated_by' => $propriete->document_recu->generatedBy->name ?? 'Inconnu',
+                        'generated_at' => $propriete->document_recu->generated_at->format('d/m/Y H:i'),
+                        'download_count' => $propriete->document_recu->download_count,
+                        'source' => 'documents_generes',
+                    ];
+                }
+                
+                // Statistiques
+                $propriete->has_active_demandeurs = $demandeursActifs->count() > 0;
+                $propriete->has_archived_demandeurs = Demander::where('id_propriete', $propriete->id)
+                    ->where('status', 'archive')
+                    ->count() > 0;
+                
+                return $propriete;
+            })
+            ->filter(function($propriete) {
+                return $propriete->has_active_demandeurs;
+            })
+            ->values();
+        
+        // ✅ NOUVEAU : Charger les demandeurs avec leurs CSF
+        $demandeurs = $dossier->demandeurs()
+            ->whereHas('proprietes', function($query) {
+                $query->where('demander.status', 'active');
+            })
+            ->get()
+            ->map(function($demandeur) use ($dossier) {
+                // Charger le CSF de ce demandeur
+                $demandeur->document_csf = DocumentGenere::where('type_document', DocumentGenere::TYPE_CSF)
+                    ->where('id_demandeur', $demandeur->id)
+                    ->where('id_district', $dossier->id_district)
+                    ->where('status', DocumentGenere::STATUS_ACTIVE)
+                    ->first();
+                
+                return $demandeur;
+            });
 
         return Inertia::render('documents/Generate', [
             'dossier' => $dossier,
             'proprietes' => $proprietes,
-            'demandeurs' => $dossier->demandeurs,
+            'demandeurs' => $demandeurs,
         ]);
     }
 
     /**
-     * ✅ CORRIGÉ : Générer et télécharger le reçu pour N'IMPORTE QUEL district
+     * ✅ Générer ou télécharger un reçu existant
      */
     public function generateRecu(Request $request)
     {
@@ -89,39 +151,198 @@ class DocumentGenerationController extends Controller
             $propriete = Propriete::with('dossier.district')->findOrFail($request->id_propriete);
             $demandeur = Demandeur::findOrFail($request->id_demandeur);
             
-            // ✅ Vérifier si le document existe déjà AVEC le bon district
-            $documentExistant = DocumentGenere::where('type_document', DocumentGenere::TYPE_RECU)
-                ->where('id_propriete', $request->id_propriete)
-                ->where('id_demandeur', $request->id_demandeur)
-                ->where('id_district', $propriete->dossier->id_district) // ✅ AJOUTÉ
-                ->where('status', DocumentGenere::STATUS_ACTIVE)
-                ->first();
+            Log::info('🔍 Vérification existence reçu', [
+                'propriete_id' => $request->id_propriete,
+                'demandeur_id' => $request->id_demandeur,
+                'district_id' => $propriete->dossier->id_district,
+            ]);
+            
+            // ✅ Vérifier si le document existe déjà
+            $documentExistant = DocumentGenere::findExisting(
+                DocumentGenere::TYPE_RECU,
+                $request->id_propriete,
+                $request->id_demandeur,
+                $propriete->dossier->id_district
+            );
 
-            if ($documentExistant) {
-                Log::info('Téléchargement reçu existant', [
+            if ($documentExistant && $documentExistant->fileExists()) {
+                Log::info('✅ Document trouvé, téléchargement', [
                     'document_id' => $documentExistant->id,
-                    'district' => $propriete->dossier->district->nom_district,
                 ]);
                 return $this->downloadExistingDocument($documentExistant, 'reçu');
             }
 
-            // ✅ Sinon, générer le nouveau document
+            // ✅ Sinon, créer un nouveau document
+            Log::info('🆕 Aucun reçu existant, création nécessaire');
             return $this->createNewRecu($propriete, $demandeur);
             
         } catch (\Exception $e) {
-            Log::error('Erreur génération/téléchargement reçu', [
+            Log::error('❌ Erreur génération reçu', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'propriete_id' => $request->id_propriete,
-                'demandeur_id' => $request->id_demandeur,
             ]);
             
-            return back()->withErrors(['error' => 'Erreur: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
 
     /**
-     * Télécharger un reçu existant
+     * ✅ NOUVELLE MÉTHODE SÉCURISÉE : Créer un reçu avec commit AVANT téléchargement
+     */
+    private function createNewRecuSafe($propriete, $demandeur)
+    {
+        DB::beginTransaction();
+
+        try {
+            $district = $propriete->dossier->district;
+            
+            Log::info('🔄 Début génération nouveau reçu', [
+                'propriete_id' => $propriete->id,
+                'demandeur_id' => $demandeur->id,
+                'district' => $district->nom_district,
+                'id_district' => $propriete->dossier->id_district,
+            ]);
+
+            // ✅ 1. Calculer le prix
+            $prix = $this->getPrixFromDistrict($propriete);
+            $prixTotal = (int) ($prix * $propriete->contenance);
+            
+            // ✅ 2. Générer le numéro
+            $numeroRecu = $this->generateNumeroRecu($propriete->dossier->id_district);
+            
+            Log::info('📝 Numéro de reçu généré', [
+                'numero' => $numeroRecu,
+                'id_district' => $propriete->dossier->id_district,
+                'prix_total' => $prixTotal,
+            ]);
+            
+            // ✅ 3. Créer le fichier Word temporaire
+            $tempFilePath = $this->createRecu($propriete, $demandeur, $numeroRecu, $prixTotal);
+            
+            if (!file_exists($tempFilePath)) {
+                throw new \Exception("❌ Échec de création du fichier Word temporaire");
+            }
+            
+            $tempFileSize = filesize($tempFilePath);
+            
+            Log::info('📄 Fichier Word créé', [
+                'temp_path' => $tempFilePath,
+                'file_size' => $tempFileSize,
+            ]);
+            
+            // ✅ 4. Sauvegarder dans storage PERMANENT
+            $savedPath = $this->saveDocumentCopy($tempFilePath, 'RECU', $propriete, $demandeur);
+            
+            if (!Storage::disk('public')->exists($savedPath)) {
+                throw new \Exception("❌ Le fichier n'a pas été sauvegardé: {$savedPath}");
+            }
+            
+            $savedFileSize = Storage::disk('public')->size($savedPath);
+            
+            Log::info('💾 Fichier sauvegardé', [
+                'saved_path' => $savedPath,
+                'storage_size' => $savedFileSize,
+            ]);
+            
+            // ✅ VALIDATION CRITIQUE
+            if ($tempFileSize !== $savedFileSize) {
+                throw new \Exception("❌ Taille fichier incohérente (temp: {$tempFileSize}, saved: {$savedFileSize})");
+            }
+            
+            $nomFichier = basename($savedPath);
+            
+            // ✅ 5. Enregistrer dans documents_generes
+            $document = DocumentGenere::create([
+                'type_document' => DocumentGenere::TYPE_RECU,
+                'id_propriete' => $propriete->id,
+                'id_demandeur' => $demandeur->id,
+                'id_dossier' => $propriete->id_dossier,
+                'id_district' => $propriete->dossier->id_district,
+                'numero_document' => $numeroRecu,
+                'file_path' => $savedPath,
+                'nom_fichier' => $nomFichier,
+                'montant' => $prixTotal,
+                'date_document' => Carbon::now(),
+                'has_consorts' => false,
+                'generated_by' => Auth::id(),
+                'generated_at' => now(),
+                'status' => DocumentGenere::STATUS_ACTIVE,
+            ]);
+            
+            if (!$document->id) {
+                throw new \Exception("❌ Échec de création de l'enregistrement DocumentGenere");
+            }
+            
+            Log::info('✅ Document enregistré en base', [
+                'document_id' => $document->id,
+                'file_path' => $document->file_path,
+            ]);
+            
+            // ✅ 6. Compatibilité avec l'ancienne table
+            RecuPaiement::create([
+                'id_propriete' => $propriete->id,
+                'id_demandeur' => $demandeur->id,
+                'id_user' => Auth::id(),
+                'numero_recu' => $numeroRecu,
+                'montant' => $prixTotal,
+                'date_recu' => Carbon::now(),
+                'file_path' => $savedPath,
+                'status' => 'confirmed',
+            ]);
+            
+            // ✅ 7. COMMIT AVANT LE TÉLÉCHARGEMENT
+            DB::commit();
+            
+            Log::info('✅ Transaction committée avec succès', [
+                'document_id' => $document->id,
+            ]);
+            
+            // ✅ 8. Logger l'activité APRÈS le commit
+            ActivityLogger::logDocumentGeneration(ActivityLog::DOC_RECU, $document->id, [
+                'numero_recu' => $numeroRecu,
+                'propriete_id' => $propriete->id,
+                'demandeur_id' => $demandeur->id,
+                'montant' => $prixTotal,
+                'lot' => $propriete->lot,
+                'id_district' => $propriete->dossier->id_district,
+                'district_nom' => $district->nom_district,
+            ]);
+            
+            // ✅ 9. Copier le fichier temporaire pour le téléchargement
+            $downloadPath = sys_get_temp_dir() . '/download_' . uniqid() . '_' . $nomFichier;
+            copy($tempFilePath, $downloadPath);
+            
+            Log::info('📥 Préparation du téléchargement', [
+                'download_path' => $downloadPath,
+                'download_file_exists' => file_exists($downloadPath),
+            ]);
+            
+            // ✅ 10. RETOURNER LE TÉLÉCHARGEMENT avec le fichier copié
+            return response()->download($downloadPath, $nomFichier, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'Content-Disposition' => 'attachment; filename="' . $nomFichier . '"',
+                'Cache-Control' => 'no-cache, must-revalidate',
+                'X-Document-ID' => $document->id, // ✅ Pour debugging
+            ])->deleteFileAfterSend(true);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('❌ ERREUR CRITIQUE lors de la création du reçu', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'propriete_id' => $propriete->id,
+                'district' => $propriete->dossier->district->nom_district ?? 'Inconnu',
+            ]);
+            
+            throw $e;
+        }
+    }
+
+    /**
+     * ✅ Télécharger un document existant par son ID
      */
     public function downloadRecu($id)
     {
@@ -129,13 +350,17 @@ class DocumentGenerationController extends Controller
             $document = DocumentGenere::findOrFail($id);
             
             if (!$document->fileExists()) {
+                Log::warning('⚠️ Fichier introuvable, régénération', [
+                    'document_id' => $id,
+                    'file_path' => $document->file_path,
+                ]);
                 return $this->regenerateDocument($document);
             }
             
-            return $this->downloadExistingDocument($document, 'reçu');
+            return $this->downloadExistingDocument($document, 'document');
             
         } catch (\Exception $e) {
-            Log::error('Erreur téléchargement reçu', [
+            Log::error('❌ Erreur téléchargement document', [
                 'id' => $id,
                 'error' => $e->getMessage()
             ]);
@@ -150,8 +375,12 @@ class DocumentGenerationController extends Controller
     public function getRecuHistory($id_propriete)
     {
         try {
+            $propriete = Propriete::with('dossier')->findOrFail($id_propriete);
+            
+            // ✅ CORRIGÉ : Filtrer par district
             $documents = DocumentGenere::with(['demandeur', 'generatedBy'])
                 ->where('id_propriete', $id_propriete)
+                ->where('id_district', $propriete->dossier->id_district)
                 ->where('type_document', DocumentGenere::TYPE_RECU)
                 ->orderBy('generated_at', 'desc')
                 ->get()
@@ -176,7 +405,7 @@ class DocumentGenerationController extends Controller
             ]);
             
         } catch (\Exception $e) {
-            Log::error('Erreur récupération historique', [
+            Log::error('❌ Erreur récupération historique', [
                 'id_propriete' => $id_propriete,
                 'error' => $e->getMessage()
             ]);
@@ -189,7 +418,7 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Générer Acte de Vente
+     * ✅ Générer ou télécharger un acte de vente existant
      */
     public function generateActeVente(Request $request)
     {
@@ -201,11 +430,12 @@ class DocumentGenerationController extends Controller
         try {
             $propriete = Propriete::with('dossier.district')->findOrFail($request->id_propriete);
             
-            // ✅ Vérifier qu'un reçu existe
-            $recuExists = DocumentGenere::findExisting(
-                DocumentGenere::TYPE_RECU,
-                $request->id_propriete
-            );
+            // Vérifier qu'un reçu existe
+            $recuExists = DocumentGenere::where('type_document', DocumentGenere::TYPE_RECU)
+                ->where('id_propriete', $request->id_propriete)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->exists();
             
             if (!$recuExists) {
                 return back()->withErrors([
@@ -213,21 +443,21 @@ class DocumentGenerationController extends Controller
                 ]);
             }
             
-            // ✅ Vérifier si l'ADV existe déjà
-            $documentExistant = DocumentGenere::findExisting(
-                DocumentGenere::TYPE_ADV,
-                $request->id_propriete,
-                $request->id_demandeur
-            );
+            // Vérifier si l'ADV existe déjà
+            $documentExistant = DocumentGenere::where('type_document', DocumentGenere::TYPE_ADV)
+                ->where('id_propriete', $request->id_propriete)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->first();
 
-            if ($documentExistant) {
+            if ($documentExistant && $documentExistant->fileExists()) {
                 return $this->downloadExistingDocument($documentExistant, 'acte de vente');
             }
 
             return $this->createNewActeVente($propriete, $request->id_demandeur);
             
         } catch (\Exception $e) {
-            Log::error('Erreur génération/téléchargement ADV', [
+            Log::error('❌ Erreur génération/téléchargement ADV', [
                 'error' => $e->getMessage()
             ]);
             
@@ -236,7 +466,7 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Générer CSF
+     * ✅ Générer ou télécharger un CSF existant
      */
     public function generateCsf(Request $request)
     {
@@ -249,21 +479,20 @@ class DocumentGenerationController extends Controller
             $propriete = Propriete::with('dossier.district')->findOrFail($request->id_propriete);
             $demandeur = Demandeur::findOrFail($request->id_demandeur);
             
-            // ✅ Vérifier si le CSF existe déjà
-            $documentExistant = DocumentGenere::findExisting(
-                DocumentGenere::TYPE_CSF,
-                $request->id_propriete,
-                $request->id_demandeur
-            );
+            $documentExistant = DocumentGenere::where('type_document', DocumentGenere::TYPE_CSF)
+                ->where('id_demandeur', $request->id_demandeur)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->first();
 
-            if ($documentExistant) {
+            if ($documentExistant && $documentExistant->fileExists()) {
                 return $this->downloadExistingDocument($documentExistant, 'CSF');
             }
 
             return $this->createNewCsf($propriete, $demandeur);
             
         } catch (\Exception $e) {
-            Log::error('Erreur génération/téléchargement CSF', [
+            Log::error('❌ Erreur génération/téléchargement CSF', [
                 'error' => $e->getMessage()
             ]);
             
@@ -272,7 +501,7 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Générer Réquisition
+     * ✅ Générer ou télécharger une réquisition existante
      */
     public function generateRequisition(Request $request)
     {
@@ -283,20 +512,20 @@ class DocumentGenerationController extends Controller
         try {
             $propriete = Propriete::with('dossier.district')->findOrFail($request->id_propriete);
             
-            // ✅ Vérifier si la réquisition existe déjà
-            $documentExistant = DocumentGenere::findExisting(
-                DocumentGenere::TYPE_REQ,
-                $request->id_propriete
-            );
+            $documentExistant = DocumentGenere::where('type_document', DocumentGenere::TYPE_REQ)
+                ->where('id_propriete', $request->id_propriete)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->first();
 
-            if ($documentExistant) {
+            if ($documentExistant && $documentExistant->fileExists()) {
                 return $this->downloadExistingDocument($documentExistant, 'réquisition');
             }
 
             return $this->createNewRequisition($propriete);
             
         } catch (\Exception $e) {
-            Log::error('Erreur génération/téléchargement réquisition', [
+            Log::error('❌ Erreur génération/téléchargement réquisition', [
                 'error' => $e->getMessage()
             ]);
             
@@ -307,47 +536,34 @@ class DocumentGenerationController extends Controller
     // ==================== MÉTHODES PRIVÉES ====================
 
     /**
-     * ✅ NOUVEAU : Génération du chemin de stockage organisé par district et date
+     * Construire le chemin de stockage organisé
      */
     private function buildStoragePath(string $type, Propriete $propriete, ?Demandeur $demandeur = null): string
     {
         $district = $propriete->dossier->district;
         $districtSlug = Str::slug($district->nom_district);
-        $date = Carbon::now()->format('Y/m'); // Année/Mois
+        $date = Carbon::now()->format('Y/m');
         
-        $baseName = '';
         $timestamp = Carbon::now()->format('Ymd_His');
         
-        switch ($type) {
-            case 'RECU':
-                $nomDemandeur = $demandeur ? Str::slug($demandeur->nom_demandeur) : 'DEMANDEUR';
-                $baseName = "{$timestamp}_RECU_{$nomDemandeur}_LOT{$propriete->lot}.docx";
-                break;
-                
-            case 'ADV':
-                $nomDemandeur = $demandeur ? Str::slug($demandeur->nom_demandeur) : 'CONSORTS';
-                $baseName = "{$timestamp}_ADV_{$nomDemandeur}_LOT{$propriete->lot}.docx";
-                break;
-                
-            case 'CSF':
-                $nomDemandeur = $demandeur ? Str::slug($demandeur->nom_demandeur) : 'DEMANDEUR';
-                $baseName = "{$timestamp}_CSF_{$nomDemandeur}_LOT{$propriete->lot}.docx";
-                break;
-                
-            case 'REQ':
-                $baseName = "{$timestamp}_REQ_LOT{$propriete->lot}_TN{$propriete->titre}.docx";
-                break;
-                
-            default:
-                throw new \Exception("Type de document inconnu: {$type}");
-        }
+        $baseName = match($type) {
+            'RECU' => $demandeur 
+                ? "{$timestamp}_RECU_" . Str::slug($demandeur->nom_demandeur) . "_LOT{$propriete->lot}.docx"
+                : "{$timestamp}_RECU_DEMANDEUR_LOT{$propriete->lot}.docx",
+            'ADV' => $demandeur
+                ? "{$timestamp}_ADV_" . Str::slug($demandeur->nom_demandeur) . "_LOT{$propriete->lot}.docx"
+                : "{$timestamp}_ADV_CONSORTS_LOT{$propriete->lot}.docx",
+            'CSF' => $demandeur
+                ? "{$timestamp}_CSF_" . Str::slug($demandeur->nom_demandeur) . "_LOT{$propriete->lot}.docx"
+                : "{$timestamp}_CSF_DEMANDEUR_LOT{$propriete->lot}.docx",
+            'REQ' => "{$timestamp}_REQ_LOT{$propriete->lot}_TN{$propriete->titre}.docx",
+            default => throw new \Exception("Type de document inconnu: {$type}"),
+        };
         
-        // Structure: pieces_jointes/documents/{TYPE}/{DISTRICT}/{ANNEE}/{MOIS}/{fichier}
         return "pieces_jointes/documents/{$type}/{$districtSlug}/{$date}/{$baseName}";
     }
-
     /**
-     * ✅ CORRIGÉ : Sauvegarder avec organisation par district et date
+     * Sauvegarder le document avec vérification renforcée
      */
     private function saveDocumentCopy(string $tempFilePath, string $type, Propriete $propriete, ?Demandeur $demandeur = null): string
     {
@@ -355,49 +571,39 @@ class DocumentGenerationController extends Controller
             $storagePath = $this->buildStoragePath($type, $propriete, $demandeur);
             $directory = dirname($storagePath);
             
-            Log::info('Préparation sauvegarde document', [
+            Log::info('💾 Préparation sauvegarde document', [
                 'type' => $type,
                 'storage_path' => $storagePath,
                 'temp_file_exists' => file_exists($tempFilePath),
                 'temp_file_size' => file_exists($tempFilePath) ? filesize($tempFilePath) : 0,
             ]);
             
-            // ✅ Créer le répertoire avec permissions explicites
             if (!Storage::disk('public')->exists($directory)) {
                 Storage::disk('public')->makeDirectory($directory, 0755, true);
-                Log::info('Répertoire créé', ['directory' => $directory]);
             }
             
-            // ✅ Lire le contenu du fichier temporaire
             $fileContent = file_get_contents($tempFilePath);
             
             if ($fileContent === false) {
-                throw new \Exception("Impossible de lire le fichier temporaire: {$tempFilePath}");
+                throw new \Exception("❌ Impossible de lire le fichier temporaire: {$tempFilePath}");
             }
             
-            Log::info('Contenu du fichier lu', [
-                'content_length' => strlen($fileContent),
-            ]);
-            
-            // ✅ Écrire le fichier dans le storage
             $written = Storage::disk('public')->put($storagePath, $fileContent);
             
             if (!$written) {
-                throw new \Exception("Échec de l'écriture du fichier dans le storage: {$storagePath}");
+                throw new \Exception("❌ Échec de l'écriture dans le storage: {$storagePath}");
             }
             
-            // ✅ Vérifier que le fichier existe bien
             if (!Storage::disk('public')->exists($storagePath)) {
-                throw new \Exception("Le fichier n'existe pas après sauvegarde: {$storagePath}");
+                throw new \Exception("❌ Le fichier n'existe pas après sauvegarde: {$storagePath}");
             }
             
-            // ✅ Définir les permissions
             $fullPath = Storage::disk('public')->path($storagePath);
             if (file_exists($fullPath)) {
                 chmod($fullPath, 0644);
             }
             
-            Log::info('Document sauvegardé avec succès', [
+            Log::info('✅ Document sauvegardé avec succès', [
                 'type' => $type,
                 'path' => $storagePath,
                 'size' => Storage::disk('public')->size($storagePath),
@@ -407,7 +613,7 @@ class DocumentGenerationController extends Controller
             return $storagePath;
             
         } catch (\Exception $e) {
-            Log::error('ERREUR sauvegarde document', [
+            Log::error('❌ ERREUR sauvegarde document', [
                 'error' => $e->getMessage(),
                 'temp_file' => $tempFilePath,
                 'storage_path' => $storagePath ?? 'non défini',
@@ -418,13 +624,12 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * ✅ CORRIGÉ : Générer numéro de reçu avec ID district
+     * Générer numéro de reçu avec ID district
      */
-   private function generateNumeroRecu($idDistrict): string
+    private function generateNumeroRecu($idDistrict): string
     {
         $year = Carbon::now()->format('y');
         
-        // ✅ Compter uniquement pour ce district et cette année
         $count = DocumentGenere::where('type_document', DocumentGenere::TYPE_RECU)
             ->where('id_district', $idDistrict)
             ->whereYear('generated_at', Carbon::now()->year)
@@ -432,7 +637,7 @@ class DocumentGenerationController extends Controller
         
         $numero = sprintf('%03d/%s', $count, $year);
         
-        Log::info('Numéro de reçu généré', [
+        Log::info('📊 Numéro de reçu généré', [
             'numero' => $numero,
             'id_district' => $idDistrict,
             'count' => $count,
@@ -443,7 +648,61 @@ class DocumentGenerationController extends Controller
     }
 
     /**
-     * Créer un nouveau reçu
+     * ✅ Télécharger un document existant avec incrémentation du compteur
+     */
+    private function downloadExistingDocument(DocumentGenere $document, string $typeName)
+    {
+        try {
+            Log::info('📥 Téléchargement document existant', [
+                'document_id' => $document->id,
+                'type' => $typeName,
+                'file_path' => $document->file_path,
+            ]);
+            
+            if (!$document->fileExists()) {
+                Log::warning('⚠️ Fichier introuvable, régénération', [
+                    'document_id' => $document->id,
+                ]);
+                return $this->regenerateDocument($document);
+            }
+            
+            // ✅ Incrémenter le compteur de téléchargements
+            $document->incrementDownloadCount();
+            
+            ActivityLogger::logDocumentDownload(
+                $this->getActivityLogType($document->type_document),
+                $document->id,
+                [
+                    'numero_document' => $document->numero_document,
+                    'action_type' => 'download_existing',
+                    'download_count' => $document->download_count,
+                    'id_district' => $document->id_district,
+                ]
+            );
+            
+            Log::info('✅ Téléchargement réussi', [
+                'document_id' => $document->id,
+                'download_count' => $document->download_count,
+            ]);
+            
+            return response()->download($document->full_path, $document->nom_fichier, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'Content-Disposition' => 'attachment; filename="' . $document->nom_fichier . '"',
+                'Content-Length' => filesize($document->full_path),
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur téléchargement', [
+                'error' => $e->getMessage(),
+                'document_id' => $document->id,
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * ✅ Créer un nouveau reçu
      */
     private function createNewRecu($propriete, $demandeur)
     {
@@ -452,58 +711,37 @@ class DocumentGenerationController extends Controller
         try {
             $district = $propriete->dossier->district;
             
-            Log::info('Début génération nouveau reçu', [
-                'propriete_id' => $propriete->id,
-                'demandeur_id' => $demandeur->id,
-                'district' => $district->nom_district,
-                'id_district' => $propriete->dossier->id_district,
-            ]);
+            // Double vérification
+            $existingDoc = DocumentGenere::where('type_document', DocumentGenere::TYPE_RECU)
+                ->where('id_propriete', $propriete->id)
+                ->where('id_demandeur', $demandeur->id)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->lockForUpdate()
+                ->first();
 
-            // ✅ Calculer le prix
+            if ($existingDoc) {
+                DB::rollBack();
+                return $this->downloadExistingDocument($existingDoc, 'reçu');
+            }
+
+            // Calculer le prix et générer le numéro
             $prix = $this->getPrixFromDistrict($propriete);
             $prixTotal = (int) ($prix * $propriete->contenance);
-            
-            Log::info('Prix calculé', [
-                'prix_unitaire' => $prix,
-                'contenance' => $propriete->contenance,
-                'prix_total' => $prixTotal,
-            ]);
-            
-            // ✅ Générer le numéro avec l'ID du district
             $numeroRecu = $this->generateNumeroRecu($propriete->dossier->id_district);
             
-            Log::info('Numéro de reçu généré', [
-                'numero' => $numeroRecu,
-                'id_district' => $propriete->dossier->id_district,
-            ]);
-            
-            // ✅ Créer le fichier Word temporaire
+            // Créer le fichier Word
             $tempFilePath = $this->createRecu($propriete, $demandeur, $numeroRecu, $prixTotal);
             
             if (!file_exists($tempFilePath)) {
-                throw new \Exception("Échec de création du fichier Word temporaire");
+                throw new \Exception("Fichier Word non créé");
             }
             
-            Log::info('Fichier Word créé', [
-                'temp_path' => $tempFilePath,
-                'file_size' => filesize($tempFilePath),
-            ]);
-            
-            // ✅ Sauvegarder avec organisation par district
+            // Sauvegarder
             $savedPath = $this->saveDocumentCopy($tempFilePath, 'RECU', $propriete, $demandeur);
-            
-            if (!Storage::disk('public')->exists($savedPath)) {
-                throw new \Exception("Le fichier n'a pas été sauvegardé correctement: {$savedPath}");
-            }
-            
-            Log::info('Fichier sauvegardé', [
-                'saved_path' => $savedPath,
-                'storage_size' => Storage::disk('public')->size($savedPath),
-            ]);
-            
             $nomFichier = basename($savedPath);
             
-            // ✅ Enregistrer dans documents_generes
+            // Enregistrer
             $document = DocumentGenere::create([
                 'type_document' => DocumentGenere::TYPE_RECU,
                 'id_propriete' => $propriete->id,
@@ -521,60 +759,21 @@ class DocumentGenerationController extends Controller
                 'status' => DocumentGenere::STATUS_ACTIVE,
             ]);
             
-            Log::info('Document enregistré en base', [
-                'document_id' => $document->id,
-                'file_path' => $document->file_path,
-            ]);
-            
-            // ✅ Compatibilité avec l'ancienne table
-            RecuPaiement::create([
-                'id_propriete' => $propriete->id,
-                'id_demandeur' => $demandeur->id,
-                'id_user' => Auth::id(),
-                'numero_recu' => $numeroRecu,
-                'montant' => $prixTotal,
-                'date_recu' => Carbon::now(),
-                'file_path' => $savedPath,
-                'status' => 'confirmed',
-            ]);
-            
             DB::commit();
             
-            // ✅ Logger l'activité
             ActivityLogger::logDocumentGeneration(ActivityLog::DOC_RECU, $document->id, [
                 'numero_recu' => $numeroRecu,
                 'propriete_id' => $propriete->id,
                 'demandeur_id' => $demandeur->id,
                 'montant' => $prixTotal,
-                'lot' => $propriete->lot,
-                'id_district' => $propriete->dossier->id_district,
-                'district_nom' => $district->nom_district,
             ]);
             
-            Log::info('Reçu généré avec succès, préparation du téléchargement', [
-                'document_id' => $document->id,
-                'temp_file_exists' => file_exists($tempFilePath),
-            ]);
-            
-            // ✅ IMPORTANT : Retourner le téléchargement avec en-têtes explicites
             return response()->download($tempFilePath, $nomFichier, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'Content-Disposition' => 'attachment; filename="' . $nomFichier . '"',
-                'Cache-Control' => 'no-cache, must-revalidate',
             ])->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             DB::rollBack();
-            
-            Log::error('ERREUR lors de la création du reçu', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-                'propriete_id' => $propriete->id,
-                'district' => $propriete->dossier->district->nom_district ?? 'Inconnu',
-            ]);
-            
             throw $e;
         }
     }
@@ -587,10 +786,26 @@ class DocumentGenerationController extends Controller
         DB::beginTransaction();
 
         try {
+            $district = $propriete->dossier->district;
+            
+            // ✅ Double vérification avec lock
+            $existingDoc = DocumentGenere::where('type_document', DocumentGenere::TYPE_ADV)
+                ->where('id_propriete', $propriete->id)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingDoc) {
+                DB::rollBack();
+                return $this->downloadExistingDocument($existingDoc, 'acte de vente');
+            }
+
             // Récupérer TOUS les demandeurs liés
             $tousLesDemandeurs = Demander::with('demandeur')
                 ->where('id_propriete', $propriete->id)
                 ->where('status', 'active')
+                ->orderBy('ordre', 'asc')
                 ->get();
             
             $hasConsorts = $tousLesDemandeurs->count() > 1;
@@ -602,6 +817,10 @@ class DocumentGenerationController extends Controller
             
             // Générer le fichier Word
             $tempFilePath = $this->createActeVente($propriete, $tousLesDemandeurs, $hasConsorts);
+            
+            if (!file_exists($tempFilePath)) {
+                throw new \Exception("Fichier Word non créé");
+            }
             
             // ✅ Sauvegarder avec organisation
             $savedPath = $this->saveDocumentCopy($tempFilePath, 'ADV', $propriete, $demandeursPrincipal->demandeur);
@@ -635,7 +854,9 @@ class DocumentGenerationController extends Controller
                 'district_nom' => $propriete->dossier->district->nom_district,
             ]);
             
-            return response()->download($tempFilePath)->deleteFileAfterSend(true);
+            return response()->download($tempFilePath, $nomFichier, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ])->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             DB::rollBack();
@@ -651,18 +872,43 @@ class DocumentGenerationController extends Controller
         DB::beginTransaction();
 
         try {
+            $district = $propriete->dossier->district;
+            
+            // ✅ Double vérification avec lock
+            $existingDoc = DocumentGenere::where('type_document', DocumentGenere::TYPE_CSF)
+                ->where('id_demandeur', $demandeur->id)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingDoc) {
+                DB::rollBack();
+                return $this->downloadExistingDocument($existingDoc, 'CSF');
+            }
+
+            // Générer le fichier Word
             $tempFilePath = $this->createCsf($demandeur, $propriete);
+            
+            if (!file_exists($tempFilePath)) {
+                throw new \Exception("Fichier Word non créé");
+            }
+            
+            // Sauvegarder
             $savedPath = $this->saveDocumentCopy($tempFilePath, 'CSF', $propriete, $demandeur);
             $nomFichier = basename($savedPath);
             
+            // Enregistrer
             $document = DocumentGenere::create([
                 'type_document' => DocumentGenere::TYPE_CSF,
                 'id_propriete' => $propriete->id,
                 'id_demandeur' => $demandeur->id,
                 'id_dossier' => $propriete->id_dossier,
                 'id_district' => $propriete->dossier->id_district,
+                'numero_document' => null,
                 'file_path' => $savedPath,
                 'nom_fichier' => $nomFichier,
+                'has_consorts' => false,
                 'generated_by' => Auth::id(),
                 'generated_at' => now(),
                 'status' => DocumentGenere::STATUS_ACTIVE,
@@ -678,7 +924,9 @@ class DocumentGenerationController extends Controller
                 'district_nom' => $propriete->dossier->district->nom_district,
             ]);
             
-            return response()->download($tempFilePath)->deleteFileAfterSend(true);
+            return response()->download($tempFilePath, $nomFichier, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ])->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             DB::rollBack();
@@ -694,18 +942,43 @@ class DocumentGenerationController extends Controller
         DB::beginTransaction();
 
         try {
+            $district = $propriete->dossier->district;
+            
+            // ✅ Double vérification avec lock
+            $existingDoc = DocumentGenere::where('type_document', DocumentGenere::TYPE_REQ)
+                ->where('id_propriete', $propriete->id)
+                ->where('id_district', $propriete->dossier->id_district)
+                ->where('status', DocumentGenere::STATUS_ACTIVE)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingDoc) {
+                DB::rollBack();
+                return $this->downloadExistingDocument($existingDoc, 'réquisition');
+            }
+
+            // Générer le fichier Word
             $tempFilePath = $this->createRequisition($propriete);
+            
+            if (!file_exists($tempFilePath)) {
+                throw new \Exception("Fichier Word non créé");
+            }
+            
+            // Sauvegarder
             $savedPath = $this->saveDocumentCopy($tempFilePath, 'REQ', $propriete);
             $nomFichier = basename($savedPath);
             
+            // Enregistrer
             $document = DocumentGenere::create([
                 'type_document' => DocumentGenere::TYPE_REQ,
                 'id_propriete' => $propriete->id,
+                'id_demandeur' => null,
                 'id_dossier' => $propriete->id_dossier,
                 'id_district' => $propriete->dossier->id_district,
                 'numero_document' => $propriete->numero_requisition,
                 'file_path' => $savedPath,
                 'nom_fichier' => $nomFichier,
+                'has_consorts' => false,
                 'generated_by' => Auth::id(),
                 'generated_at' => now(),
                 'status' => DocumentGenere::STATUS_ACTIVE,
@@ -722,7 +995,9 @@ class DocumentGenerationController extends Controller
                 'district_nom' => $propriete->dossier->district->nom_district,
             ]);
             
-            return response()->download($tempFilePath)->deleteFileAfterSend(true);
+            return response()->download($tempFilePath, $nomFichier, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ])->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             DB::rollBack();
@@ -733,58 +1008,58 @@ class DocumentGenerationController extends Controller
     /**
      * Télécharger un document existant
      */
-    private function downloadExistingDocument(DocumentGenere $document, string $typeName)
-    {
-        try {
-            Log::info('Tentative téléchargement document existant', [
-                'document_id' => $document->id,
-                'file_path' => $document->file_path,
-                'type' => $typeName,
-            ]);
+    // private function downloadExistingDocument(DocumentGenere $document, string $typeName)
+    // {
+    //     try {
+    //         Log::info('Tentative téléchargement document existant', [
+    //             'document_id' => $document->id,
+    //             'file_path' => $document->file_path,
+    //             'type' => $typeName,
+    //         ]);
             
-            if (!$document->fileExists()) {
-                Log::warning('Fichier introuvable, régénération nécessaire', [
-                    'document_id' => $document->id,
-                    'file_path' => $document->file_path,
-                ]);
+    //         if (!$document->fileExists()) {
+    //             Log::warning('Fichier introuvable, régénération nécessaire', [
+    //                 'document_id' => $document->id,
+    //                 'file_path' => $document->file_path,
+    //             ]);
                 
-                return $this->regenerateDocument($document);
-            }
+    //             return $this->regenerateDocument($document);
+    //         }
             
-            $document->incrementDownloadCount();
+    //         $document->incrementDownloadCount();
             
-            ActivityLogger::logDocumentDownload(
-                $this->getActivityLogType($document->type_document),
-                $document->id,
-                [
-                    'numero_document' => $document->numero_document,
-                    'action_type' => 'download_existing',
-                    'download_count' => $document->download_count,
-                    'id_district' => $document->id_district,
-                ]
-            );
+    //         ActivityLogger::logDocumentDownload(
+    //             $this->getActivityLogType($document->type_document),
+    //             $document->id,
+    //             [
+    //                 'numero_document' => $document->numero_document,
+    //                 'action_type' => 'download_existing',
+    //                 'download_count' => $document->download_count,
+    //                 'id_district' => $document->id_district,
+    //             ]
+    //         );
             
-            Log::info('Téléchargement document existant', [
-                'document_id' => $document->id,
-                'nom_fichier' => $document->nom_fichier,
-                'file_exists' => file_exists($document->full_path),
-            ]);
+    //         Log::info('Téléchargement document existant', [
+    //             'document_id' => $document->id,
+    //             'nom_fichier' => $document->nom_fichier,
+    //             'file_exists' => file_exists($document->full_path),
+    //         ]);
             
-            return response()->download($document->full_path, $document->nom_fichier, [
-                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'Content-Disposition' => 'attachment; filename="' . $document->nom_fichier . '"',
-                'Cache-Control' => 'no-cache, must-revalidate',
-            ]);
+    //         return response()->download($document->full_path, $document->nom_fichier, [
+    //             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    //             'Content-Disposition' => 'attachment; filename="' . $document->nom_fichier . '"',
+    //             'Cache-Control' => 'no-cache, must-revalidate',
+    //         ]);
             
-        } catch (\Exception $e) {
-            Log::error('ERREUR téléchargement document existant', [
-                'error' => $e->getMessage(),
-                'document_id' => $document->id,
-            ]);
+    //     } catch (\Exception $e) {
+    //         Log::error('ERREUR téléchargement document existant', [
+    //             'error' => $e->getMessage(),
+    //             'document_id' => $document->id,
+    //         ]);
             
-            throw $e;
-        }
-    }
+    //         throw $e;
+    //     }
+    // }
 
     /**
      * Régénérer un document si le fichier est perdu
@@ -840,9 +1115,6 @@ class DocumentGenerationController extends Controller
         }
     }
 
-    /**
-     * Helper pour obtenir le type de log
-     */
     private function getActivityLogType(string $docType): string
     {
         return match($docType) {
