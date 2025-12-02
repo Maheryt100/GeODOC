@@ -69,6 +69,13 @@ export default function DossierInfoSection({
     const duration = getDurationInDays();
     const daysSinceOpening = getDaysSinceOpening();
 
+    // ✅ DEBUG : Afficher la valeur de can_close
+    console.log('🔍 DossierInfoSection - Permissions:', {
+        can_close: dossier.can_close,
+        can_modify: dossier.can_modify,
+        is_closed: dossier.is_closed
+    });
+
     return (
         <div className="space-y-6">
             {/* ✅ Alerte si dossier fermé - AVEC BOUTON ROUVRIR */}
@@ -96,8 +103,8 @@ export default function DossierInfoSection({
                                     </p>
                                 </div>
                                 
-                                {/* ✅ BOUTON ROUVRIR dans l'alerte */}
-                                {dossier.can_close && (
+                                {/* ✅ BOUTON ROUVRIR dans l'alerte - TOUJOURS VISIBLE si permission */}
+                                {dossier.can_close === true && (
                                     <Button
                                         variant="default"
                                         size="sm"
@@ -147,8 +154,8 @@ export default function DossierInfoSection({
 
                         {/* ✅ Boutons d'action - AVEC BOUTON FERMER/ROUVRIR PRINCIPAL */}
                         <div className="flex flex-wrap gap-2">
-                            {/* ✅ BOUTON FERMER/ROUVRIR - TOUJOURS VISIBLE SI PERMISSION */}
-                            {dossier.can_close && (
+                            {/* ✅ BOUTON FERMER/ROUVRIR - VISIBLE SI PERMISSION */}
+                            {dossier.can_close === true && (
                                 <Button
                                     variant={dossier.is_closed ? "default" : "destructive"}
                                     size="sm"

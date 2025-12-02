@@ -1,3 +1,4 @@
+// documents/tabs/ActeVenteTab.tsx
 import React, { useState, useMemo } from 'react';
 import { router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import {
     FileText, Download, AlertCircle, Users, CheckCircle2, 
-    Lock, Receipt, Clock, Eye, Loader2, Crown, FileCheck
+    Lock, Receipt, Clock, Eye, Loader2, Crown, FileCheck, MapPin, Coins
 } from 'lucide-react';
 import { Demandeur, Dossier } from '@/types';
 import { ProprieteWithDemandeurs, DocumentGenere } from '../types';
@@ -34,26 +35,23 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
 
     const selectedProprieteData = proprietes.find(p => p.id === Number(selectedPropriete));
 
-    // ✅ Récupérer automatiquement le demandeur principal
+    // Récupérer automatiquement le demandeur principal
     const demandeurPrincipal = useMemo(() => {
         if (!selectedProprieteData?.demandeurs_lies) return null;
         return getDemandeurPrincipal(selectedProprieteData.demandeurs_lies);
     }, [selectedProprieteData]);
 
-    // ✅ Récupérer les consorts
     const consorts = useMemo(() => {
         if (!selectedProprieteData?.demandeurs_lies) return [];
         return getConsorts(selectedProprieteData.demandeurs_lies);
     }, [selectedProprieteData]);
 
-    // ✅ Vérifier si le principal est complet
     const isPrincipalComplete = useMemo(() => {
         if (!demandeurPrincipal) return false;
         const demandeurData = demandeurs.find(d => d.id === demandeurPrincipal.id);
         return demandeurData ? isDemandeurComplete(demandeurData) : false;
     }, [demandeurPrincipal, demandeurs]);
 
-    // ✅ NOUVEAU : Vérifier l'existence des documents
     const documentRecu = selectedProprieteData?.document_recu;
     const documentAdv = selectedProprieteData?.document_adv;
     const hasRecu = !!documentRecu;
@@ -79,7 +77,22 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
         'acte_vente'
     );
 
-    // ✅ NOUVEAU : Télécharger un document existant
+    // ✅ Formater la contenance
+    const formatContenance = (contenance: number): string => {
+        const hectares = Math.floor(contenance / 10000);
+        const reste = contenance % 10000;
+        const ares = Math.floor(reste / 100);
+        const centiares = reste % 100;
+        
+        const parts = [];
+        if (hectares > 0) parts.push(`${hectares}Ha`);
+        if (ares > 0) parts.push(`${ares}A`);
+        parts.push(`${centiares}Ca`);
+        
+        return parts.join(' ');
+    };
+
+    // ✅ CORRIGÉ : preserveUrl
     const handleDownloadExisting = async (document: DocumentGenere, typeName: string) => {
         if (isGenerating) return;
         
@@ -90,11 +103,10 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
             
             toast.success(`Téléchargement du ${typeName} en cours...`);
             
-            // Rafraîchir pour mettre à jour le compteur
             setTimeout(() => {
                 router.reload({ 
                     only: ['proprietes'],
-                    preserveScroll: true,
+                    preserveUrl: true, // ✅ CORRIGÉ
                     onFinish: () => setIsGenerating(false)
                 });
             }, 1000);
@@ -106,7 +118,7 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
         }
     };
 
-    // ✅ NOUVEAU : Générer un nouveau document
+    // ✅ CORRIGÉ : preserveUrl
     const handleGenerate = async (type: 'recu' | 'acte_vente') => {
         if (!selectedPropriete || !demandeurPrincipal) {
             toast.warning('Sélection incomplète');
@@ -144,11 +156,10 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
             await new Promise(resolve => setTimeout(resolve, 500));
             window.location.href = url;
             
-            // Rafraîchir après génération
             setTimeout(() => {
                 router.reload({ 
                     only: ['proprietes'],
-                    preserveScroll: true,
+                    preserveUrl: true, // ✅ CORRIGÉ
                     onSuccess: () => {
                         toast.success(`${type === 'recu' ? 'Reçu' : 'Acte de vente'} généré avec succès !`);
                         setIsGenerating(false);
@@ -168,26 +179,26 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
     };
 
     return (
-        <Card>
-            <CardHeader>
+        <Card className="border-0 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-violet-50/50 to-purple-50/50 dark:from-violet-950/20 dark:to-purple-950/20">
                 <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
+                    <FileText className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                     Acte de Vente
                 </CardTitle>
                 <CardDescription>
                     Le demandeur principal (ordre = 1) sera automatiquement utilisé
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6 p-6">
                 {/* Sélection Propriété */}
                 <div className="space-y-2">
-                    <Label>Propriété</Label>
+                    <Label className="text-sm font-semibold">Propriété</Label>
                     <Select 
                         value={selectedPropriete} 
                         onValueChange={setSelectedPropriete}
                         disabled={isGenerating}
                     >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-auto min-h-[60px]">
                             <SelectValue placeholder="Sélectionner une propriété" />
                         </SelectTrigger>
                         <SelectContent>
@@ -198,34 +209,43 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
                                 
                                 return (
                                     <SelectItem key={prop.id} value={String(prop.id)}>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium">Lot {prop.lot} - TN°{prop.titre}</span>
+                                        <div className="flex flex-col gap-2 py-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Badge variant="outline" className="font-mono">
+                                                    Lot {prop.lot}
+                                                </Badge>
+                                                <Badge variant="outline">
+                                                    TN°{prop.titre}
+                                                </Badge>
                                                 {prop.document_recu && (
-                                                    <Badge variant="default" className="bg-green-500">
+                                                    <Badge variant="default" className="bg-green-500 text-xs">
                                                         <CheckCircle2 className="h-3 w-3 mr-1" />
                                                         Reçu
                                                     </Badge>
                                                 )}
                                                 {prop.document_adv && (
-                                                    <Badge variant="default" className="bg-blue-500">
+                                                    <Badge variant="default" className="bg-blue-500 text-xs">
                                                         <FileCheck className="h-3 w-3 mr-1" />
                                                         ADV
                                                     </Badge>
                                                 )}
                                                 {!isComplete && (
-                                                    <AlertCircle className="h-3 w-3 text-red-500" />
+                                                    <Badge variant="destructive" className="text-xs">
+                                                        <AlertCircle className="h-3 w-3 mr-1" />
+                                                        Incomplet
+                                                    </Badge>
                                                 )}
                                             </div>
                                             {principal && (
-                                                <div className="text-xs text-muted-foreground">
+                                                <div className="text-xs text-muted-foreground space-y-1">
                                                     <div className="flex items-center gap-1">
-                                                        <Crown className="h-3 w-3" />
-                                                        Principal: {principal.nom} {principal.prenom}
+                                                        <Crown className="h-3 w-3 text-yellow-500" />
+                                                        <span className="font-medium">Principal:</span> {principal.nom} {principal.prenom}
                                                     </div>
                                                     {consortsList.length > 0 && (
-                                                        <div className="ml-4">
-                                                            Consorts: {consortsList.map(c => `${c.nom} ${c.prenom}`).join(', ')}
+                                                        <div className="flex items-center gap-1 ml-4">
+                                                            <Users className="h-3 w-3" />
+                                                            <span>+ {consortsList.length} consort{consortsList.length > 1 ? 's' : ''}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -238,37 +258,110 @@ export default function ActeVenteTab({ proprietes, demandeurs, dossier }: ActeVe
                     </Select>
                 </div>
 
-                {selectedPropriete && (
-                    <>
-                        {/* Affichage de la hiérarchie */}
-                        {demandeurPrincipal && (
-                            <Alert className="bg-blue-500/10 border-blue-500/50">
-                                <Crown className="h-4 w-4 text-blue-500" />
-                                <AlertDescription className="text-blue-700 dark:text-blue-300">
-                                    <div className="space-y-2">
-                                        <div className="font-semibold">
-                                            Demandeur principal : {demandeurPrincipal.nom} {demandeurPrincipal.prenom}
-                                        </div>
-                                        {consorts.length > 0 && (
-                                            <div className="text-sm">
-                                                <div className="font-medium mb-1">Consorts ({consorts.length}) :</div>
-                                                <ul className="list-disc list-inside">
-                                                    {consorts.map((c, idx) => (
-                                                        <li key={idx}>
-                                                            {c.nom} {c.prenom} (ordre {c.ordre})
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                {/* ✅ Affichage amélioré de la propriété sélectionnée */}
+                {selectedPropriete && selectedProprieteData && (
+                    <Card className="border-2 border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/20">
+                        <CardContent className="p-4 space-y-4">
+                            {/* Infos propriété */}
+                            <div className="flex items-start gap-3">
+                                <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 flex-shrink-0 mt-1" />
+                                <div className="space-y-2 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Badge className="bg-violet-600 text-white">
+                                            Lot {selectedProprieteData.lot}
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            TN°{selectedProprieteData.titre}
+                                        </Badge>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                            <span className="text-muted-foreground">Contenance:</span>
+                                            <div className="font-semibold">
+                                                {formatContenance(selectedProprieteData.contenance)}
                                             </div>
-                                        )}
-                                        <div className="text-xs opacity-75">
-                                            Le document sera généré automatiquement avec cette hiérarchie
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Nature:</span>
+                                            <div className="font-semibold capitalize">
+                                                {selectedProprieteData.nature}
+                                            </div>
                                         </div>
                                     </div>
-                                </AlertDescription>
-                            </Alert>
-                        )}
 
+                                    <div className="text-sm">
+                                        <span className="text-muted-foreground">Propriétaire:</span>
+                                        <div className="font-medium">{selectedProprieteData.proprietaire}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Hiérarchie des demandeurs */}
+                            {demandeurPrincipal && (
+                                <div className="pt-3 border-t border-violet-200 dark:border-violet-800">
+                                    <div className="flex items-start gap-3">
+                                        <Users className="h-5 w-5 text-violet-600 dark:text-violet-400 flex-shrink-0 mt-1" />
+                                        <div className="space-y-2 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Badge className="bg-yellow-500 text-white">
+                                                    <Crown className="h-3 w-3 mr-1" />
+                                                    Principal
+                                                </Badge>
+                                                <span className="font-semibold">
+                                                    {demandeurPrincipal.nom} {demandeurPrincipal.prenom}
+                                                </span>
+                                            </div>
+                                            
+                                            {consorts.length > 0 && (
+                                                <div className="text-sm space-y-1 ml-4">
+                                                    <div className="font-medium text-muted-foreground">
+                                                        Consorts ({consorts.length}) :
+                                                    </div>
+                                                    <ul className="space-y-1">
+                                                        {consorts.map((c, idx) => (
+                                                            <li key={idx} className="flex items-center gap-2">
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    {c.ordre}
+                                                                </Badge>
+                                                                <span>{c.nom} {c.prenom}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            <div className="text-xs text-muted-foreground">
+                                                {consorts.length > 0 
+                                                    ? `Document généré avec ${consorts.length + 1} demandeurs`
+                                                    : 'Document généré avec un seul demandeur'
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Prix total si disponible */}
+                            {selectedProprieteData.demandeurs_lies && selectedProprieteData.demandeurs_lies.length > 0 && (
+                                <div className="pt-3 border-t border-violet-200 dark:border-violet-800">
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Coins className="h-4 w-4 text-violet-600" />
+                                        <span className="text-muted-foreground">Prix total:</span>
+                                        <span className="font-semibold">
+                                            {new Intl.NumberFormat('fr-FR').format(
+                                                selectedProprieteData.demandeurs_lies[0]?.total_prix || 0
+                                            )} Ar
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {selectedPropriete && (
+                    <>
                         {/* Statut du reçu */}
                         {!hasRecu ? (
                             <Alert className="bg-amber-500/10 border-amber-500/50">

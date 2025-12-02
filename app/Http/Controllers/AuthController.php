@@ -11,18 +11,13 @@ use App\Services\ActivityLogger;
 
 class AuthController extends Controller
 {
-     use AuthorizesRequests;
-    /**
-     * Affiche le formulaire de connexion
-     */
+    use AuthorizesRequests;
+    
     public function showLoginForm()
     {
         return Inertia::render('Auth/Login');
     }
 
-    /**
-     * Traite la connexion utilisateur
-     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -61,8 +56,7 @@ class AuthController extends Controller
             // Régénère la session
             $request->session()->regenerate();
 
-            // ✅ CORRECTION: Tous les rôles vont au même dashboard
-            // Le middleware district.scope s'occupera du filtrage
+            // ✅ Tous les rôles vont au même dashboard
             return redirect()->intended('/dashboard');
         }
 
@@ -71,14 +65,10 @@ class AuthController extends Controller
         ])->onlyInput('email');
     }
 
-    /**
-     * Déconnexion utilisateur
-     */
     public function logout(Request $request)
     {
-          $user = Auth::user();
+        $user = Auth::user();
         
-        // ✅ Logger la déconnexion AVANT de déconnecter
         if ($user) {
             ActivityLogger::logLogout($user);
         }
@@ -90,9 +80,6 @@ class AuthController extends Controller
         return redirect('/login')->with('success', 'Déconnexion réussie');
     }
 
-    /**
-     * Affiche le profil utilisateur
-     */
     public function profile()
     {
         return view('auth.profile', [
@@ -100,20 +87,21 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Mise à jour du profil et du district/role (super admin uniquement)
-     */
     public function update(Request $request, $id)
     {
         $user = User::findOrFail($id);
 
-        // Seul le super admin peut modifier le district ou le rôle
         $this->authorize('manage-users', User::class);
 
         $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users,email,' . $user->id,
-            'role'       => 'required|in:super_admin,admin_district,user_district',
+            'role'       => 'required|in:' . implode(',', [
+                User::ROLE_SUPER_ADMIN,
+                User::ROLE_CENTRAL_USER,
+                User::ROLE_ADMIN_DISTRICT,
+                User::ROLE_USER_DISTRICT
+            ]),
             'id_district'=> 'nullable|exists:districts,id'
         ]);
 
@@ -122,7 +110,7 @@ class AuthController extends Controller
         $user->role = $request->role;
 
         // Affectation du district si rôle district
-        if (in_array($request->role, ['admin_district', 'user_district'])) {
+        if (in_array($request->role, [User::ROLE_ADMIN_DISTRICT, User::ROLE_USER_DISTRICT])) {
             $user->id_district = $request->id_district;
         } else {
             $user->id_district = null;

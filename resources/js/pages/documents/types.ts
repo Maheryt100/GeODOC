@@ -56,6 +56,17 @@ export interface DemandeurLie {
 }
 
 /**
+ * ✅ NOUVEAU : Demandeur avec ordre pour affichage
+ */
+export interface DemandeurWithOrder {
+    demandeur: Demandeur;
+    ordre: number;
+    status: 'active' | 'archive';
+    total_prix: number;
+    is_principal?: boolean;
+}
+
+/**
  * ✅ Propriété avec ses demandeurs associés
  */
 export interface ProprieteWithDemandeurs extends Propriete {
@@ -63,7 +74,7 @@ export interface ProprieteWithDemandeurs extends Propriete {
     has_recu?: boolean;
     dernier_recu?: RecuPaiement | null;
     
-    // ✅ NOUVEAU : Documents générés
+    // ✅ Documents générés
     document_recu?: DocumentGenere | null;
     document_adv?: DocumentGenere | null;
     document_csf?: DocumentGenere | null;

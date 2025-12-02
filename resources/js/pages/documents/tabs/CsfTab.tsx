@@ -1,3 +1,4 @@
+// documents/tabs/CsfTab.tsx
 import React, { useState, useMemo } from 'react';
 import { router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { FileCheck, Download, AlertCircle, Info, Crown, Users, Loader2, Eye } from 'lucide-react';
+import { FileCheck, Download, AlertCircle, Info, Crown, Users, Loader2, Eye, MapPin } from 'lucide-react';
 import { Demandeur, Dossier } from '@/types';
 import { ProprieteWithDemandeurs, DemandeurWithCSF, DocumentGenere } from '../types';
 import { 
@@ -31,7 +32,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
 
     const selectedProprieteData = proprietes.find(p => p.id === Number(csfPropriete));
 
-    // ✅ Filtrer les demandeurs selon la propriété sélectionnée
+    // Filtrer les demandeurs selon la propriété sélectionnée
     const demandeursFiltered = useMemo(() => {
         if (!csfPropriete || !selectedProprieteData) return [];
         
@@ -39,7 +40,6 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
         return demandeurs.filter(d => demandeursLiesIds.includes(d.id));
     }, [csfPropriete, selectedProprieteData, demandeurs]);
 
-    // ✅ NOUVEAU : Récupérer le document CSF du demandeur sélectionné
     const selectedDemandeurData = demandeurs.find(d => d.id === Number(csfDemandeur));
     const documentCsf = selectedDemandeurData ? (selectedDemandeurData as DemandeurWithCSF).document_csf : null;
     const hasCsf = !!documentCsf;
@@ -52,7 +52,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
         return isProprieteComplete(prop) && isDemandeurComplete(dem);
     };
 
-    // ✅ NOUVEAU : Télécharger un CSF existant
+    // ✅ CORRIGÉ : preserveUrl
     const handleDownloadExisting = async (document: DocumentGenere) => {
         if (isGenerating) return;
         
@@ -66,7 +66,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
             setTimeout(() => {
                 router.reload({ 
                     only: ['demandeurs'],
-                    preserveScroll: true,
+                    preserveUrl: true, // ✅ CORRIGÉ
                     onFinish: () => setIsGenerating(false)
                 });
             }, 1000);
@@ -78,7 +78,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
         }
     };
 
-    // ✅ NOUVEAU : Générer un nouveau CSF
+    // ✅ CORRIGÉ : preserveUrl
     const handleGenerate = () => {
         if (!csfPropriete || !csfDemandeur) {
             toast.warning('Veuillez sélectionner une propriété et un demandeur');
@@ -106,7 +106,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
             setTimeout(() => {
                 router.reload({ 
                     only: ['demandeurs'],
-                    preserveScroll: true,
+                    preserveUrl: true, // ✅ CORRIGÉ
                     onSuccess: () => {
                         toast.success('CSF généré avec succès !');
                         setIsGenerating(false);
@@ -130,7 +130,6 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
         setCsfDemandeur('');
     };
 
-    // ✅ Récupérer demandeur principal et consorts
     const demandeurPrincipal = useMemo(() => {
         if (!selectedProprieteData) return null;
         return getDemandeurPrincipal(selectedProprieteData.demandeurs_lies || []);
@@ -141,27 +140,42 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
         return getConsorts(selectedProprieteData.demandeurs_lies || []);
     }, [selectedProprieteData]);
 
+    // ✅ Formater la contenance
+    const formatContenance = (contenance: number): string => {
+        const hectares = Math.floor(contenance / 10000);
+        const reste = contenance % 10000;
+        const ares = Math.floor(reste / 100);
+        const centiares = reste % 100;
+        
+        const parts = [];
+        if (hectares > 0) parts.push(`${hectares}Ha`);
+        if (ares > 0) parts.push(`${ares}A`);
+        parts.push(`${centiares}Ca`);
+        
+        return parts.join(' ');
+    };
+
     return (
-        <Card>
-            <CardHeader>
+        <Card className="border-0 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20">
                 <CardTitle className="flex items-center gap-2">
-                    <FileCheck className="h-5 w-5" />
+                    <FileCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                     Certificat de Situation Financière
                 </CardTitle>
                 <CardDescription>
                     Générez un CSF pour chaque demandeur individuellement
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6 p-6">
                 {/* Sélection Propriété */}
                 <div className="space-y-2">
-                    <Label>Propriété</Label>
+                    <Label className="text-sm font-semibold">Propriété</Label>
                     <Select 
                         value={csfPropriete} 
                         onValueChange={handleProprieteChange}
                         disabled={isGenerating}
                     >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-auto min-h-[60px]">
                             <SelectValue placeholder="Sélectionner une propriété" />
                         </SelectTrigger>
                         <SelectContent>
@@ -172,22 +186,31 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
                                 
                                 return (
                                     <SelectItem key={prop.id} value={String(prop.id)}>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium">Lot {prop.lot} - TN°{prop.titre}</span>
+                                        <div className="flex flex-col gap-2 py-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Badge variant="outline" className="font-mono">
+                                                    Lot {prop.lot}
+                                                </Badge>
+                                                <Badge variant="outline">
+                                                    TN°{prop.titre}
+                                                </Badge>
                                                 {!isComplete && (
-                                                    <AlertCircle className="h-3 w-3 text-red-500" />
+                                                    <Badge variant="destructive" className="text-xs">
+                                                        <AlertCircle className="h-3 w-3 mr-1" />
+                                                        Incomplet
+                                                    </Badge>
                                                 )}
                                             </div>
                                             {principal && (
-                                                <div className="text-xs text-muted-foreground">
+                                                <div className="text-xs text-muted-foreground space-y-1">
                                                     <div className="flex items-center gap-1">
-                                                        <Crown className="h-3 w-3" />
-                                                        Principal: {principal.nom} {principal.prenom}
+                                                        <Crown className="h-3 w-3 text-yellow-500" />
+                                                        <span className="font-medium">Principal:</span> {principal.nom} {principal.prenom}
                                                     </div>
                                                     {consortsList.length > 0 && (
-                                                        <div className="ml-4">
-                                                            Consorts: {consortsList.map(c => `${c.nom} ${c.prenom}`).join(', ')}
+                                                        <div className="flex items-center gap-1 ml-4">
+                                                            <Users className="h-3 w-3" />
+                                                            <span>+ {consortsList.length} consort{consortsList.length > 1 ? 's' : ''}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -199,6 +222,58 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
                         </SelectContent>
                     </Select>
                 </div>
+
+                {/* ✅ Affichage amélioré de la propriété sélectionnée */}
+                {csfPropriete && selectedProprieteData && (
+                    <Card className="border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+                        <CardContent className="p-4 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <MapPin className="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-1" />
+                                <div className="space-y-2 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Badge className="bg-emerald-600 text-white">
+                                            Lot {selectedProprieteData.lot}
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            TN°{selectedProprieteData.titre}
+                                        </Badge>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                            <span className="text-muted-foreground">Contenance:</span>
+                                            <div className="font-semibold">
+                                                {formatContenance(selectedProprieteData.contenance)}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Nature:</span>
+                                            <div className="font-semibold capitalize">
+                                                {selectedProprieteData.nature}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-sm">
+                                        <span className="text-muted-foreground">Propriétaire:</span>
+                                        <div className="font-medium">{selectedProprieteData.proprietaire}</div>
+                                    </div>
+
+                                    {demandeursFiltered.length > 0 && (
+                                        <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800">
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <Users className="h-4 w-4 text-emerald-600" />
+                                                <span className="font-medium">
+                                                    {demandeursFiltered.length} demandeur{demandeursFiltered.length > 1 ? 's' : ''} associé{demandeursFiltered.length > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Info filtrage */}
                 {csfPropriete && demandeursFiltered.length === 0 && (
@@ -212,30 +287,15 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
 
                 {csfPropriete && demandeursFiltered.length > 0 && (
                     <>
-                        {/* Info hiérarchie */}
-                        <Alert className="bg-blue-500/10 border-blue-500/50">
-                            <Users className="h-4 w-4 text-blue-500" />
-                            <AlertDescription className="text-blue-700 dark:text-blue-300">
-                                <div className="space-y-1">
-                                    <div className="font-medium">
-                                        {demandeursFiltered.length} demandeur{demandeursFiltered.length > 1 ? 's' : ''} associé{demandeursFiltered.length > 1 ? 's' : ''}
-                                    </div>
-                                    <div className="text-xs opacity-75">
-                                        Sélectionnez le demandeur pour lequel générer le CSF
-                                    </div>
-                                </div>
-                            </AlertDescription>
-                        </Alert>
-
                         {/* Sélection Demandeur */}
                         <div className="space-y-2">
-                            <Label>Demandeur</Label>
+                            <Label className="text-sm font-semibold">Demandeur</Label>
                             <Select 
                                 value={csfDemandeur} 
                                 onValueChange={setCsfDemandeur}
                                 disabled={isGenerating}
                             >
-                                <SelectTrigger>
+                                <SelectTrigger className="h-auto min-h-[50px]">
                                     <SelectValue placeholder="Sélectionner un demandeur" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -248,7 +308,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
                                         
                                         return (
                                             <SelectItem key={dem.id} value={String(dem.id)}>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 py-1">
                                                     {isPrincipal && <Crown className="h-3 w-3 text-yellow-500" />}
                                                     <span>{dem.nom_demandeur} {dem.prenom_demandeur}</span>
                                                     {demandeurLie && (
@@ -257,7 +317,7 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
                                                         </Badge>
                                                     )}
                                                     {hasDocument && (
-                                                        <Badge variant="default" className="bg-green-500">
+                                                        <Badge variant="default" className="bg-green-500 text-xs">
                                                             <FileCheck className="h-3 w-3" />
                                                         </Badge>
                                                     )}
@@ -271,6 +331,41 @@ export default function CsfTab({ proprietes, demandeurs, dossier }: CsfTabProps)
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {/* ✅ Affichage du demandeur sélectionné */}
+                        {csfDemandeur && selectedDemandeurData && (
+                            <Card className="border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-start gap-3">
+                                        <Users className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
+                                        <div className="space-y-2 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {selectedProprieteData?.demandeurs_lies?.find(d => d.id === selectedDemandeurData.id)?.ordre === 1 && (
+                                                    <Badge className="bg-yellow-500 text-white">
+                                                        <Crown className="h-3 w-3 mr-1" />
+                                                        Principal
+                                                    </Badge>
+                                                )}
+                                                <span className="font-semibold">
+                                                    {selectedDemandeurData.titre_demandeur} {selectedDemandeurData.nom_demandeur} {selectedDemandeurData.prenom_demandeur}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                                <div>
+                                                    <span className="text-muted-foreground">CIN:</span>
+                                                    <div className="font-mono">{selectedDemandeurData.cin}</div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground">Occupation:</span>
+                                                    <div className="font-medium">{selectedDemandeurData.occupation || '-'}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Statut du CSF sélectionné */}
                         {csfDemandeur && hasCsf && (

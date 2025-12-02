@@ -161,10 +161,15 @@ class DossierController extends Controller
         $permissions = [
             'canEdit' => $this->canModifyDossier($dossier, $user),
             'canDelete' => $this->canDeleteDossier($dossier, $user),
-            'canClose' => $this->canCloseDossier($dossier, $user), // ✅ UTILISÉ DANS DossierInfoSection
+            'canClose' => $this->canCloseDossier($dossier, $user), // ✅ CRITIQUE
             'canArchive' => $this->canModifyDossier($dossier, $user),
             'canExport' => $this->canExportDossier($dossier, $user),
         ];
+
+        // ✅ AJOUTER can_close et can_modify directement dans dossier
+        $dossierArray = $dossier->toArray();
+        $dossierArray['can_close'] = $permissions['canClose'];
+        $dossierArray['can_modify'] = $permissions['canEdit'];
 
         Log::info('🔍 Permissions calculées pour dossier', [
             'dossier_id' => $dossier->id,
@@ -177,7 +182,7 @@ class DossierController extends Controller
         ]);
 
         return Inertia::render('dossiers/Show', [
-            'dossier' => $dossier,
+            'dossier' => $dossierArray, // ✅ AVEC can_close et can_modify
             'permissions' => $permissions,
         ]);
     }
@@ -264,13 +269,19 @@ class DossierController extends Controller
 
     /**
      * ✅ CORRECTION CRITIQUE : Méthode canCloseDossier
-     * RÈGLE : Seuls super_admin ET admin_district peuvent fermer/rouvrir
+     * RÈGLE : Seuls super_admin, central_user ET admin_district peuvent fermer/rouvrir
      */
     private function canCloseDossier(Dossier $dossier, User $user): bool
     {
         // ✅ Super admin peut TOUJOURS fermer/rouvrir (tous districts)
         if ($user->isSuperAdmin()) {
             Log::info('✅ canClose: super_admin détecté', ['user_id' => $user->id]);
+            return true;
+        }
+
+        // ✅ Central user peut fermer/rouvrir (tous districts)
+        if ($user->isCentralUser()) {
+            Log::info('✅ canClose: central_user détecté', ['user_id' => $user->id]);
             return true;
         }
 
@@ -286,7 +297,7 @@ class DossierController extends Controller
             return $canClose;
         }
 
-        // ❌ Central user et user_district NE PEUVENT PAS fermer
+        // ❌ User district NE PEUT PAS fermer
         Log::info('❌ canClose: rôle non autorisé', [
             'user_id' => $user->id,
             'role' => $user->role
@@ -345,7 +356,7 @@ class DossierController extends Controller
             Log::error('Erreur fermeture dossier', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Erreur : ' . $e->getMessage()]);
         }
-    }
+    } 
 
     public function reopen($id)
     {

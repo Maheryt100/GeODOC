@@ -82,10 +82,20 @@ export const OPERATION_TYPES = {
 } as const;
 
 /**
- * Status des reçus
+ * Status des documents
  */
-export const RECU_STATUS = {
-    CONFIRMED: 'confirmed',
-    PENDING: 'pending',
-    CANCELLED: 'cancelled',
+export const DOCUMENT_STATUS = {
+    ACTIVE: 'active',
+    ARCHIVED: 'archived',
+    OBSOLETE: 'obsolete',
+} as const;
+
+/**
+ * Couleurs des badges par type de document
+ */
+export const DOCUMENT_COLORS = {
+    [DOCUMENT_TYPES.RECU]: 'bg-green-500',
+    [DOCUMENT_TYPES.ACTE_VENTE]: 'bg-violet-500',
+    [DOCUMENT_TYPES.CSF]: 'bg-emerald-500',
+    [DOCUMENT_TYPES.REQUISITION]: 'bg-blue-500',
 } as const;

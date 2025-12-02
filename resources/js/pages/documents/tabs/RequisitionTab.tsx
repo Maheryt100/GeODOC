@@ -1,3 +1,4 @@
+// documents/tabs/RequisitionTab.tsx
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,6 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
 
     const selectedProprieteData = proprietes.find(p => p.id === Number(reqPropriete));
     
-    // ✅ NOUVEAU : Vérifier l'existence du document
     const documentRequisition = selectedProprieteData?.document_requisition;
     const hasRequisition = !!documentRequisition;
 
@@ -51,7 +51,7 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
 
     const validationMessage = getValidationMessage();
 
-    // ✅ NOUVEAU : Télécharger une réquisition existante
+    // ✅ CORRIGÉ : preserveUrl au lieu de preserveScroll
     const handleDownloadExisting = async (document: DocumentGenere) => {
         if (isGenerating) return;
         
@@ -65,7 +65,7 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
             setTimeout(() => {
                 router.reload({ 
                     only: ['proprietes'],
-                    preserveScroll: true,
+                    preserveUrl: true, // ✅ CORRIGÉ
                     onFinish: () => setIsGenerating(false)
                 });
             }, 1000);
@@ -77,7 +77,7 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
         }
     };
 
-    // ✅ NOUVEAU : Générer une nouvelle réquisition
+    // ✅ CORRIGÉ : preserveUrl au lieu de preserveScroll
     const handleGenerate = () => {
         if (!reqPropriete) {
             toast.warning('Veuillez sélectionner une propriété');
@@ -104,7 +104,7 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
             setTimeout(() => {
                 router.reload({ 
                     only: ['proprietes'],
-                    preserveScroll: true,
+                    preserveUrl: true, // ✅ CORRIGÉ
                     onSuccess: () => {
                         toast.success('Réquisition générée avec succès !');
                         setIsGenerating(false);
@@ -180,24 +180,33 @@ export default function RequisitionTab({ proprietes, dossier }: RequisitionTabPr
                     </Select>
                 </div>
 
-                {/* Affichage du type d'opération */}
+                {/* ✅ Affichage amélioré de la propriété sélectionnée */}
                 {reqPropriete && selectedProprieteData && (
-                    <Alert className="bg-blue-500/10 border-blue-500/50">
-                        <Info className="h-4 w-4 text-blue-500" />
-                        <AlertDescription className="text-blue-700 dark:text-blue-300">
-                            <div className="space-y-1">
-                                <div>
-                                    <strong>Type :</strong>{' '}
-                                    {selectedProprieteData.type_operation === 'morcellement'
-                                        ? 'Morcellement'
-                                        : 'Immatriculation'}
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-start gap-3">
+                            <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                            <div className="space-y-2 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge variant="outline" className="font-mono">
+                                        Lot {selectedProprieteData.lot}
+                                    </Badge>
+                                    <Badge variant="outline">
+                                        TN°{selectedProprieteData.titre}
+                                    </Badge>
+                                    <Badge variant={selectedProprieteData.type_operation === 'morcellement' ? 'default' : 'secondary'}>
+                                        {selectedProprieteData.type_operation === 'morcellement' ? 'Morcellement' : 'Immatriculation'}
+                                    </Badge>
                                 </div>
-                                <div className="text-xs opacity-75">
-                                    La réquisition sera générée automatiquement selon le type d'opération
+                                <div className="text-sm text-blue-700 dark:text-blue-300">
+                                    <div><strong>Propriétaire :</strong> {selectedProprieteData.proprietaire}</div>
+                                    <div><strong>Situation :</strong> {selectedProprieteData.situation}</div>
+                                    <div className="text-xs mt-1 opacity-75">
+                                        La réquisition sera générée automatiquement selon le type d'opération
+                                    </div>
                                 </div>
                             </div>
-                        </AlertDescription>
-                    </Alert>
+                        </div>
+                    </div>
                 )}
 
                 {/* Statut du document */}

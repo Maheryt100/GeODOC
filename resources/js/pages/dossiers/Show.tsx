@@ -1,4 +1,4 @@
-// ✅ AJOUT : Bouton Retour vers la liste
+// dossiers/Show.tsx
 
 import { Head, router, usePage, Link } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
@@ -423,7 +423,7 @@ export default function Show() {
                     proprietes={proprietes}
                     dossier={dossier}
                     demandeurs={allDemandeurs}
-                    onSelectPropriete={(prop) => console.log('Sélectionné:', prop)}
+                    onSelectPropriete={(prop: any) => console.log('Sélectionné:', prop)}
                     onDeletePropriete={handleDeletePropriete}
                     onArchivePropriete={handleArchivePropriete}
                     onUnarchivePropriete={handleUnarchivePropriete}

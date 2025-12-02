@@ -34,10 +34,7 @@ class UserManagementController extends Controller
 
         // Si admin district, voir seulement les users de son district
         if ($user->isAdminDistrict()) {
-            $query->where(function($q) use ($user) {
-                $q->where('id_district', $user->id_district)
-                  ->orWhere('role', User::ROLE_USER);
-            });
+            $query->where('id_district', $user->id_district);
         }
 
         // FILTRES
@@ -88,11 +85,11 @@ class UserManagementController extends Controller
                 'can_delete' => $connectedUser->isSuperAdmin() && $user->id !== $connectedUser->id,
             ]);
 
-        // ✅ MODIFIÉ : Ajouter les stats pour central_user
+        // Stats avec central_user
         $stats = [
             'total' => User::count(),
             'super_admins' => User::where('role', User::ROLE_SUPER_ADMIN)->count(),
-            'central_users' => User::where('role', User::ROLE_CENTRAL_USER)->count(), // ✅ AJOUTÉ
+            'central_users' => User::where('role', User::ROLE_CENTRAL_USER)->count(),
             'admin_district' => User::where('role', User::ROLE_ADMIN_DISTRICT)->count(),
             'user_district' => User::where('role', User::ROLE_USER_DISTRICT)->count(),
             'active' => User::where('status', true)->count(),
@@ -101,7 +98,6 @@ class UserManagementController extends Controller
 
         $districts = District::with('region')->orderBy('nom_district')->get();
 
-        // ✅ MODIFIÉ : Ajouter central_user dans les rôles
         return Inertia::render('users/Index', [
             'users' => $users,
             'stats' => $stats,
@@ -114,10 +110,9 @@ class UserManagementController extends Controller
             ],
             'roles' => [
                 User::ROLE_SUPER_ADMIN => 'Super Administrateur',
-                User::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
+                User::ROLE_CENTRAL_USER => 'Utilisateur Central',
                 User::ROLE_ADMIN_DISTRICT => 'Administrateur District',
                 User::ROLE_USER_DISTRICT => 'Utilisateur District',
-                User::ROLE_USER => 'Utilisateur',
             ],
         ]);
     }
@@ -152,12 +147,11 @@ class UserManagementController extends Controller
                 ];
             });
 
-        // ✅ MODIFIÉ : Ajouter central_user dans les rôles disponibles
         $availableRoles = [];
         if ($user->isSuperAdmin()) {
             $availableRoles = [
                 User::ROLE_SUPER_ADMIN => 'Super Administrateur',
-                User::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
+                User::ROLE_CENTRAL_USER => 'Utilisateur Central',
                 User::ROLE_ADMIN_DISTRICT => 'Administrateur District',
                 User::ROLE_USER_DISTRICT => 'Utilisateur District',
             ];
@@ -183,17 +177,15 @@ class UserManagementController extends Controller
         /** @var User $currentUser */
         $currentUser = Auth::user();
 
-        // ✅ MODIFIÉ : Ajouter central_user dans la validation
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => 'required|in:' . implode(',', [
                 User::ROLE_SUPER_ADMIN,
-                User::ROLE_CENTRAL_USER, // ✅ AJOUTÉ
+                User::ROLE_CENTRAL_USER,
                 User::ROLE_ADMIN_DISTRICT,
                 User::ROLE_USER_DISTRICT,
-                User::ROLE_USER
             ]),
             'id_district' => 'nullable|exists:districts,id',
             'status' => 'boolean',
@@ -220,8 +212,7 @@ class UserManagementController extends Controller
                 }
             }
 
-            // ✅ MODIFIÉ : Validation de la cohérence role/district
-            // Les rôles qui nécessitent un district
+            // Validation cohérence role/district
             $rolesRequiringDistrict = [User::ROLE_ADMIN_DISTRICT, User::ROLE_USER_DISTRICT];
             
             if (in_array($validated['role'], $rolesRequiringDistrict)) {
@@ -307,12 +298,11 @@ class UserManagementController extends Controller
                 ];
             });
 
-        // ✅ MODIFIÉ : Ajouter central_user dans les rôles disponibles
         $availableRoles = [];
         if ($currentUser->isSuperAdmin()) {
             $availableRoles = [
                 User::ROLE_SUPER_ADMIN => 'Super Administrateur',
-                User::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
+                User::ROLE_CENTRAL_USER => 'Utilisateur Central',
                 User::ROLE_ADMIN_DISTRICT => 'Administrateur District',
                 User::ROLE_USER_DISTRICT => 'Utilisateur District',
             ];
@@ -362,17 +352,15 @@ class UserManagementController extends Controller
             abort(403, 'Vous ne pouvez modifier que les utilisateurs de votre district');
         }
 
-        // ✅ MODIFIÉ : Ajouter central_user dans la validation
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $id,
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'role' => 'required|in:' . implode(',', [
                 User::ROLE_SUPER_ADMIN,
-                User::ROLE_CENTRAL_USER, // ✅ AJOUTÉ
+                User::ROLE_CENTRAL_USER,
                 User::ROLE_ADMIN_DISTRICT,
                 User::ROLE_USER_DISTRICT,
-                User::ROLE_USER
             ]),
             'id_district' => 'nullable|exists:districts,id',
             'status' => 'boolean',
@@ -398,7 +386,7 @@ class UserManagementController extends Controller
                 }
             }
 
-            // ✅ MODIFIÉ : Validation cohérence role/district
+            // Validation cohérence role/district
             $rolesRequiringDistrict = [User::ROLE_ADMIN_DISTRICT, User::ROLE_USER_DISTRICT];
             
             if (in_array($validated['role'], $rolesRequiringDistrict)) {

@@ -32,7 +32,6 @@ export const buildDownloadUrl = (
     const params = new URLSearchParams();
     params.append('id_propriete', String(idPropriete));
     
-    // ✅ IMPORTANT : Pour ADV avec consorts, toujours passer le demandeur principal
     if (idDemandeur) {
         params.append('id_demandeur', String(idDemandeur));
     }
@@ -45,7 +44,6 @@ export const buildDownloadUrl = (
  * ✅ Obtenir la route Laravel pour un type de document
  */
 export const getRouteForDocumentType = (type: DocumentType): string => {
-    // Note: Utiliser window.route() si disponible
     const routes: Record<DocumentType, string> = {
         recu: '/documents/recu',
         acte_vente: '/documents/acte-vente',
@@ -58,9 +56,6 @@ export const getRouteForDocumentType = (type: DocumentType): string => {
 
 /**
  * ✅ Obtenir le message de succès pour un type de document
- * @param type - Type de document
- * @param hasConsorts - Si le document a des consorts
- * @param nbConsorts - Nombre de consorts (optionnel)
  */
 export const getSuccessMessage = (type: DocumentType, hasConsorts?: boolean, nbConsorts?: number): string => {
     if (type === 'acte_vente' && hasConsorts && nbConsorts) {
@@ -109,12 +104,24 @@ export const formatDateTime = (date: string | Date): string => {
 };
 
 /**
+ * ✅ Formater la contenance en Ha A Ca
+ */
+export const formatContenance = (contenance: number): string => {
+    const hectares = Math.floor(contenance / 10000);
+    const reste = contenance % 10000;
+    const ares = Math.floor(reste / 100);
+    const centiares = reste % 100;
+    
+    const parts = [];
+    if (hectares > 0) parts.push(`${hectares}Ha`);
+    if (ares > 0) parts.push(`${ares}A`);
+    parts.push(`${centiares}Ca`);
+    
+    return parts.join(' ');
+};
+
+/**
  * ✅ Télécharger un document
- * @param type - Type de document
- * @param idPropriete - ID de la propriété
- * @param idDemandeur - ID du demandeur (optionnel, mais requis pour acte_vente, csf, reçu)
- * @param onSuccess - Callback de succès
- * @param onError - Callback d'erreur
  */
 export const downloadDocument = (
     type: DocumentType,
@@ -224,7 +231,7 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
 };
 
 /**
- * ✅ NOUVEAU : Formater la liste des demandeurs pour affichage
+ * ✅ Formater la liste des demandeurs pour affichage
  */
 export const formatDemandeursList = (demandeurs: DemandeurWithOrder[]): string => {
     if (demandeurs.length === 0) return 'Aucun demandeur';
@@ -237,7 +244,7 @@ export const formatDemandeursList = (demandeurs: DemandeurWithOrder[]): string =
 };
 
 /**
- * ✅ NOUVEAU : Obtenir l'icône selon le type de document
+ * ✅ Obtenir l'icône selon le type de document
  */
 export const getDocumentIcon = (type: DocumentType): string => {
     const icons: Record<DocumentType, string> = {
@@ -251,7 +258,7 @@ export const getDocumentIcon = (type: DocumentType): string => {
 };
 
 /**
- * ✅ NOUVEAU : Valider les paramètres de génération
+ * ✅ Valider les paramètres de génération
  */
 export const validateGenerationParams = (
     type: DocumentType,
@@ -262,12 +269,10 @@ export const validateGenerationParams = (
         return { valid: false, message: 'ID de propriété manquant' };
     }
     
-    // Pour réquisition, pas besoin de demandeur
     if (type === 'requisition') {
         return { valid: true };
     }
     
-    // Pour autres documents, demandeur requis
     if (!idDemandeur) {
         return { valid: false, message: 'ID de demandeur manquant' };
     }

@@ -13,12 +13,11 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    // Constantes pour les rôles
+    // ✅ CORRIGÉ : Constantes pour les rôles (ROLE_USER supprimé)
     const ROLE_SUPER_ADMIN = 'super_admin';
     const ROLE_ADMIN_DISTRICT = 'admin_district';
     const ROLE_USER_DISTRICT = 'user_district';
-    const ROLE_CENTRAL_USER = 'central_user'; // ✅ NOUVEAU RÔLE
-    const ROLE_USER = 'user';
+    const ROLE_CENTRAL_USER = 'central_user';
 
     protected $fillable = [
         'name',
@@ -94,7 +93,6 @@ class User extends Authenticatable
         return $this->role === self::ROLE_USER_DISTRICT && $this->status;
     }
 
-    // ✅ NOUVEAU : Vérifier si c'est un utilisateur central
     public function isCentralUser(): bool
     {
         return $this->role === self::ROLE_CENTRAL_USER && $this->status;
@@ -113,7 +111,6 @@ class User extends Authenticatable
         ]) && $this->id_district !== null;
     }
 
-    // ✅ MODIFIÉ : Les central_user peuvent aussi accéder à tous les districts
     public function canAccessAllDistricts(): bool
     {
         return $this->isSuperAdmin() || $this->isCentralUser();
@@ -127,7 +124,6 @@ class User extends Authenticatable
             return false;
         }
 
-        // Super admin et central user peuvent accéder à tous les districts
         if ($this->canAccessAllDistricts()) {
             return true;
         }
@@ -137,7 +133,6 @@ class User extends Authenticatable
 
     public function canAccessDossier(Dossier $dossier): bool
     {
-        // Super admin et central user peuvent accéder à tous les dossiers
         if ($this->canAccessAllDistricts()) {
             return true;
         }
@@ -145,19 +140,16 @@ class User extends Authenticatable
         return $this->id_district === $dossier->id_district;
     }
 
-    // ✅ MODIFIÉ : Central user peut créer dans tous les districts
     public function canCreate(?string $resource = null): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        // Super admin, admin district et central user peuvent créer
         if ($this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser()) {
             return true;
         }
         
-        // User district peut créer dans son district
         if ($this->isUserDistrict() && $this->id_district) {
             return true;
         }
@@ -165,34 +157,28 @@ class User extends Authenticatable
         return false;
     }
 
-    // ✅ MODIFIÉ : Central user peut modifier dans tous les districts
     public function canUpdate(?string $resource = null): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        // Super admin, admin district et central user peuvent modifier
         if ($this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser()) {
             return true;
         }
         
-        // User district peut modifier dans son district
         return $this->isUserDistrict() && $this->id_district !== null;
     }
 
-    // ✅ Central user NE PEUT PAS supprimer (réservé aux admins)
     public function canDelete(?string $resource = null): bool
     {
         if (!$this->status) {
             return false;
         }
 
-        // Seuls super_admin et admin_district peuvent supprimer
         return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
-    // ✅ MODIFIÉ : Central user peut archiver
     public function canArchive(): bool
     {
         if (!$this->status) {
@@ -203,11 +189,10 @@ class User extends Authenticatable
             self::ROLE_SUPER_ADMIN,
             self::ROLE_ADMIN_DISTRICT,
             self::ROLE_USER_DISTRICT,
-            self::ROLE_CENTRAL_USER, // ✅ AJOUTÉ
+            self::ROLE_CENTRAL_USER,
         ]);
     }
 
-    // ✅ MODIFIÉ : Central user peut exporter
     public function canExportData(): bool
     {
         if (!$this->status) {
@@ -217,7 +202,6 @@ class User extends Authenticatable
         return $this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser();
     }
 
-    // ✅ Central user NE PEUT PAS gérer les utilisateurs
     public function canManageUsers(): bool
     {
         if (!$this->status) {
@@ -227,7 +211,6 @@ class User extends Authenticatable
         return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
-    // ✅ Central user NE PEUT PAS configurer les prix
     public function canConfigurePrices(): bool
     {
         if (!$this->status) {
@@ -269,7 +252,6 @@ class User extends Authenticatable
         return $query->where('role', self::ROLE_USER_DISTRICT);
     }
 
-    // ✅ NOUVEAU : Scope pour les utilisateurs centraux
     public function scopeCentralUsers(Builder $query): Builder
     {
         return $query->where('role', self::ROLE_CENTRAL_USER);
@@ -291,15 +273,13 @@ class User extends Authenticatable
             self::ROLE_SUPER_ADMIN => 'Super Administrateur',
             self::ROLE_ADMIN_DISTRICT => 'Administrateur District',
             self::ROLE_USER_DISTRICT => 'Utilisateur District',
-            self::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
-            self::ROLE_USER => 'Utilisateur',
+            self::ROLE_CENTRAL_USER => 'Utilisateur Central',
             default => 'Utilisateur',
         };
     }
 
     public function getLocationAttribute(): string
     {
-        // Super admin et central user ont accès à tous les districts
         if ($this->isSuperAdmin() || $this->isCentralUser()) {
             return 'Tous les districts';
         }
@@ -334,7 +314,6 @@ class User extends Authenticatable
     
     public function hasPermission(string $permission): bool
     {
-        // Super admin a toutes les permissions
         if ($this->isSuperAdmin()) {
             return true;
         }
@@ -419,12 +398,10 @@ class User extends Authenticatable
             return false;
         }
 
-        // Les users district doivent avoir un district assigné
         if (in_array($this->role, [self::ROLE_ADMIN_DISTRICT, self::ROLE_USER_DISTRICT])) {
             return $this->id_district !== null;
         }
 
-        // Central user et super admin n'ont pas besoin de district
         return true;
     }
 
@@ -456,15 +433,12 @@ class User extends Authenticatable
 
     // ============ VALIDATION HELPERS ============
     
-    // ✅ MODIFIÉ : Central user ne doit pas avoir de district
     public function hasValidRoleDistrictCombination(): bool
     {
-        // Super admin et central user ne doivent pas avoir de district
         if (in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_CENTRAL_USER])) {
             return $this->id_district === null;
         }
 
-        // Admin et user district doivent avoir un district
         if (in_array($this->role, [self::ROLE_ADMIN_DISTRICT, self::ROLE_USER_DISTRICT])) {
             return $this->id_district !== null;
         }
@@ -476,22 +450,19 @@ class User extends Authenticatable
     {
         $allRoles = [
             self::ROLE_SUPER_ADMIN => 'Super Administrateur',
-            self::ROLE_CENTRAL_USER => 'Utilisateur Central', // ✅ AJOUTÉ
+            self::ROLE_CENTRAL_USER => 'Utilisateur Central',
             self::ROLE_ADMIN_DISTRICT => 'Administrateur District',
             self::ROLE_USER_DISTRICT => 'Utilisateur District',
-           
         ];
 
         if (!$forUser) {
             return $allRoles;
         }
 
-        // Super admin peut assigner tous les rôles
         if ($forUser->isSuperAdmin()) {
             return $allRoles;
         }
 
-        // Admin district peut seulement créer des user_district
         if ($forUser->isAdminDistrict()) {
             return [
                 self::ROLE_USER_DISTRICT => 'Utilisateur District',
@@ -501,75 +472,22 @@ class User extends Authenticatable
         return [];
     }
 
-    // ============ COMPATIBILITÉ AVEC LARAVEL POLICIES ============
+    // ============ MÉTHODES POUR DOSSIERS ============
     
-    /**
-     * ✅ NOUVEAU : Méthode compatible avec auth()->user()->can()
-     * Cette méthode permet d'utiliser Gate::allows() et $user->can()
-     */
-    public function can($ability, $arguments = []): bool
-    {
-        // Si c'est un modèle Dossier, vérifier les permissions spécifiques
-        if ($arguments instanceof \App\Models\Dossier) {
-            return $this->canManageDossier($ability, $arguments);
-        }
-
-        // Sinon, utiliser la vérification de permission standard
-        if (is_string($ability)) {
-            return $this->hasPermission($ability);
-        }
-
-        // Par défaut, retourner false
-        return false;
-    }
-
-    /**
-     * ✅ NOUVEAU : Vérifier les permissions spécifiques aux dossiers
-     */
-    private function canManageDossier(string $ability, \App\Models\Dossier $dossier): bool
-    {
-        switch ($ability) {
-            case 'update':
-                return $this->canUpdateDossier($dossier);
-            
-            case 'delete':
-                return $this->canDeleteDossier($dossier);
-            
-            case 'close':
-                return $this->canCloseDossier($dossier);
-            
-            case 'archive':
-                return $this->canArchiveDossier($dossier);
-            
-            case 'export':
-                return $this->canExportDossier($dossier);
-            
-            default:
-                return false;
-        }
-    }
-
-    /**
-     * ✅ NOUVEAU : Peut modifier un dossier spécifique
-     */
     public function canUpdateDossier(\App\Models\Dossier $dossier): bool
     {
-        // Dossier fermé = non modifiable
         if ($dossier->is_closed) {
             return false;
         }
 
-        // Vérifier l'accès au dossier
         if (!$this->canAccessDossier($dossier)) {
             return false;
         }
 
-        // Super admin, admin district, central user peuvent modifier
         if ($this->isSuperAdmin() || $this->isAdminDistrict() || $this->isCentralUser()) {
             return true;
         }
 
-        // User district peut modifier ses propres dossiers dans son district
         if ($this->isUserDistrict()) {
             return $this->id === $dossier->id_user;
         }
@@ -577,74 +495,50 @@ class User extends Authenticatable
         return false;
     }
 
-    /**
-     * ✅ NOUVEAU : Peut supprimer un dossier spécifique
-     */
     public function canDeleteDossier(\App\Models\Dossier $dossier): bool
     {
-        // Dossier fermé = non supprimable
         if ($dossier->is_closed) {
             return false;
         }
 
-        // Vérifier l'accès au dossier
         if (!$this->canAccessDossier($dossier)) {
             return false;
         }
 
-        // Seuls super_admin et admin_district peuvent supprimer
         return $this->isSuperAdmin() || $this->isAdminDistrict();
     }
 
-    /**
-     * ✅ NOUVEAU : Peut fermer un dossier spécifique
-     */
     public function canCloseDossier(\App\Models\Dossier $dossier): bool
     {
-        // Déjà fermé
         if ($dossier->is_closed) {
             return false;
         }
 
-        // Vérifier l'accès au dossier
         if (!$this->canAccessDossier($dossier)) {
             return false;
         }
 
-        // Super admin, central user et admin district peuvent fermer
         return $this->isSuperAdmin() 
             || $this->isCentralUser() 
             || $this->isAdminDistrict();
     }
 
-    /**
-     * ✅ NOUVEAU : Peut archiver des éléments d'un dossier spécifique
-     */
     public function canArchiveDossier(\App\Models\Dossier $dossier): bool
     {
-        // Même logique que canUpdateDossier
         return $this->canUpdateDossier($dossier);
     }
 
-    /**
-     * ✅ NOUVEAU : Peut exporter un dossier spécifique
-     */
     public function canExportDossier(\App\Models\Dossier $dossier): bool
     {
-        // Vérifier l'accès au dossier
         if (!$this->canAccessDossier($dossier)) {
             return false;
         }
 
-        // Super admin, central user et admin district peuvent exporter
         return $this->isSuperAdmin() 
             || $this->isCentralUser() 
             || $this->isAdminDistrict();
     }
 
-    /**
-     * ✅ NOUVEAU : Obtenir le label du rôle (pour compatibilité)
-     */
     public function getRoleLabel(): string
     {
         return $this->role_name;
